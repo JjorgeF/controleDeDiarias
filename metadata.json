@@ -1,5 +1,5 @@
 {
-  "name": "Controle de Diárias",
-  "description": "Uma aplicação web para gerenciar o pagamento de diárias de funcionários, permitindo cadastro, registro de dias trabalhados, cálculo de ganhos mensais e exportação de relatórios.",
+  "name": "Novo Projeto",
+  "description": "Um ponto de partida para sua nova aplicação React.",
   "requestFramePermissions": []
 }

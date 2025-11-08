@@ -1,66 +1,64 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Controle de Diárias</title>
-    <!-- 
-    Para adicionar um ícone na guia do navegador (favicon), descomente a linha abaixo 
-    e substitua "URL_DA_SUA_IMAGEM.png" pelo caminho ou link da sua imagem.
-    <link rel="icon" type="image/png" href="URL_DA_SUA_IMAGEM.png" />
-    -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS for Excel Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style type="text/tailwindcss">
+      @layer base {
+        :root {
+          --brand-primary: #0077b6;
+          --brand-light: #caf0f8;
+        }
+      }
+      @layer components {
+        .animate-fade-in {
+          animation: fadeIn 0.3s ease-out forwards;
+        }
+        .animate-slide-down {
+          animation: slideDown 0.4s ease-out forwards;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      }
+    </style>
     <script>
       tailwind.config = {
         darkMode: 'class',
         theme: {
           extend: {
             colors: {
-              'brand-primary': '#ffa02e',
-              'brand-accent': '#afcacc',
-              'brand-light': '#e4f3d8',
-            },
-            animation: {
-                'slide-down': 'slide-down 0.3s ease-out forwards',
-                'fade-in': 'fade-in 0.3s ease-in-out forwards',
-            },
-            keyframes: {
-                'slide-down': {
-                    '0%': { transform: 'translateY(-10px)', opacity: 0 },
-                    '100%': { transform: 'translateY(0)', opacity: 1 },
-                },
-                'fade-in': {
-                    '0%': { opacity: 0 },
-                    '100%': { opacity: 1 },
-                }
+              'brand-primary': 'var(--brand-primary)',
+              'brand-light': 'var(--brand-light)',
             }
           }
         }
       }
     </script>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-<script type="importmap">
+    <script type="importmap">
 {
   "imports": {
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "firebase/": "https://aistudiocdn.com/firebase@^12.5.0/",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "xlsx": "https://aistudiocdn.com/xlsx@^0.18.5",
-    "firebase/app": "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js",
-    "firebase/auth": "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js",
-    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js",
-    "firebase/": "https://aistudiocdn.com/firebase@^12.5.0/"
+    "react/": "https://aistudiocdn.com/react@^19.2.0/"
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
-</head>
-  <body class="bg-slate-100 dark:bg-slate-900 antialiased">
+  </head>
+  <body class="bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 antialiased">
     <div id="root"></div>
     <script type="text/babel" data-type="module" src="./index.tsx"></script>
-  <script type="module" src="/index.tsx"></script>
-</body>
+  </body>
 </html>
