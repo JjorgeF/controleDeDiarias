@@ -1,11 +1,8 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
+import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// Configuração do seu aplicativo da web do Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyDgbUoe6zQkOpJ125jvkqBY4SctHbO03zo",
   authDomain: "lpdatabase-4249e.firebaseapp.com",
@@ -16,6 +13,14 @@ const firebaseConfig = {
   measurementId: "G-SM72NHLYR2"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+// Previne que o Firebase seja inicializado múltiplas vezes
+// FIX: Correctly initialize Firebase using the v9 modular SDK. `getApps`, `initializeApp`,
+// and `getApp` are top-level functions and must be imported directly.
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+
+// Obtém os serviços do Firebase
+const db = getFirestore(app);
+const auth = getAuth(app);
+const googleProvider = new GoogleAuthProvider();
+
+export { db, auth, googleProvider };
