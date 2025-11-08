@@ -1,8 +1,8 @@
-// FIX: The original named imports from 'firebase/app' were causing module resolution errors.
-// Switched to a namespace import (`import * as firebaseApp`) and updated the initialization
-// logic to use `firebaseApp.` prefixes. This is a robust way to handle Firebase v9
-// imports and can resolve issues in certain build environments.
-import * as firebaseApp from 'firebase/app';
+
+// FIX: The namespace import for 'firebase/app' was incorrect. Switched to named imports
+// for `initializeApp`, `getApps`, and `getApp` to follow the Firebase v9 modular SDK pattern
+// and resolve "Property does not exist" errors.
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 
@@ -18,7 +18,7 @@ const firebaseConfig = {
 };
 
 // Previne que o Firebase seja inicializado múltiplas vezes
-const app = !firebaseApp.getApps().length ? firebaseApp.initializeApp(firebaseConfig) : firebaseApp.getApp();
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // Obtém os serviços do Firebase
 const db = getFirestore(app);
