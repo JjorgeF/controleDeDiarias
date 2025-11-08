@@ -145,10 +145,19 @@ const App: React.FC = () => {
     // Employee CRUD Handlers (Firestore)
     const handleSaveEmployee = useCallback(async (employeeData: Omit<Employee, 'id' | 'workDays'> & { id?: string }) => {
         if (!user) return;
-        const userEmployeesCollection = collection(db, 'users', user.uid, 'employees');
 
-        // Desestruturamos o 'id' aqui para removê-lo do 'dataToSave'.
-        // Isso previne que um campo 'id: undefined' seja enviado ao Firestore ao criar um novo funcionário, o que causava o erro.
+        // Validação de nome artístico duplicado (case-insensitive)
+        const isArtisticNameDuplicate = employees.some(emp => 
+            emp.artisticName.toLowerCase() === employeeData.artisticName.toLowerCase() &&
+            emp.id !== employeeData.id // Garante que não estamos comparando o funcionário com ele mesmo durante a edição
+        );
+
+        if (isArtisticNameDuplicate) {
+            alert(`O nome artístico "${employeeData.artisticName}" já está em uso. Por favor, escolha outro.`);
+            return; // Impede o salvamento
+        }
+
+        const userEmployeesCollection = collection(db, 'users', user.uid, 'employees');
         const { id, ...dataToSave } = employeeData;
 
         try {
@@ -164,7 +173,7 @@ const App: React.FC = () => {
             console.error("Erro ao salvar funcionário:", error);
             alert("Não foi possível salvar o funcionário. Verifique suas regras de segurança do Firestore e a conexão com a internet.");
         }
-    }, [user]);
+    }, [user, employees]);
     
     const confirmDeleteEmployee = useCallback(async () => {
         if (employeeToDelete && user) {
