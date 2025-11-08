@@ -1,0 +1,12 @@
+{
+  "headers": [
+    {
+      "source": "/(.*\\.tsx)",
+      "headers": [{ "key": "Content-Type", "value": "text/javascript" }]
+    },
+    {
+      "source": "/(.*\\.ts)",
+      "headers": [{ "key": "Content-Type", "value": "text/javascript" }]
+    }
+  ]
+}
