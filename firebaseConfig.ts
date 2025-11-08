@@ -1,4 +1,8 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
+// FIX: The original named imports from 'firebase/app' were causing module resolution errors.
+// Switched to a namespace import (`import * as firebaseApp`) and updated the initialization
+// logic to use `firebaseApp.` prefixes. This is a robust way to handle Firebase v9
+// imports and can resolve issues in certain build environments.
+import * as firebaseApp from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 
@@ -14,9 +18,7 @@ const firebaseConfig = {
 };
 
 // Previne que o Firebase seja inicializado múltiplas vezes
-// FIX: Correctly initialize Firebase using the v9 modular SDK. `getApps`, `initializeApp`,
-// and `getApp` are top-level functions and must be imported directly.
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+const app = !firebaseApp.getApps().length ? firebaseApp.initializeApp(firebaseConfig) : firebaseApp.getApp();
 
 // Obtém os serviços do Firebase
 const db = getFirestore(app);
