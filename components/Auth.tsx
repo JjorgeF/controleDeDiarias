@@ -10,7 +10,7 @@ const Auth: React.FC = () => {
             await signInWithPopup(auth, googleProvider);
         } catch (error) {
             console.error("Erro ao fazer login com Google:", error);
-            alert("Não foi possível fazer o login. Verifique o console para mais detalhes.");
+            alert("Não foi possível fazer o login. Verifique o console para mais detalhes e informe o Tio Cacheado.");
         }
     };
 
