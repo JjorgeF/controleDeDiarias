@@ -17,7 +17,7 @@ const Header: React.FC<HeaderProps> = ({ employeeCount, viewMode, theme, onAddEm
             <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex items-center justify-between h-16">
                     <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-brand-primary">
-                        Liga Positiva | Controle de Diárias | Problemas? Tio Cacheado
+                        Liga Positiva | Problemas? Tio Cacheado
                     </h1>
                     <h6 className="text-xl sm:text-2xl font-bold tracking-tight text-brand-primary">testinho</h6>
                     <div className="flex items-center space-x-2 sm:space-x-4">
