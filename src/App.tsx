@@ -286,7 +286,7 @@ export default function App() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-brand-bg p-4">
         <div className="bg-brand-card border border-brand-border p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
           <h1 className="text-4xl font-black text-brand-primary mb-2">Liga Positiva</h1>
-          <p className="text-gray-400 mb-8">Gerencie sua equipe de recreadores de forma simples e eficiente.</p>
+          <p className="text-gray-400 mb-8">Administração de Recreadores</p>
           
           <button 
             onClick={handleLogin}
@@ -296,7 +296,8 @@ export default function App() {
             Entrar com Google
           </button>
           
-          <p className="mt-6 text-xs text-gray-500">
+          <p className="mt-2 text-xs text-gray-500">Todo e qualquer problema contate o administrador (Cacheado)</p>
+          <p className="mt-1 text-xs text-gray-500">
             Ao entrar, você concorda com nossos termos de serviço.
           </p>
         </div>
