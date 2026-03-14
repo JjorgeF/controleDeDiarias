@@ -1,1 +1,19 @@
-node_modules
+# Dependências e Builds
+node_modules/
+dist/
+dist-ssr
+*.local
+
+# Ambiente Local / Segredos (Isso protege suas chaves!)
+.env
+.env.production
+.env.dev
+
+# Python (Importante para suas automações)
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+
+# IDEs
+.vscode/
