@@ -72,7 +72,7 @@ export default function Header({
       <div className="max-w-7xl mx-auto px-2 md:px-4 h-14 md:h-16 flex items-center justify-between gap-2 md:gap-4">
         <div className="flex items-center gap-2 md:gap-8">
           <h1 className="text-lg md:text-2xl font-bold text-brand-primary whitespace-nowrap font-playful tracking-wide">
-            Liga Positiva Dev2
+            Liga Positiva
           </h1>
           
           {!hideControls && (
