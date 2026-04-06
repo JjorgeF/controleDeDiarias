@@ -1,4 +1,4 @@
-export type EmployeeLevel = 'Trainee' | 'Aprendiz' | 'Coordenador' | 'Recreador' | 'Recreador Experiente';
+export type EmployeeLevel = 'Trainee' | 'Aprendiz' | 'Coordenador(a)' | 'Recreador(a)' | 'Recreador(a) Experiente';
 
 export type DayType = 'common' | 'party';
 
