@@ -285,7 +285,7 @@ export default function App() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-brand-bg p-4">
         <div className="bg-brand-card border border-brand-border p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
-          <h1 className="text-4xl font-black text-brand-primary mb-2">Liga Positiva</h1>
+          <h1 className="text-4xl font-black text-brand-primary mb-2">Liga Positiva Dev3</h1>
           <p className="text-gray-400 mb-8">Administração de Recreadores</p>
           
           <button 
