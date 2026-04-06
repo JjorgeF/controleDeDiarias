@@ -198,16 +198,16 @@ export default function CalendarView({
           </div>
         </div>
 
-        <div className="overflow-auto">
-          <div className="grid grid-cols-7 border-b border-brand-border bg-brand-bg/50 min-w-[500px] md:min-w-[700px]">
+        <div className="overflow-x-auto sm:overflow-x-visible">
+          <div className="grid grid-cols-7 border-b border-brand-border bg-brand-bg/50 min-w-[320px] md:min-w-[700px]">
             {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day) => (
-              <div key={day} className="p-3 text-center text-[10px] md:text-xs font-black text-gray-500 uppercase tracking-widest">
+              <div key={day} className="p-1 md:p-3 text-center text-[8px] md:text-xs font-black text-gray-500 uppercase tracking-tighter md:tracking-widest">
                 {day}
               </div>
             ))}
           </div>
           
-          <div className="grid grid-cols-7 auto-rows-fr min-w-[500px] md:min-w-[700px]">
+          <div className="grid grid-cols-7 auto-rows-fr min-w-[320px] md:min-w-[700px]">
             {calendarDays.map((day, idx) => {
               const dayStr = format(day, 'yyyy-MM-dd');
               const workersCount = employees.filter(emp => 
@@ -226,28 +226,28 @@ export default function CalendarView({
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, day)}
                   onClick={() => handleDayClick(day)}
-                  className={cn(
-                    "min-h-[60px] md:min-h-[100px] p-2 md:p-4 border-b border-r border-brand-border transition-all relative group",
-                    !isReadOnly && isCurrentMonth && "hover:bg-brand-primary/5 cursor-pointer",
-                    !isCurrentMonth && "bg-brand-bg/20 opacity-30",
-                    isSelected && !isReadOnly && "bg-brand-primary/10 ring-1 ring-brand-primary ring-inset z-10",
-                    idx % 7 === 6 && "border-r-0"
-                  )}
-                >
-                  <div className="flex flex-col items-center justify-center h-full gap-2">
-                    <span className={cn(
-                      "text-sm md:text-base font-black w-8 h-8 flex items-center justify-center rounded-full transition-colors",
-                      isTodayDate ? "bg-brand-primary text-brand-bg" : "text-gray-400 group-hover:text-white",
-                      isSelected && !isTodayDate && !isReadOnly && "text-brand-primary"
-                    )}>
-                      {format(day, 'd')}
-                    </span>
-                    {workersCount > 0 && (
-                      <div className="bg-brand-primary/20 text-brand-primary px-2 py-0.5 rounded-full text-[10px] md:text-xs font-black">
-                        {workersCount}
-                      </div>
+                    className={cn(
+                      "min-h-[50px] md:min-h-[100px] p-1 md:p-4 border-b border-r border-brand-border transition-all relative group",
+                      !isReadOnly && isCurrentMonth && "hover:bg-brand-primary/5 cursor-pointer",
+                      !isCurrentMonth && "bg-brand-bg/20 opacity-30",
+                      isSelected && !isReadOnly && "bg-brand-primary/10 ring-1 ring-brand-primary ring-inset z-10",
+                      idx % 7 === 6 && "border-r-0"
                     )}
-                  </div>
+                  >
+                    <div className="flex flex-col items-center justify-center h-full gap-1 md:gap-2">
+                      <span className={cn(
+                        "text-xs md:text-base font-black w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full transition-colors",
+                        isTodayDate ? "bg-brand-primary text-brand-bg" : "text-gray-400 group-hover:text-white",
+                        isSelected && !isTodayDate && !isReadOnly && "text-brand-primary"
+                      )}>
+                        {format(day, 'd')}
+                      </span>
+                      {workersCount > 0 && (
+                        <div className="bg-brand-primary/20 text-brand-primary px-1.5 py-0.5 rounded-full text-[8px] md:text-xs font-black">
+                          {workersCount}
+                        </div>
+                      )}
+                    </div>
                 </div>
               );
             })}
