@@ -169,23 +169,23 @@ export default function CalendarView({
       {/* Calendar Grid */}
       <div className="bg-brand-card border border-brand-border rounded-xl overflow-hidden shadow-2xl">
         {/* Calendar Header */}
-        <div className="flex items-center justify-between p-4 md:p-6 border-b border-brand-border bg-brand-bg/30">
-          <div className="flex items-center gap-4">
-            <h2 className="text-xl font-black text-white capitalize">
+        <div className="flex items-center justify-between p-3 md:p-6 border-b border-brand-border bg-brand-bg/30">
+          <div className="flex items-center gap-3 md:gap-4">
+            <h2 className="text-base md:text-xl font-black text-white capitalize">
               {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
             </h2>
-            <div className="flex items-center bg-brand-bg border border-brand-border rounded-lg p-1">
+            <div className="flex items-center bg-brand-bg border border-brand-border rounded-lg p-0.5 md:p-1">
               <button 
                 onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-                className="p-1.5 hover:bg-white/5 rounded-md transition-colors text-gray-400 hover:text-white"
+                className="p-1 md:p-1.5 hover:bg-white/5 rounded-md transition-colors text-gray-400 hover:text-white"
               >
-                <ChevronLeft size={20} />
+                <ChevronLeft size={18} className="md:w-5 md:h-5" />
               </button>
               <button 
                 onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-                className="p-1.5 hover:bg-white/5 rounded-md transition-colors text-gray-400 hover:text-white"
+                className="p-1 md:p-1.5 hover:bg-white/5 rounded-md transition-colors text-gray-400 hover:text-white"
               >
-                <ChevronRight size={20} />
+                <ChevronRight size={18} className="md:w-5 md:h-5" />
               </button>
             </div>
           </div>
@@ -199,7 +199,7 @@ export default function CalendarView({
         </div>
 
         <div className="overflow-auto">
-          <div className="grid grid-cols-7 border-b border-brand-border bg-brand-bg/50 min-w-[700px]">
+          <div className="grid grid-cols-7 border-b border-brand-border bg-brand-bg/50 min-w-[500px] md:min-w-[700px]">
             {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day) => (
               <div key={day} className="p-3 text-center text-[10px] md:text-xs font-black text-gray-500 uppercase tracking-widest">
                 {day}
@@ -207,7 +207,7 @@ export default function CalendarView({
             ))}
           </div>
           
-          <div className="grid grid-cols-7 auto-rows-fr min-w-[700px]">
+          <div className="grid grid-cols-7 auto-rows-fr min-w-[500px] md:min-w-[700px]">
             {calendarDays.map((day, idx) => {
               const dayStr = format(day, 'yyyy-MM-dd');
               const workersCount = employees.filter(emp => 
@@ -227,7 +227,7 @@ export default function CalendarView({
                   onDrop={(e) => handleDrop(e, day)}
                   onClick={() => handleDayClick(day)}
                   className={cn(
-                    "min-h-[80px] md:min-h-[100px] p-2 md:p-4 border-b border-r border-brand-border transition-all relative group",
+                    "min-h-[60px] md:min-h-[100px] p-2 md:p-4 border-b border-r border-brand-border transition-all relative group",
                     !isReadOnly && isCurrentMonth && "hover:bg-brand-primary/5 cursor-pointer",
                     !isCurrentMonth && "bg-brand-bg/20 opacity-30",
                     isSelected && !isReadOnly && "bg-brand-primary/10 ring-1 ring-brand-primary ring-inset z-10",
@@ -258,35 +258,35 @@ export default function CalendarView({
       {/* Management Panel (Below Calendar) */}
       {!isReadOnly && selectedDay && (
         <div className="bg-brand-card border border-brand-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-4">
-          <div className="p-6 border-b border-brand-border flex items-center justify-between bg-brand-bg/30">
+          <div className="p-4 md:p-6 border-b border-brand-border flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-brand-bg/30">
             <div>
-              <h3 className="text-xl font-bold text-white capitalize">
+              <h3 className="text-base md:text-xl font-bold text-white capitalize">
                 {format(selectedDay, "EEEE, dd 'de' MMMM", { locale: ptBR })}
               </h3>
-              <p className="text-sm text-gray-400">Gerenciar equipe para este dia</p>
+              <p className="text-xs md:text-sm text-gray-400">Gerenciar equipe para este dia</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-1.5 md:gap-2">
               <button 
                 onClick={() => setIsDayModalOpen(true)}
-                className="flex items-center gap-2 bg-brand-primary/20 hover:bg-brand-primary/30 text-brand-primary text-xs font-bold py-2 px-3 rounded-lg transition-colors"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-brand-primary/20 hover:bg-brand-primary/30 text-brand-primary text-[10px] md:text-xs font-bold py-2 px-2 md:px-3 rounded-lg transition-colors"
                 title="Visualizar dia em foco"
               >
                 <Maximize2 size={14} />
-                <span className="hidden sm:inline">Focar Dia</span>
+                <span className="inline">Focar Dia</span>
               </button>
               <button 
                 onClick={handleCopyTeam}
-                className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold py-2 px-3 rounded-lg transition-colors"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-white text-[10px] md:text-xs font-bold py-2 px-2 md:px-3 rounded-lg transition-colors"
                 title="Copiar time deste dia"
               >
                 <Copy size={14} />
-                <span className="hidden sm:inline">Copiar</span>
+                <span className="inline">Copiar</span>
               </button>
               <button 
                 onClick={handlePasteTeam}
                 disabled={!copiedTeam}
                 className={cn(
-                  "flex items-center gap-2 text-xs font-bold py-2 px-3 rounded-lg transition-colors",
+                  "flex-1 sm:flex-none flex items-center justify-center gap-2 text-[10px] md:text-xs font-bold py-2 px-2 md:px-3 rounded-lg transition-colors",
                   copiedTeam 
                     ? "bg-brand-primary/20 text-brand-primary hover:bg-brand-primary/30" 
                     : "bg-gray-800 text-gray-600 cursor-not-allowed"
@@ -294,7 +294,7 @@ export default function CalendarView({
                 title="Colar time copiado"
               >
                 <ClipboardPaste size={14} />
-                <span className="hidden sm:inline">Colar</span>
+                <span className="inline">Colar</span>
               </button>
             </div>
           </div>

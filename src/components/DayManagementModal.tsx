@@ -67,60 +67,60 @@ export default function DayManagementModal({
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bg-brand-card border border-brand-border w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="p-6 border-b border-brand-border flex items-center justify-between bg-brand-bg/30">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-brand-primary/20 rounded-xl flex items-center justify-center text-brand-primary">
-              <Users size={24} />
+        <div className="p-4 md:p-6 border-b border-brand-border flex items-center justify-between bg-brand-bg/30">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-brand-primary/20 rounded-xl flex items-center justify-center text-brand-primary">
+              <Users size={20} className="md:w-6 md:h-6" />
             </div>
             <div>
-              <h3 className="text-2xl font-black text-white capitalize leading-tight">
+              <h3 className="text-lg md:text-2xl font-black text-white capitalize leading-tight">
                 {format(selectedDay, "dd 'de' MMMM", { locale: ptBR })}
               </h3>
-              <p className="text-sm text-gray-400 font-medium">{format(selectedDay, "EEEE", { locale: ptBR })}</p>
+              <p className="text-xs md:text-sm text-gray-400 font-medium">{format(selectedDay, "EEEE", { locale: ptBR })}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 md:gap-2">
             <button 
               onClick={onCopyTeam}
-              className="p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all"
+              className="p-1.5 md:p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all"
               title="Copiar Time"
             >
-              <Copy size={20} />
+              <Copy size={18} className="md:w-5 md:h-5" />
             </button>
             <button 
               onClick={onPasteTeam}
               disabled={!copiedTeam}
               className={cn(
-                "p-2 rounded-lg transition-all",
+                "p-1.5 md:p-2 rounded-lg transition-all",
                 copiedTeam ? "text-brand-primary hover:bg-brand-primary/10" : "text-gray-600 cursor-not-allowed"
               )}
               title="Colar Time"
             >
-              <ClipboardPaste size={20} />
+              <ClipboardPaste size={18} className="md:w-5 md:h-5" />
             </button>
-            <div className="w-px h-6 bg-brand-border mx-2" />
-            <button onClick={onClose} className="text-gray-400 hover:text-white hover:bg-white/5 p-2 rounded-lg transition-all">
-              <X size={24} />
+            <div className="w-px h-5 md:h-6 bg-brand-border mx-1 md:mx-2" />
+            <button onClick={onClose} className="text-gray-400 hover:text-white hover:bg-white/5 p-1.5 md:p-2 rounded-lg transition-all">
+              <X size={20} className="md:w-6 md:h-6" />
             </button>
           </div>
         </div>
 
         {/* Search Bar */}
-        <div className="p-4 border-b border-brand-border bg-brand-bg/10">
+        <div className="p-3 md:p-4 border-b border-brand-border bg-brand-bg/10">
           <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input 
               type="text"
-              placeholder="Buscar recreador para adicionar..."
+              placeholder="Buscar recreador..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-brand-bg border border-brand-border rounded-xl py-3 pl-12 pr-4 text-base focus:outline-none focus:border-brand-primary transition-colors shadow-inner"
+              className="w-full bg-brand-bg border border-brand-border rounded-xl py-2.5 md:py-3 pl-10 md:pl-12 pr-4 text-sm md:text-base focus:outline-none focus:border-brand-primary transition-colors shadow-inner"
             />
           </div>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto p-6 space-y-8">
+        <div className="flex-1 overflow-auto p-4 md:p-6 space-y-6 md:space-y-8">
           {/* Working List */}
           <div>
             <div className="flex items-center justify-between mb-4">
