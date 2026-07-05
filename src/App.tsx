@@ -44,7 +44,7 @@ export default function App() {
   const [simulatedEmployeeId, setSimulatedEmployeeId] = useState<string>('');
 
   // Flag de controle: ativa no modo desenvolvimento local ou via variável customizada VITE_ENABLE_SIMULATION no .env
-  const isSimulationEnabled = import.meta.env.VITE_ENABLE_SIMULATION === 'true' || import.meta.env.DEV;
+  const isSimulationEnabled = import.meta.env.VITE_ENABLE_SIMULATION?.toLowerCase() === 'true' || import.meta.env.DEV;
 
   const isViewingAsAdmin = isAdmin && (!isSimulationEnabled || !simulationActive);
 
