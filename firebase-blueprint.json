@@ -1,0 +1,57 @@
+{
+  "entities": {
+    "Admin": {
+      "title": "Admin",
+      "description": "Administrator of the system",
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string"
+        }
+      },
+      "required": ["role"]
+    },
+    "Employee": {
+      "title": "Employee",
+      "description": "Recreation worker details, workdays, and availabilities",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "artisticName": { "type": "string" },
+        "email": { "type": "string" },
+        "userId": { "type": "string" },
+        "level": { "type": "string" },
+        "dailyRate": { "type": "number" },
+        "partyRate": { "type": "number" },
+        "extraHourRate": { "type": "number" },
+        "workDays": {
+          "type": "array"
+        },
+        "availabilities": {
+          "type": "array"
+        }
+      },
+      "required": ["name", "email"]
+    },
+    "DeadlineSetting": {
+      "title": "Deadline Setting",
+      "description": "Map of year-month keys to deadline ISO strings",
+      "type": "object",
+      "properties": {}
+    }
+  },
+  "firestore": {
+    "/usuarios_admin/{email}": {
+      "schema": "Admin",
+      "description": "Users with admin access"
+    },
+    "/employees/{employeeId}": {
+      "schema": "Employee",
+      "description": "Employee profiles, workdays, and availabilities"
+    },
+    "/settings/deadlines": {
+      "schema": "DeadlineSetting",
+      "description": "Deadlines for submitting work availabilities"
+    }
+  }
+}

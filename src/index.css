@@ -1,0 +1,43 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fredoka:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-playful: "Fredoka", sans-serif;
+  
+  --color-brand-bg: var(--bg);
+  --color-brand-card: var(--card);
+  --color-brand-primary: #fbbf24;
+  --color-brand-primary-hover: #f59e0b;
+  --color-brand-border: var(--border);
+}
+
+:root {
+  --bg: #f1f5f9;
+  --card: #ffffff;
+  --border: rgba(0, 0, 0, 0.08);
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+}
+
+.dark {
+  --bg: #0f172a;
+  --card: #1e293b;
+  --border: rgba(255, 255, 255, 0.1);
+  --text-main: #ffffff;
+  --text-muted: #94a3b8;
+}
+
+@layer base {
+  body {
+    @apply bg-brand-bg text-[var(--text-main)] font-sans antialiased transition-colors duration-300;
+  }
+  
+  .text-gray-400 {
+    color: var(--text-muted);
+  }
+  
+  .text-white {
+    color: var(--text-main);
+  }
+}

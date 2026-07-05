@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/usuarios_admin/$(request.auth.token.email));
+    }
+
+    // 1. settings/deadlines and other settings
+    match /settings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // 2. usuarios_admin
+    match /usuarios_admin/{email} {
+      allow get: if isSignedIn() && (request.auth.token.email == email || isAdmin());
+      allow list, write: if isAdmin();
+    }
+
+    // 3. employees
+    match /employees/{employeeId} {
+      allow create, delete: if isAdmin();
+      
+      // Admins can read all. Employees can read their own record.
+      allow get, list: if isSignedIn() && (
+        isAdmin() || 
+        resource.data.email == request.auth.token.email || 
+        ('userId' in resource.data && resource.data.userId == request.auth.uid)
+      );
+
+      // Admins can update any field. Employees can only update their own availabilities.
+      allow update: if isSignedIn() && (
+        isAdmin() || (
+          (resource.data.email == request.auth.token.email || ('userId' in resource.data && resource.data.userId == request.auth.uid)) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['availabilities'])
+        )
+      );
+    }
+  }
+}
