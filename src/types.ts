@@ -17,6 +17,7 @@ export interface Employee {
   partyRate: number;
   extraHourRate: number;
   workDays: WorkDay[];
+  availabilities?: string[]; // Date strings 'YYYY-MM-DD'
   userId: string; // To associate with the logged in user
   email?: string; // Access email for the employee
 }
