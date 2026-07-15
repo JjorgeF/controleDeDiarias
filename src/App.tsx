@@ -9,10 +9,11 @@ import {
   query, 
   where,
   getDoc,
-  getDocs
+  getDocs,
+  setDoc
 } from 'firebase/firestore';
 import { onAuthStateChanged, User, signInWithPopup } from 'firebase/auth';
-import { auth, db, googleProvider, isFirebaseConfigured } from './lib/firebase';
+import { auth, db, googleProvider, isFirebaseConfigured, handleFirestoreError, OperationType } from './lib/firebase';
 import { Employee, ViewMode, WorkDay } from './types';
 import Header from './components/Header';
 import EmployeeCard from './components/EmployeeCard';
@@ -20,6 +21,7 @@ import EmployeeList from './components/EmployeeList';
 import CalendarView from './components/CalendarView';
 import EmployeeModal from './components/EmployeeModal';
 import ManageDaysModal from './components/ManageDaysModal';
+import SimulationBanner from './components/SimulationBanner';
 import { LogIn, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format, isSameMonth, parseISO, eachDayOfInterval, startOfMonth, endOfMonth } from 'date-fns';
@@ -35,11 +37,50 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [deadlines, setDeadlines] = useState<Record<string, string>>({}); // Key: "yyyy-MM", Value: "yyyy-MM-ddTHH:mm"
+  const [dayConfigs, setDayConfigs] = useState<Record<string, { isCommon: boolean; isParty: boolean }>>({});
   
+  // Estado para simulação de papéis (Role simulation)
+  const [simulationActive, setSimulationActive] = useState(false);
+  const [simulatedEmployeeId, setSimulatedEmployeeId] = useState<string>('');
+
+  // Flag de controle: ativa no modo desenvolvimento local ou via variável customizada VITE_ENABLE_SIMULATION no .env
+  const isSimulationEnabled = import.meta.env.VITE_ENABLE_SIMULATION?.toLowerCase() === 'true' || import.meta.env.DEV;
+
+  const isViewingAsAdmin = isAdmin && (!isSimulationEnabled || !simulationActive);
+
   // Modals state
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
   const [isManageDaysModalOpen, setIsManageDaysModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | undefined>(undefined);
+
+  useEffect(() => {
+    if (!db || !user) return;
+    const unsub = onSnapshot(doc(db, 'settings', 'deadlines'), (snapshot) => {
+      if (snapshot.exists()) {
+        setDeadlines(snapshot.data() as Record<string, string>);
+      } else {
+        setDeadlines({});
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/deadlines');
+    });
+    return () => unsub();
+  }, [db, user]);
+
+  useEffect(() => {
+    if (!db || !user) return;
+    const unsub = onSnapshot(doc(db, 'settings', 'dayConfigs'), (snapshot) => {
+      if (snapshot.exists()) {
+        setDayConfigs(snapshot.data() as Record<string, { isCommon: boolean; isParty: boolean }>);
+      } else {
+        setDayConfigs({});
+      }
+    }, (error) => {
+      console.error("Error loading dayConfigs:", error);
+    });
+    return () => unsub();
+  }, [db, user]);
 
   useEffect(() => {
     // Apply theme class to html element
@@ -68,6 +109,7 @@ export default function App() {
         } catch (error) {
           console.error("Erro ao verificar status de admin:", error);
           setIsAdmin(false);
+          handleFirestoreError(error, OperationType.GET, 'usuarios_admin/' + user.email);
         }
       } else {
         setIsAdmin(false);
@@ -97,6 +139,8 @@ export default function App() {
       })) as Employee[];
       
       setEmployees(emps);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'employees');
     });
 
     return () => unsubscribe();
@@ -144,6 +188,7 @@ export default function App() {
       return { success: true };
     } catch (error: any) {
       console.error("Error saving employee:", error);
+      handleFirestoreError(error, selectedEmployee ? OperationType.UPDATE : OperationType.CREATE, selectedEmployee ? `employees/${selectedEmployee.id}` : 'employees');
       return { 
         success: false, 
         error: "Erro ao salvar funcionário. Verifique sua conexão." 
@@ -169,6 +214,7 @@ export default function App() {
       console.log("handleDeleteEmployee: Employee deleted successfully from Firestore:", id);
     } catch (error: any) {
       console.error("handleDeleteEmployee: Error deleting employee:", error);
+      handleFirestoreError(error, OperationType.DELETE, `employees/${id}`);
       alert("Erro ao excluir funcionário: " + (error.message || "Erro desconhecido. Verifique sua conexão e permissões."));
       throw error;
     }
@@ -243,6 +289,40 @@ export default function App() {
       await updateDoc(empRef, { workDays: days });
     } catch (error) {
       console.error("Error updating work days:", error);
+      handleFirestoreError(error, OperationType.UPDATE, `employees/${employeeId}`);
+    }
+  };
+
+  const handleUpdateAvailabilities = async (employeeId: string, availabilities: string[]) => {
+    if (!user || !db) return;
+    try {
+      const empRef = doc(db, 'employees', employeeId);
+      await updateDoc(empRef, { availabilities });
+    } catch (error) {
+      console.error("Error updating availabilities:", error);
+      handleFirestoreError(error, OperationType.UPDATE, `employees/${employeeId}`);
+    }
+  };
+
+  const handleUpdateDeadline = async (monthKey: string, deadlineIso: string) => {
+    if (!db) return;
+    try {
+      const docRef = doc(db, 'settings', 'deadlines');
+      await setDoc(docRef, { [monthKey]: deadlineIso }, { merge: true });
+    } catch (error) {
+      console.error("Error updating deadline:", error);
+      handleFirestoreError(error, OperationType.WRITE, 'settings/deadlines');
+    }
+  };
+
+  const handleUpdateDayConfig = async (dateStr: string, config: { isCommon: boolean; isParty: boolean }) => {
+    if (!db) return;
+    try {
+      const docRef = doc(db, 'settings', 'dayConfigs');
+      await setDoc(docRef, { [dateStr]: config }, { merge: true });
+    } catch (error) {
+      console.error("Error updating day config:", error);
+      handleFirestoreError(error, OperationType.WRITE, 'settings/dayConfigs');
     }
   };
 
@@ -285,7 +365,7 @@ export default function App() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-brand-bg p-4">
         <div className="bg-brand-card border border-brand-border p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
-          <h1 className="text-4xl font-black text-brand-primary mb-2">Liga Positiva</h1>
+          <h1 className="text-2xl md:text-4xl font-black text-brand-primary mb-2">Liga Positiva Dev2</h1>
           <p className="text-gray-400 mb-8">Administração de Recreadores</p>
           
           <button 
@@ -306,11 +386,23 @@ export default function App() {
   }
 
   // Interface do Funcionário (Não Admin)
-  if (!isAdmin) {
-    const myEmployeeRecord = employees[0];
+  if (!isViewingAsAdmin) {
+    const myEmployeeRecord = simulationActive
+      ? employees.find(emp => emp.id === simulatedEmployeeId)
+      : employees[0];
 
     return (
       <div className="min-h-screen bg-brand-bg pb-12">
+        {isSimulationEnabled && isAdmin && (
+          <SimulationBanner 
+            employees={employees}
+            simulationActive={simulationActive}
+            setSimulationActive={setSimulationActive}
+            simulatedEmployeeId={simulatedEmployeeId}
+            setSimulatedEmployeeId={setSimulatedEmployeeId}
+            realUserEmail={user.email}
+          />
+        )}
         <Header 
           viewMode="grid"
           setViewMode={() => {}}
@@ -336,14 +428,19 @@ export default function App() {
                     isReadOnly={true}
                   />
                 </div>
-                <div className="w-full md:w-2/3 bg-brand-card border border-brand-border rounded-2xl p-3 md:p-6 shadow-xl">
-                  <h2 className="text-lg md:text-xl font-bold text-white mb-4 md:mb-6">Meu Calendário de Trabalho</h2>
+                <div className="w-full md:w-2/3 space-y-4">
+                  <h2 className="text-lg md:text-xl font-black text-white mb-2">Meu Calendário de Trabalho / Disponibilidade</h2>
                   <CalendarView 
-                    employees={[myEmployeeRecord]}
+                    employees={[myEmployeeRecord]} // Pass the simulated employee as the single record
                     onUpdateDays={() => {}}
                     currentMonth={currentMonth}
                     setCurrentMonth={setCurrentMonth}
-                    isReadOnly={true}
+                    isReadOnly={false}
+                    isAdmin={false}
+                    deadlines={deadlines}
+                    onUpdateAvailabilities={handleUpdateAvailabilities}
+                    dayConfigs={dayConfigs}
+                    onUpdateDayConfig={handleUpdateDayConfig}
                   />
                 </div>
               </div>
@@ -351,7 +448,7 @@ export default function App() {
           ) : (
             <div className="py-20 text-center">
               <p className="text-gray-400 text-lg">Carregando seus dados ou você ainda não foi vinculado a um registro de funcionário.</p>
-              <p className="text-sm text-gray-500 mt-2">Entre em contato com o administrador e informe seu e-mail: {user.email}</p>
+              <p className="text-sm text-gray-500 mt-2">Entre em contato com o administrador e informe seu e-mail: {simulationActive ? '[Simulado Sem Registro]' : user.email}</p>
             </div>
           )}
         </main>
@@ -362,6 +459,16 @@ export default function App() {
   // Interface do Admin
   return (
     <div className="min-h-screen bg-brand-bg pb-12">
+      {isSimulationEnabled && isAdmin && (
+        <SimulationBanner 
+          employees={employees}
+          simulationActive={simulationActive}
+          setSimulationActive={setSimulationActive}
+          simulatedEmployeeId={simulatedEmployeeId}
+          setSimulatedEmployeeId={setSimulatedEmployeeId}
+          realUserEmail={user.email}
+        />
+      )}
       <Header 
         viewMode={viewMode}
         setViewMode={setViewMode}
@@ -424,6 +531,11 @@ export default function App() {
             onUpdateDays={handleUpdateDays}
             currentMonth={currentMonth}
             setCurrentMonth={setCurrentMonth}
+            isAdmin={true}
+            deadlines={deadlines}
+            onUpdateDeadline={handleUpdateDeadline}
+            dayConfigs={dayConfigs}
+            onUpdateDayConfig={handleUpdateDayConfig}
           />
         )}
       </main>
