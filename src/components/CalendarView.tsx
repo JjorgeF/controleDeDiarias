@@ -105,6 +105,10 @@ export default function CalendarView({
   const [draggedDay, setDraggedDay] = React.useState<Date | null>(null);
   const [replicationTarget, setReplicationTarget] = React.useState<Date | null>(null);
   const [isReplicationModalOpen, setIsReplicationModalOpen] = React.useState(false);
+  
+  // Deactivation confirmation modal for Admins
+  const [isDeactivateModalOpen, setIsDeactivateModalOpen] = React.useState(false);
+  const [deactivateTargetDay, setDeactivateTargetDay] = React.useState<Date | null>(null);
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(monthStart);
@@ -277,6 +281,19 @@ export default function CalendarView({
     }
   };
 
+  const confirmDeactivation = () => {
+    if (deactivateTargetDay && onUpdateDayConfig) {
+      const dayStr = format(deactivateTargetDay, 'yyyy-MM-dd');
+      const currentConfig = getDayConfig(dayStr);
+      onUpdateDayConfig(dayStr, {
+        ...currentConfig,
+        isCommon: false
+      });
+    }
+    setIsDeactivateModalOpen(false);
+    setDeactivateTargetDay(null);
+  };
+
   const handleDayClick = (day: Date) => {
     if (isAdmin) {
       if (isReadOnly) return;
@@ -300,8 +317,14 @@ export default function CalendarView({
           const prevDayStr = clickDayStrRef.current;
           if (prevDayStr) {
             const currentConfig = getDayConfig(prevDayStr);
-            if (onUpdateDayConfig) {
-              onUpdateDayConfig(prevDayStr, { ...currentConfig, isCommon: !currentConfig.isCommon });
+            if (currentConfig.isCommon) {
+              const prevDay = parseISO(prevDayStr);
+              setDeactivateTargetDay(prevDay);
+              setIsDeactivateModalOpen(true);
+            } else {
+              if (onUpdateDayConfig) {
+                onUpdateDayConfig(prevDayStr, { ...currentConfig, isCommon: true });
+              }
             }
           }
         }
@@ -313,14 +336,21 @@ export default function CalendarView({
           
           // Single click action: Toggle isCommon config
           const currentConfig = getDayConfig(dayStr);
-          const newConfig = {
-            ...currentConfig,
-            isCommon: !currentConfig.isCommon
-          };
-          if (onUpdateDayConfig) {
-            onUpdateDayConfig(dayStr, newConfig);
+          if (currentConfig.isCommon) {
+            // Deactivating this day requires confirmation!
+            setDeactivateTargetDay(day);
+            setIsDeactivateModalOpen(true);
+          } else {
+            // Activating is immediate and safe
+            const newConfig = {
+              ...currentConfig,
+              isCommon: true
+            };
+            if (onUpdateDayConfig) {
+              onUpdateDayConfig(dayStr, newConfig);
+            }
           }
-        }, 220); // 220ms is highly responsive and standard double click delay
+        }, 280); // 280ms double click delay is standard and comfortable
       }
     } else {
       // Employee mode: toggle availability
@@ -1027,6 +1057,42 @@ export default function CalendarView({
                 className="flex-1 bg-brand-primary hover:bg-brand-primary-hover text-brand-bg font-bold py-3 rounded-xl transition-colors"
               >
                 Sim, Replicar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deactivation Confirmation Modal */}
+      {isDeactivateModalOpen && deactivateTargetDay && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="bg-brand-card border border-brand-border w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center space-y-4">
+              <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-white">Desativar Dia Comum?</h3>
+              <p className="text-gray-400 text-sm leading-relaxed">
+                Você tem certeza que deseja desativar o dia <span className="text-brand-primary font-bold">{format(deactivateTargetDay, "dd/MM")}</span> como disponível para atividades comuns?
+                <br />
+                <span className="text-xs text-red-400/80 mt-2 block font-medium">Os funcionários não poderão marcar disponibilidade para atividades comuns nesta data.</span>
+              </p>
+            </div>
+            <div className="p-4 bg-brand-bg/50 border-t border-brand-border flex gap-3">
+              <button 
+                onClick={() => {
+                  setIsDeactivateModalOpen(false);
+                  setDeactivateTargetDay(null);
+                }}
+                className="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 rounded-xl transition-colors"
+              >
+                Voltar
+              </button>
+              <button 
+                onClick={confirmDeactivation}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl transition-colors"
+              >
+                Sim, Desativar
               </button>
             </div>
           </div>
