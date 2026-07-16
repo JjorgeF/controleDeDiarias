@@ -10,11 +10,12 @@ import {
   isSameDay, 
   addMonths, 
   subMonths,
-  isToday
+  isToday,
+  parseISO
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, Users, Search, UserPlus, UserMinus, Clock, Copy, ClipboardPaste, AlertTriangle, Maximize2, Lock, Unlock, Save, Calendar, CheckCircle2, AlertCircle, X } from 'lucide-react';
-import { Employee, WorkDay, DayType } from '../types';
+import { ChevronLeft, ChevronRight, Users, Search, UserPlus, UserMinus, Clock, Copy, ClipboardPaste, AlertTriangle, Maximize2, Lock, Unlock, Save, Calendar, CheckCircle2, AlertCircle, X, Check, Trash2 } from 'lucide-react';
+import { Employee, WorkDay, DayType, CancellationLog } from '../types';
 import { cn } from '../lib/utils';
 import DayManagementModal from './DayManagementModal';
 
@@ -30,6 +31,12 @@ interface CalendarViewProps {
   onUpdateAvailabilities?: (employeeId: string, availabilities: string[]) => void;
   dayConfigs?: Record<string, { isCommon: boolean; isParty: boolean }>;
   onUpdateDayConfig?: (dateStr: string, config: { isCommon: boolean; isParty: boolean }) => void;
+  onCancelWorkDay?: (employeeId: string, dateStr: string, type: 'common' | 'party', employeeName: string) => Promise<void>;
+  cancellations?: CancellationLog[];
+  onDismissCancellation?: (cancellationId: string) => void;
+  onMarkCancellationRead?: (cancellationId: string) => void;
+  sidebarTab?: 'availabilities' | 'cancellations';
+  onSidebarTabChange?: React.Dispatch<React.SetStateAction<'availabilities' | 'cancellations'>>;
 }
 
 export default function CalendarView({ 
@@ -43,7 +50,13 @@ export default function CalendarView({
   onUpdateDeadline,
   onUpdateAvailabilities,
   dayConfigs = {},
-  onUpdateDayConfig
+  onUpdateDayConfig,
+  onCancelWorkDay,
+  cancellations = [],
+  onDismissCancellation,
+  onMarkCancellationRead,
+  sidebarTab = 'availabilities',
+  onSidebarTabChange
 }: CalendarViewProps) {
   const [selectedDay, setSelectedDay] = React.useState<Date | null>(new Date());
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -54,6 +67,11 @@ export default function CalendarView({
   // Employee Choice Modal State
   const [employeeChoiceDate, setEmployeeChoiceDate] = React.useState<Date | null>(null);
   const [isEmployeeChoiceModalOpen, setIsEmployeeChoiceModalOpen] = React.useState(false);
+
+  // Employee Cancellation Modal State
+  const [isCancelModalOpen, setIsCancelModalOpen] = React.useState(false);
+  const [cancelTargetDate, setCancelTargetDate] = React.useState<Date | null>(null);
+  const [isCancellingLoading, setIsCancellingLoading] = React.useState(false);
 
   // Deadline Admin State
   const [deadlineInputDate, setDeadlineInputDate] = React.useState('');
@@ -91,24 +109,25 @@ export default function CalendarView({
   const selectedDayStr = selectedDay ? format(selectedDay, 'yyyy-MM-dd') : '';
   
   const employeesWorking = employees.filter(emp => 
-    emp.workDays.some(d => d.date === selectedDayStr)
+    emp.workDays.some(d => d.date === selectedDayStr && !d.isCancelled)
   );
 
   const employeesAvailable = employees.filter(emp => 
-    !emp.workDays.some(d => d.date === selectedDayStr) &&
+    !emp.workDays.some(d => d.date === selectedDayStr && !d.isCancelled) &&
     (emp.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
      emp.artisticName.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const toggleWorkDay = (employee: Employee, date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    const isWorking = employee.workDays.some(d => d.date === dateStr);
+    const isWorking = employee.workDays.some(d => d.date === dateStr && !d.isCancelled);
     let newDays: WorkDay[];
     
     if (isWorking) {
       newDays = employee.workDays.filter(d => d.date !== dateStr);
     } else {
-      newDays = [...employee.workDays, { date: dateStr, type: 'common' as DayType, extraHours: 0 }];
+      const filtered = employee.workDays.filter(d => d.date !== dateStr);
+      newDays = [...filtered, { date: dateStr, type: 'common' as DayType, extraHours: 0 }];
     }
     
     onUpdateDays(employee.id, newDays);
@@ -205,6 +224,25 @@ export default function CalendarView({
     return { isCommon: true, isParty: false };
   };
 
+  const handleConfirmCancellation = async () => {
+    if (!cancelTargetDate || !myEmployee || !onCancelWorkDay) return;
+    setIsCancellingLoading(true);
+    try {
+      const dateStr = format(cancelTargetDate, 'yyyy-MM-dd');
+      const isScheduledParty = myEmployee.workDays?.some(d => d.date === dateStr && d.type === 'party');
+      const type = isScheduledParty ? 'party' : 'common';
+      const employeeName = myEmployee.artisticName || myEmployee.name;
+      
+      await onCancelWorkDay(myEmployee.id, dateStr, type, employeeName);
+      setIsCancelModalOpen(false);
+      setCancelTargetDate(null);
+    } catch (error) {
+      console.error("Error during cancellation confirm:", error);
+    } finally {
+      setIsCancellingLoading(false);
+    }
+  };
+
   const handleDayClick = (day: Date) => {
     if (isAdmin) {
       if (isReadOnly) return;
@@ -214,6 +252,19 @@ export default function CalendarView({
       // Employee mode: toggle availability
       if (!myEmployee) return;
       
+      const dayStr = format(day, 'yyyy-MM-dd');
+      
+      // Check if scheduled
+      const isScheduledCommon = myEmployee.workDays?.some(d => d.date === dayStr && d.type === 'common');
+      const isScheduledParty = myEmployee.workDays?.some(d => d.date === dayStr && d.type === 'party');
+      const isScheduled = isScheduledCommon || isScheduledParty;
+      
+      if (isScheduled) {
+        setCancelTargetDate(day);
+        setIsCancelModalOpen(true);
+        return;
+      }
+      
       const monthKey = format(day, 'yyyy-MM');
       const deadlineVal = deadlines?.[monthKey];
       const isExpired = deadlineVal ? new Date() > new Date(deadlineVal) : false;
@@ -222,7 +273,6 @@ export default function CalendarView({
         return; // Click disabled because deadline expired
       }
       
-      const dayStr = format(day, 'yyyy-MM-dd');
       const config = getDayConfig(dayStr);
       
       if (config.isCommon && config.isParty) {
@@ -421,10 +471,10 @@ export default function CalendarView({
                   
                   // Counts for admin view
                   const workersCommonCount = employees.filter(emp => 
-                    emp.workDays.some(d => d.date === dayStr && d.type === 'common')
+                    emp.workDays.some(d => d.date === dayStr && d.type === 'common' && !d.isCancelled)
                   ).length;
                   const workersPartyCount = employees.filter(emp => 
-                    emp.workDays.some(d => d.date === dayStr && d.type === 'party')
+                    emp.workDays.some(d => d.date === dayStr && d.type === 'party' && !d.isCancelled)
                   ).length;
                   const availablesCommonCount = employees.filter(emp => 
                     emp.availabilities?.includes(dayStr) || emp.availabilities?.includes(`${dayStr}_common`)
@@ -434,10 +484,12 @@ export default function CalendarView({
                   ).length;
                   
                   // Status for employee view
-                  const isMyAvailableCommon = myEmployee?.availabilities?.includes(dayStr) || myEmployee?.availabilities?.includes(`${dayStr}_common`);
-                  const isMyAvailableParty = myEmployee?.availabilities?.includes(`${dayStr}_party`);
-                  const isMyScheduledCommon = myEmployee?.workDays.some(d => d.date === dayStr && d.type === 'common');
-                  const isMyScheduledParty = myEmployee?.workDays.some(d => d.date === dayStr && d.type === 'party');
+                  const isMyCancelledCommon = myEmployee?.workDays?.some(d => d.date === dayStr && d.type === 'common' && d.isCancelled);
+                  const isMyCancelledParty = myEmployee?.workDays?.some(d => d.date === dayStr && d.type === 'party' && d.isCancelled);
+                  const isMyAvailableCommon = !isMyCancelledCommon && (myEmployee?.availabilities?.includes(dayStr) || myEmployee?.availabilities?.includes(`${dayStr}_common`));
+                  const isMyAvailableParty = !isMyCancelledParty && myEmployee?.availabilities?.includes(`${dayStr}_party`);
+                  const isMyScheduledCommon = myEmployee?.workDays?.some(d => d.date === dayStr && d.type === 'common' && !d.isCancelled);
+                  const isMyScheduledParty = myEmployee?.workDays?.some(d => d.date === dayStr && d.type === 'party' && !d.isCancelled);
 
                   const isMyAvailable = isMyAvailableCommon || isMyAvailableParty;
                   const isMyScheduled = isMyScheduledCommon || isMyScheduledParty;
@@ -723,37 +775,124 @@ export default function CalendarView({
           )}
         </div>
 
-        {/* Sidebar Panel with Availabilities Ranking */}
+        {/* Sidebar Panel with Availabilities Ranking and Cancellations */}
         {isAdmin && (
-          <div className="w-full lg:w-80 bg-brand-card border border-brand-border rounded-xl p-4 md:p-6 shadow-2xl h-fit space-y-4 animate-in fade-in duration-300">
-            <div>
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <CheckCircle2 className="text-emerald-400" size={18} />
-                Quadro de Disponibilidades
-              </h3>
-              <p className="text-xs text-gray-400 mt-1">Ranking de disponibilidades enviadas para este mês ({format(currentMonth, 'MMMM', { locale: ptBR })})</p>
-            </div>
-            <div className="divide-y divide-brand-border overflow-y-auto max-h-[400px] pr-1 space-y-3 pt-2">
-              {employeesWithAvailabilitiesCount.map(emp => (
-                <div key={emp.id} className="flex items-center justify-between pt-3 first:pt-0">
-                  <div>
-                    <p className="text-xs font-bold text-white">{emp.artisticName || emp.name}</p>
-                    <p className="text-[10px] text-gray-500 font-medium uppercase">{emp.level}</p>
-                  </div>
-                  <div className={cn(
-                    "px-2.5 py-1 rounded-full text-xs font-black",
-                    emp.availabilitiesCount > 0 
-                      ? "bg-emerald-500/10 text-emerald-400" 
-                      : "bg-gray-800 text-gray-500"
-                  )}>
-                    {emp.availabilitiesCount} {emp.availabilitiesCount === 1 ? 'dia' : 'dias'}
-                  </div>
-                </div>
-              ))}
-              {employeesWithAvailabilitiesCount.length === 0 && (
-                <p className="text-xs text-gray-500 text-center py-4 italic">Nenhum funcionário cadastrado.</p>
+          <div id="sidebar-panel" className="w-full lg:w-80 bg-brand-card border border-brand-border rounded-xl p-4 md:p-6 shadow-2xl h-fit space-y-4 animate-in fade-in duration-300">
+            <div className="flex items-center justify-between gap-2 border-b border-brand-border/50 pb-3">
+              <div>
+                <h3 className="text-sm font-black text-white flex items-center gap-2">
+                  {sidebarTab === 'availabilities' ? (
+                    <>
+                      <CheckCircle2 className="text-emerald-400 shrink-0" size={18} />
+                      Disponibilidades
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle className="text-red-400 shrink-0 animate-pulse" size={18} />
+                      Cancelamentos
+                    </>
+                  )}
+                </h3>
+                <p className="text-[10px] text-gray-400 mt-0.5">
+                  {sidebarTab === 'availabilities' 
+                    ? `Ranking (${format(currentMonth, 'MMMM', { locale: ptBR })})` 
+                    : 'Avisos da equipe'
+                  }
+                </p>
+              </div>
+
+              {onSidebarTabChange && (
+                <button 
+                  onClick={() => onSidebarTabChange(sidebarTab === 'availabilities' ? 'cancellations' : 'availabilities')}
+                  title={sidebarTab === 'availabilities' ? 'Ver Cancelamentos' : 'Ver Disponibilidades'}
+                  className="flex items-center gap-1 text-[10px] font-black uppercase text-brand-primary bg-brand-primary/10 hover:bg-brand-primary/20 transition-all px-2.5 py-1.5 rounded-lg border border-brand-primary/20 shrink-0"
+                >
+                  <span>{sidebarTab === 'availabilities' ? 'Cancelamentos' : 'Disponibilidades'}</span>
+                  <ChevronRight size={14} className={cn("transition-transform duration-200", sidebarTab === 'cancellations' && "rotate-180")} />
+                </button>
               )}
             </div>
+
+            {sidebarTab === 'availabilities' ? (
+              <div className="divide-y divide-brand-border overflow-y-auto max-h-[400px] pr-1 space-y-3 pt-2">
+                {employeesWithAvailabilitiesCount.map(emp => (
+                  <div key={emp.id} className="flex items-center justify-between pt-3 first:pt-0">
+                    <div>
+                      <p className="text-xs font-bold text-white">{emp.artisticName || emp.name}</p>
+                      <p className="text-[10px] text-gray-500 font-medium uppercase">{emp.level}</p>
+                    </div>
+                    <div className={cn(
+                      "px-2.5 py-1 rounded-full text-xs font-black",
+                      emp.availabilitiesCount > 0 
+                        ? "bg-emerald-500/10 text-emerald-400" 
+                        : "bg-gray-800 text-gray-500"
+                    )}>
+                      {emp.availabilitiesCount} {emp.availabilitiesCount === 1 ? 'dia' : 'dias'}
+                    </div>
+                  </div>
+                ))}
+                {employeesWithAvailabilitiesCount.length === 0 && (
+                  <p className="text-xs text-gray-500 text-center py-4 italic">Nenhum funcionário cadastrado.</p>
+                )}
+              </div>
+            ) : (
+              <div className="overflow-y-auto max-h-[400px] pr-1 space-y-3 pt-2">
+                {cancellations.map(c => {
+                  const isUnread = !c.viewedByAdmins;
+                  return (
+                    <div 
+                      key={c.id} 
+                      className={cn(
+                        "p-3 rounded-xl border flex flex-col gap-2 transition-all duration-200",
+                        isUnread 
+                          ? "bg-red-500/10 border-red-500/30 ring-1 ring-red-500/20" 
+                          : "bg-brand-bg/40 border-brand-border"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                            {isUnread && <span className="w-2 h-2 bg-red-500 rounded-full shrink-0 animate-pulse"></span>}
+                            {c.employeeName}
+                          </p>
+                          <p className="text-[10px] text-gray-400 font-medium mt-0.5">
+                            Cancelou dia <span className="text-red-400 font-bold">{format(parseISO(c.date), 'dd/MM')}</span> ({c.type === 'party' ? 'Festa 🥳' : 'Comum'})
+                          </p>
+                        </div>
+                        
+                        <div className="flex items-center gap-1 shrink-0">
+                          {isUnread && onMarkCancellationRead && (
+                            <button 
+                              onClick={() => onMarkCancellationRead(c.id)}
+                              title="Marcar como visto"
+                              className="p-1 hover:bg-white/5 text-gray-400 hover:text-emerald-400 rounded transition-colors"
+                            >
+                              <Check size={14} />
+                            </button>
+                          )}
+                          {onDismissCancellation && (
+                            <button 
+                              onClick={() => onDismissCancellation(c.id)}
+                              title="Excluir aviso"
+                              className="p-1 hover:bg-white/5 text-gray-400 hover:text-red-400 rounded transition-colors"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-[9px] text-gray-500 border-t border-brand-border/30 pt-1.5">
+                        <span>Horário:</span>
+                        <span>{format(parseISO(c.cancelledAt), "dd/MM 'às' HH:mm", { locale: ptBR })}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                {cancellations.length === 0 && (
+                  <p className="text-xs text-gray-500 text-center py-6 italic">Nenhum cancelamento registrado.</p>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -922,6 +1061,53 @@ export default function CalendarView({
           dayConfig={selectedDay ? getDayConfig(format(selectedDay, 'yyyy-MM-dd')) : { isCommon: true, isParty: false }}
           onUpdateDayConfig={onUpdateDayConfig || (() => {})}
         />
+      )}
+
+      {/* Employee Cancellation Modal */}
+      {!isAdmin && isCancelModalOpen && cancelTargetDate && myEmployee && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="bg-brand-card border border-brand-border w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center space-y-4">
+              <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
+                <AlertCircle size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-white">Cancelar Escala?</h3>
+              <div className="text-gray-300 text-sm leading-relaxed space-y-2">
+                <p>
+                  Você está escalado para trabalhar no dia <span className="text-brand-primary font-bold">{format(cancelTargetDate, "dd/MM 'de' MMMM", { locale: ptBR })}</span>.
+                </p>
+                <p className="text-xs text-gray-400">
+                  Deseja realmente solicitar o cancelamento da sua escala para esta data? Os administradores serão notificados imediatamente.
+                </p>
+              </div>
+            </div>
+            <div className="p-4 bg-brand-bg/50 border-t border-brand-border flex gap-3">
+              <button 
+                type="button"
+                disabled={isCancellingLoading}
+                onClick={() => {
+                  setIsCancelModalOpen(false);
+                  setCancelTargetDate(null);
+                }}
+                className="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-bold py-2.5 px-4 rounded-xl transition-all text-sm disabled:opacity-50"
+              >
+                Voltar
+              </button>
+              <button 
+                type="button"
+                disabled={isCancellingLoading}
+                onClick={handleConfirmCancellation}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2.5 px-4 rounded-xl transition-all text-sm shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isCancellingLoading ? (
+                  <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                ) : (
+                  'Confirmar'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
