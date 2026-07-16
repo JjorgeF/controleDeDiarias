@@ -29,8 +29,8 @@ interface CalendarViewProps {
   deadlines?: Record<string, string>;
   onUpdateDeadline?: (monthKey: string, deadlineIso: string) => void;
   onUpdateAvailabilities?: (employeeId: string, availabilities: string[]) => void;
-  dayConfigs?: Record<string, { isCommon: boolean; isParty: boolean }>;
-  onUpdateDayConfig?: (dateStr: string, config: { isCommon: boolean; isParty: boolean }) => void;
+  dayConfigs?: Record<string, { isCommon: boolean; isParty: boolean; partyTime?: string }>;
+  onUpdateDayConfig?: (dateStr: string, config: { isCommon: boolean; isParty: boolean; partyTime?: string }) => void;
   onCancelWorkDay?: (employeeId: string, dateStr: string, type: 'common' | 'party', employeeName: string) => Promise<void>;
   cancellations?: CancellationLog[];
   onDismissCancellation?: (cancellationId: string) => void;
@@ -233,6 +233,7 @@ export default function CalendarView({
       return {
         isCommon: !!config.isCommon,
         isParty: !!config.isParty,
+        partyTime: config.partyTime || '',
       };
     }
 
@@ -256,10 +257,11 @@ export default function CalendarView({
       return {
         isCommon: hasCommonWorkers || hasPastAvailabilities || (!hasPartyWorkers && !hasPastPartyAvailabilities),
         isParty: hasPartyWorkers || hasPastPartyAvailabilities,
+        partyTime: '',
       };
     }
 
-    return { isCommon: false, isParty: false };
+    return { isCommon: false, isParty: false, partyTime: '' };
   };
 
   const handleConfirmCancellation = async () => {
@@ -640,8 +642,11 @@ export default function CalendarView({
                     >
                       {/* Party indicator badge */}
                       {config.isParty && (
-                        <span className="absolute top-1 right-1 text-[7px] md:text-[9px] bg-purple-500/25 text-purple-300 px-1 py-0.5 rounded font-black uppercase tracking-wider scale-90 md:scale-100 z-10">
-                          🎉 Festa
+                        <span 
+                          className="absolute top-1 right-1 text-[7px] md:text-[9px] bg-purple-500/25 text-purple-300 px-1 py-0.5 rounded font-black uppercase tracking-wider scale-90 md:scale-100 z-10 max-w-[80%] truncate"
+                          title={config.partyTime ? `Horário da Festa: ${config.partyTime}` : 'Festa'}
+                        >
+                          🎉 Festa{config.partyTime ? ` (${config.partyTime})` : ''}
                         </span>
                       )}
 
@@ -1164,6 +1169,7 @@ export default function CalendarView({
                 const dateStr = format(employeeChoiceDate, 'yyyy-MM-dd');
                 const currentAvailabilities = myEmployee.availabilities || [];
                 const isPartyChecked = currentAvailabilities.includes(`${dateStr}_party`);
+                const config = getDayConfig(dateStr);
                 
                 return (
                   <label className={cn(
@@ -1174,7 +1180,11 @@ export default function CalendarView({
                   )}>
                     <div className="flex flex-col">
                       <span className="font-bold text-sm text-white">Dia de Festa 🥳</span>
-                      <span className="text-xs text-gray-400">Trabalhar em eventos e festas extras</span>
+                      {config.partyTime ? (
+                        <span className="text-xs text-purple-300 font-bold mt-1">Horário: {config.partyTime}</span>
+                      ) : (
+                        <span className="text-xs text-gray-400">Trabalhar em eventos e festas extras</span>
+                      )}
                     </div>
                     <input 
                       type="checkbox"
@@ -1223,7 +1233,7 @@ export default function CalendarView({
           copiedTeam={copiedTeam}
           onCopyTeam={handleCopyTeam}
           onPasteTeam={handlePasteTeam}
-          dayConfig={selectedDay ? getDayConfig(format(selectedDay, 'yyyy-MM-dd')) : { isCommon: false, isParty: false }}
+          dayConfig={selectedDay ? getDayConfig(format(selectedDay, 'yyyy-MM-dd')) : { isCommon: false, isParty: false, partyTime: '' }}
           onUpdateDayConfig={onUpdateDayConfig || (() => {})}
         />
       )}
