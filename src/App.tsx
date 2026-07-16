@@ -391,7 +391,17 @@ export default function App() {
           }
           return d;
         });
-        await updateDoc(empRef, { workDays: updatedWorkDays });
+
+        // Remove the availability for this date so the employee doesn't show as available anymore after cancelling
+        const currentAvailabilities = empData.availabilities || [];
+        const updatedAvailabilities = currentAvailabilities.filter(av => 
+          av !== dateStr && av !== `${dateStr}_common` && av !== `${dateStr}_party`
+        );
+
+        await updateDoc(empRef, { 
+          workDays: updatedWorkDays,
+          availabilities: updatedAvailabilities
+        });
       }
     } catch (error: any) {
       console.error("Error cancelling workday:", error);
