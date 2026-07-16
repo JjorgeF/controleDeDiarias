@@ -10,7 +10,7 @@ interface EmployeeModalProps {
   employee?: Employee;
 }
 
-const LEVELS: EmployeeLevel[] = ['Trainee', 'Aprendiz', 'Coordenador(a)', 'Recreador(a)', 'Recreador(a) Experiente'];
+const LEVELS: EmployeeLevel[] = ['Trainee', 'Aprendiz', 'Coordenador(a)', 'Recreador(a)', 'Recreador(a) Experiente', 'Motorista'];
 
 export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, employee }: EmployeeModalProps) {
   const [isDeleting, setIsDeleting] = React.useState(false);
