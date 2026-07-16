@@ -18,6 +18,8 @@
   --border: rgba(0, 0, 0, 0.08);
   --text-main: #0f172a;
   --text-muted: #64748b;
+  --scrollbar-thumb: rgba(148, 163, 184, 0.3);
+  --scrollbar-thumb-hover: rgba(100, 116, 139, 0.5);
 }
 
 .dark {
@@ -26,6 +28,8 @@
   --border: rgba(255, 255, 255, 0.1);
   --text-main: #ffffff;
   --text-muted: #94a3b8;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.35);
 }
 
 @layer base {
@@ -39,5 +43,40 @@
   
   .text-white {
     color: var(--text-main);
+  }
+
+  /* Global elegant thin scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 0.3s ease;
+  }
+
+  *:hover {
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+
+  /* Webkit support (Chrome, Safari, Edge, Opera) */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 9999px;
+    transition: background-color 0.3s ease;
+  }
+
+  *:hover::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover) !important;
   }
 }
