@@ -231,6 +231,30 @@ export default function CalendarView({
         isParty: !!config.isParty,
       };
     }
+
+    // Auto-infer based on existing escalations to avoid losing past data
+    const hasCommonWorkers = employees.some(emp => 
+      emp.workDays?.some(d => d.date === dateStr && d.type === 'common' && !d.isCancelled)
+    );
+    const hasPartyWorkers = employees.some(emp => 
+      emp.workDays?.some(d => d.date === dateStr && d.type === 'party' && !d.isCancelled)
+    );
+    
+    // Also check if anyone has availabilities from the past system
+    const hasPastAvailabilities = employees.some(emp => 
+      emp.availabilities?.some(av => av === dateStr || av === `${dateStr}_common`)
+    );
+    const hasPastPartyAvailabilities = employees.some(emp => 
+      emp.availabilities?.some(av => av === `${dateStr}_party`)
+    );
+
+    if (hasCommonWorkers || hasPartyWorkers || hasPastAvailabilities || hasPastPartyAvailabilities) {
+      return {
+        isCommon: hasCommonWorkers || hasPastAvailabilities || (!hasPartyWorkers && !hasPastPartyAvailabilities),
+        isParty: hasPartyWorkers || hasPastPartyAvailabilities,
+      };
+    }
+
     return { isCommon: false, isParty: false };
   };
 
