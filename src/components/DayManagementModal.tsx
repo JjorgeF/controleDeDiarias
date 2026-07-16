@@ -14,8 +14,8 @@ interface DayManagementModalProps {
   copiedTeam: string[] | null;
   onCopyTeam: () => void;
   onPasteTeam: () => void;
-  dayConfig: { isCommon: boolean; isParty: boolean };
-  onUpdateDayConfig: (dateStr: string, config: { isCommon: boolean; isParty: boolean }) => void;
+  dayConfig: { isCommon: boolean; isParty: boolean; partyTime?: string };
+  onUpdateDayConfig: (dateStr: string, config: { isCommon: boolean; isParty: boolean; partyTime?: string }) => void;
 }
 
 export default function DayManagementModal({
@@ -36,6 +36,18 @@ export default function DayManagementModal({
   if (!isOpen || !selectedDay) return null;
 
   const selectedDayStr = format(selectedDay, 'yyyy-MM-dd');
+
+  // Parse party time (format: "start até end")
+  const partyTimeStr = dayConfig.partyTime || '';
+  let startTime = '';
+  let endTime = '';
+  if (partyTimeStr.includes(' até ')) {
+    const parts = partyTimeStr.split(' até ');
+    startTime = parts[0] || '';
+    endTime = parts[1] || '';
+  } else if (partyTimeStr) {
+    startTime = partyTimeStr;
+  }
   
   const employeesWorking = employees.filter(emp => 
     emp.workDays.some(d => d.date === selectedDayStr && !d.isCancelled)
@@ -137,7 +149,7 @@ export default function DayManagementModal({
             <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">Configuração do Dia</h4>
             <p className="text-[10px] text-gray-500 font-semibold mt-0.5">Ative os ambientes disponíveis para esta data</p>
           </div>
-          <div className="flex items-center gap-6">
+          <div className="flex flex-wrap items-center gap-4 sm:gap-6">
             <label className="flex items-center gap-2 cursor-pointer text-xs md:text-sm text-white select-none group">
               <input 
                 type="checkbox"
@@ -147,15 +159,47 @@ export default function DayManagementModal({
               />
               <span className="font-bold group-hover:text-brand-primary transition-colors">Dia CCSP</span>
             </label>
-            <label className="flex items-center gap-2 cursor-pointer text-xs md:text-sm text-white select-none group">
-              <input 
-                type="checkbox"
-                checked={!!dayConfig.isParty}
-                onChange={(e) => onUpdateDayConfig(selectedDayStr, { ...dayConfig, isParty: e.target.checked })}
-                className="rounded border-brand-border text-purple-500 bg-brand-bg focus:ring-purple-500 w-4 h-4 cursor-pointer"
-              />
-              <span className="text-purple-400 font-bold group-hover:text-purple-300 transition-colors">Festa 🥳</span>
-            </label>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer text-xs md:text-sm text-white select-none group">
+                <input 
+                  type="checkbox"
+                  checked={!!dayConfig.isParty}
+                  onChange={(e) => onUpdateDayConfig(selectedDayStr, { ...dayConfig, isParty: e.target.checked })}
+                  className="rounded border-brand-border text-purple-500 bg-brand-bg focus:ring-purple-500 w-4 h-4 cursor-pointer"
+                />
+                <span className="text-purple-400 font-bold group-hover:text-purple-300 transition-colors">Festa 🥳</span>
+              </label>
+              {!!dayConfig.isParty && (
+                <div className="flex items-center gap-1.5 animate-in fade-in zoom-in-95 duration-200">
+                  <span className="text-[10px] text-gray-500 font-bold uppercase">Horário:</span>
+                  <div className="flex items-center gap-1 bg-brand-bg/40 border border-purple-500/30 rounded-xl p-0.5 shadow-inner">
+                    <input 
+                      type="text"
+                      placeholder="00h"
+                      value={startTime}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const newTime = val || endTime ? `${val} até ${endTime}` : '';
+                        onUpdateDayConfig(selectedDayStr, { ...dayConfig, partyTime: newTime });
+                      }}
+                      className="bg-brand-bg border border-transparent rounded-lg px-2 py-0.5 text-xs text-center text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/50 w-12"
+                    />
+                    <span className="text-[9px] text-purple-400 font-black uppercase select-none">até</span>
+                    <input 
+                      type="text"
+                      placeholder="20h"
+                      value={endTime}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const newTime = startTime || val ? `${startTime} até ${val}` : '';
+                        onUpdateDayConfig(selectedDayStr, { ...dayConfig, partyTime: newTime });
+                      }}
+                      className="bg-brand-bg border border-transparent rounded-lg px-2 py-0.5 text-xs text-center text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/50 w-12"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
