@@ -145,7 +145,7 @@ export default function DayManagementModal({
                 onChange={(e) => onUpdateDayConfig(selectedDayStr, { ...dayConfig, isCommon: e.target.checked })}
                 className="rounded border-brand-border text-brand-primary bg-brand-bg focus:ring-brand-primary w-4 h-4 cursor-pointer"
               />
-              <span className="font-bold group-hover:text-brand-primary transition-colors">Dia Comum</span>
+              <span className="font-bold group-hover:text-brand-primary transition-colors">Dia CCSP</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer text-xs md:text-sm text-white select-none group">
               <input 
@@ -211,7 +211,7 @@ export default function DayManagementModal({
                                   : "bg-transparent border border-brand-border text-gray-500 hover:border-brand-primary/40 hover:text-brand-primary"
                               )}
                             >
-                              Comum
+                              CCSP
                             </button>
                           )}
                           {!!dayConfig.isParty && (
@@ -257,7 +257,7 @@ export default function DayManagementModal({
                     
                     {isExpanded && hasCommon && (
                       <div className="flex items-center gap-4 pt-4 border-t border-brand-primary/10 animate-in fade-in slide-in-from-top-2">
-                        <label className="text-[10px] font-black text-gray-500 uppercase">Horas Extras (Comum):</label>
+                        <label className="text-[10px] font-black text-gray-500 uppercase">Horas Extras (CCSP):</label>
                         <input 
                           type="number"
                           min="0"
@@ -305,7 +305,7 @@ export default function DayManagementModal({
                           <div className="flex items-center gap-1.5 mt-0.5">
                             <span className="text-[9px] text-emerald-400 font-bold uppercase">{emp.level}</span>
                             {isDispCommon && (
-                              <span className="text-[8px] font-black bg-emerald-500/20 text-emerald-400 px-1 rounded uppercase tracking-wider">Disp. Comum</span>
+                              <span className="text-[8px] font-black bg-emerald-500/20 text-emerald-400 px-1 rounded uppercase tracking-wider">Disp. CCSP</span>
                             )}
                             {isDispParty && (
                               <span className="text-[8px] font-black bg-pink-500/20 text-pink-300 px-1 rounded uppercase tracking-wider">Disp. Festa 🎉</span>
@@ -321,7 +321,7 @@ export default function DayManagementModal({
                               className="text-[10px] font-black bg-brand-primary/10 hover:bg-brand-primary text-brand-primary hover:text-brand-bg px-2.5 py-1.5 rounded-lg border border-brand-primary/30 hover:border-transparent transition-all flex items-center gap-1 uppercase"
                             >
                               <UserPlus size={12} />
-                              Comum
+                              CCSP
                             </button>
                           )}
                           {!!dayConfig.isParty && (
@@ -367,7 +367,7 @@ export default function DayManagementModal({
                             className="text-[10px] font-black bg-brand-bg border border-brand-border hover:bg-brand-primary/10 hover:border-brand-primary hover:text-brand-primary text-gray-400 px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 uppercase"
                           >
                             <UserPlus size={12} />
-                            Comum
+                            CCSP
                           </button>
                         )}
                         {!!dayConfig.isParty && (
