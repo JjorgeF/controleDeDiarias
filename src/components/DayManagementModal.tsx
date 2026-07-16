@@ -38,11 +38,11 @@ export default function DayManagementModal({
   const selectedDayStr = format(selectedDay, 'yyyy-MM-dd');
   
   const employeesWorking = employees.filter(emp => 
-    emp.workDays.some(d => d.date === selectedDayStr)
+    emp.workDays.some(d => d.date === selectedDayStr && !d.isCancelled)
   );
 
   const filteredAvailable = employees.filter(emp => 
-    !emp.workDays.some(d => d.date === selectedDayStr) &&
+    !emp.workDays.some(d => d.date === selectedDayStr && !d.isCancelled) &&
     (emp.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
      emp.artisticName.toLowerCase().includes(searchQuery.toLowerCase()))
   );
@@ -60,13 +60,16 @@ export default function DayManagementModal({
   );
 
   const toggleSchedule = (employee: Employee, type: 'common' | 'party') => {
-    const hasThisWork = employee.workDays.some(d => d.date === selectedDayStr && d.type === type);
+    const hasThisWork = employee.workDays.some(d => d.date === selectedDayStr && d.type === type && !d.isCancelled);
     let newDays: WorkDay[];
     
     if (hasThisWork) {
+      // Remove it
       newDays = employee.workDays.filter(d => !(d.date === selectedDayStr && d.type === type));
     } else {
-      newDays = [...employee.workDays, { date: selectedDayStr, type: type as DayType, extraHours: 0 }];
+      // Filter out any existing day for this date (whether cancelled or not) and add fresh
+      const filtered = employee.workDays.filter(d => d.date !== selectedDayStr);
+      newDays = [...filtered, { date: selectedDayStr, type: type as DayType, extraHours: 0 }];
     }
     
     onUpdateDays(employee.id, newDays);
@@ -79,7 +82,7 @@ export default function DayManagementModal({
 
   const updateExtraHours = (employee: Employee, hours: number) => {
     const newDays = employee.workDays.map(d => 
-      d.date === selectedDayStr && d.type === 'common' ? { ...d, extraHours: hours } : d
+      d.date === selectedDayStr && d.type === 'common' && !d.isCancelled ? { ...d, extraHours: hours } : d
     );
     onUpdateDays(employee.id, newDays);
   };
