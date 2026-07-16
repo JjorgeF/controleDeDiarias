@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 import { onAuthStateChanged, User, signInWithPopup } from 'firebase/auth';
 import { auth, db, googleProvider, isFirebaseConfigured, handleFirestoreError, OperationType } from './lib/firebase';
-import { Employee, ViewMode, WorkDay } from './types';
+import { Employee, ViewMode, WorkDay, CancellationLog } from './types';
 import Header from './components/Header';
 import EmployeeCard from './components/EmployeeCard';
 import EmployeeList from './components/EmployeeList';
@@ -39,6 +39,7 @@ export default function App() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [deadlines, setDeadlines] = useState<Record<string, string>>({}); // Key: "yyyy-MM", Value: "yyyy-MM-ddTHH:mm"
   const [dayConfigs, setDayConfigs] = useState<Record<string, { isCommon: boolean; isParty: boolean }>>({});
+  const [sidebarTab, setSidebarTab] = useState<'availabilities' | 'cancellations'>('availabilities');
   
   // Estado para simulação de papéis (Role simulation)
   const [simulationActive, setSimulationActive] = useState(false);
@@ -81,6 +82,8 @@ export default function App() {
     });
     return () => unsub();
   }, [db, user]);
+
+
 
   useEffect(() => {
     // Apply theme class to html element
@@ -166,6 +169,30 @@ export default function App() {
       emp.artisticName.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [employees, searchQuery]);
+
+  const cancellations = useMemo(() => {
+    const list: CancellationLog[] = [];
+    employees.forEach(emp => {
+      (emp.workDays || []).forEach(wd => {
+        if (wd.isCancelled) {
+          list.push({
+            id: `${emp.id}_${wd.date}`,
+            employeeId: emp.id,
+            employeeName: emp.artisticName || emp.name,
+            date: wd.date,
+            type: wd.type as 'common' | 'party',
+            cancelledAt: wd.cancelledAt || new Date().toISOString(),
+            viewedByAdmins: !!wd.cancellationViewed
+          });
+        }
+      });
+    });
+    return list.sort((a, b) => new Date(b.cancelledAt).getTime() - new Date(a.cancelledAt).getTime());
+  }, [employees]);
+
+  const unreadCancellations = useMemo(() => {
+    return cancellations.filter(c => !c.viewedByAdmins);
+  }, [cancellations]);
 
   const handleSaveEmployee = async (data: Partial<Employee>): Promise<{ success: boolean; error?: string }> => {
     if (!user || !db) return { success: false, error: "Usuário não autenticado." };
@@ -346,6 +373,73 @@ export default function App() {
     }
   };
 
+  const handleCancelWorkDay = async (employeeId: string, dateStr: string, type: 'common' | 'party', employeeName: string) => {
+    if (!user || !db) return;
+    try {
+      const empRef = doc(db, 'employees', employeeId);
+      const empSnap = await getDoc(empRef);
+      if (empSnap.exists()) {
+        const empData = empSnap.data() as Employee;
+        const updatedWorkDays = (empData.workDays || []).map(d => {
+          if (d.date === dateStr) {
+            return {
+              ...d,
+              isCancelled: true,
+              cancelledAt: new Date().toISOString(),
+              cancellationViewed: false
+            };
+          }
+          return d;
+        });
+        await updateDoc(empRef, { workDays: updatedWorkDays });
+      }
+    } catch (error: any) {
+      console.error("Error cancelling workday:", error);
+      alert("Erro ao cancelar escala: " + (error.message || String(error)));
+    }
+  };
+
+  const handleMarkCancellationRead = async (cancellationId: string) => {
+    if (!db) return;
+    try {
+      const [employeeId, dateStr] = cancellationId.split('_');
+      if (employeeId && dateStr) {
+        const empRef = doc(db, 'employees', employeeId);
+        const empSnap = await getDoc(empRef);
+        if (empSnap.exists()) {
+          const empData = empSnap.data() as Employee;
+          const updatedWorkDays = (empData.workDays || []).map(d => {
+            if (d.date === dateStr) {
+              return { ...d, cancellationViewed: true };
+            }
+            return d;
+          });
+          await updateDoc(empRef, { workDays: updatedWorkDays });
+        }
+      }
+    } catch (error) {
+      console.error("Error marking cancellation as read:", error);
+    }
+  };
+
+  const handleDismissCancellation = async (cancellationId: string) => {
+    if (!db) return;
+    try {
+      const [employeeId, dateStr] = cancellationId.split('_');
+      if (employeeId && dateStr) {
+        const empRef = doc(db, 'employees', employeeId);
+        const empSnap = await getDoc(empRef);
+        if (empSnap.exists()) {
+          const empData = empSnap.data() as Employee;
+          const updatedWorkDays = (empData.workDays || []).filter(d => d.date !== dateStr);
+          await updateDoc(empRef, { workDays: updatedWorkDays });
+        }
+      }
+    } catch (error) {
+      console.error("Error dismissing cancellation:", error);
+    }
+  };
+
   const handleLogin = async () => {
     if (!auth) return;
     try {
@@ -463,6 +557,12 @@ export default function App() {
                     onUpdateAvailabilities={handleUpdateAvailabilities}
                     dayConfigs={dayConfigs}
                     onUpdateDayConfig={handleUpdateDayConfig}
+                    onCancelWorkDay={handleCancelWorkDay}
+                    cancellations={cancellations}
+                    onDismissCancellation={handleDismissCancellation}
+                    onMarkCancellationRead={handleMarkCancellationRead}
+                    sidebarTab={sidebarTab}
+                    onSidebarTabChange={setSidebarTab}
                   />
                 </div>
               </div>
@@ -506,6 +606,32 @@ export default function App() {
       />
 
       <main className="w-full mx-auto px-2 md:px-4 py-4 md:py-8 max-w-7xl">
+        {isViewingAsAdmin && unreadCancellations.length > 0 && (
+          <div className="bg-red-500/10 border border-red-500/30 text-red-200 p-4 rounded-xl mb-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg animate-pulse">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="text-red-400 shrink-0" size={24} />
+              <div>
+                <p className="text-sm font-black">Atenção! Existem novos cancelamentos de escala:</p>
+                <p className="text-xs text-red-300 font-bold mt-0.5">
+                  {unreadCancellations.map(c => `${c.employeeName} (Dia ${format(parseISO(c.date), 'dd/MM')})`).join(', ')}
+                </p>
+              </div>
+            </div>
+            <button 
+              onClick={() => {
+                setSidebarTab('cancellations');
+                setViewMode('calendar');
+                setTimeout(() => {
+                  document.getElementById('sidebar-panel')?.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+              }}
+              className="bg-red-500 hover:bg-red-600 text-white font-bold text-xs py-2 px-4 rounded-lg transition-colors flex items-center gap-1.5 shrink-0 shadow-md animate-bounce"
+            >
+              Ver Quadro de Cancelamentos
+            </button>
+          </div>
+        )}
+
         {viewMode === 'grid' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredEmployees.map(emp => (
@@ -558,6 +684,12 @@ export default function App() {
             onUpdateDeadline={handleUpdateDeadline}
             dayConfigs={dayConfigs}
             onUpdateDayConfig={handleUpdateDayConfig}
+            onCancelWorkDay={handleCancelWorkDay}
+            cancellations={cancellations}
+            onDismissCancellation={handleDismissCancellation}
+            onMarkCancellationRead={handleMarkCancellationRead}
+            sidebarTab={sidebarTab}
+            onSidebarTabChange={setSidebarTab}
           />
         )}
       </main>
