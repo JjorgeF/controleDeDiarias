@@ -59,6 +59,16 @@ export default function CalendarView({
   onSidebarTabChange
 }: CalendarViewProps) {
   const [selectedDay, setSelectedDay] = React.useState<Date | null>(new Date());
+  const clickTimeoutRef = React.useRef<any>(null);
+  const clickDayStrRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (clickTimeoutRef.current) {
+        clearTimeout(clickTimeoutRef.current);
+      }
+    };
+  }, []);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [expandedEmployeeId, setExpandedEmployeeId] = React.useState<string | null>(null);
   const [copiedTeam, setCopiedTeam] = React.useState<string[] | null>(null);
@@ -217,11 +227,11 @@ export default function CalendarView({
     const config = dayConfigs?.[dateStr];
     if (config) {
       return {
-        isCommon: config.isCommon !== false,
+        isCommon: !!config.isCommon,
         isParty: !!config.isParty,
       };
     }
-    return { isCommon: true, isParty: false };
+    return { isCommon: false, isParty: false };
   };
 
   const handleConfirmCancellation = async () => {
@@ -246,8 +256,48 @@ export default function CalendarView({
   const handleDayClick = (day: Date) => {
     if (isAdmin) {
       if (isReadOnly) return;
-      setSelectedDay(day);
-      setIsDayModalOpen(true);
+      
+      const dayStr = format(day, 'yyyy-MM-dd');
+      
+      if (clickTimeoutRef.current && clickDayStrRef.current === dayStr) {
+        // Double click detected!
+        clearTimeout(clickTimeoutRef.current);
+        clickTimeoutRef.current = null;
+        clickDayStrRef.current = null;
+        
+        // Double click action: open modal
+        setSelectedDay(day);
+        setIsDayModalOpen(true);
+      } else {
+        // If a timeout was active for a different day, trigger it first
+        if (clickTimeoutRef.current) {
+          clearTimeout(clickTimeoutRef.current);
+          clickTimeoutRef.current = null;
+          const prevDayStr = clickDayStrRef.current;
+          if (prevDayStr) {
+            const currentConfig = getDayConfig(prevDayStr);
+            if (onUpdateDayConfig) {
+              onUpdateDayConfig(prevDayStr, { ...currentConfig, isCommon: !currentConfig.isCommon });
+            }
+          }
+        }
+        
+        clickDayStrRef.current = dayStr;
+        clickTimeoutRef.current = setTimeout(() => {
+          clickTimeoutRef.current = null;
+          clickDayStrRef.current = null;
+          
+          // Single click action: Toggle isCommon config
+          const currentConfig = getDayConfig(dayStr);
+          const newConfig = {
+            ...currentConfig,
+            isCommon: !currentConfig.isCommon
+          };
+          if (onUpdateDayConfig) {
+            onUpdateDayConfig(dayStr, newConfig);
+          }
+        }, 220); // 220ms is highly responsive and standard double click delay
+      }
     } else {
       // Employee mode: toggle availability
       if (!myEmployee) return;
@@ -274,6 +324,11 @@ export default function CalendarView({
       }
       
       const config = getDayConfig(dayStr);
+      
+      // Se não houver atividade comum nem de festa marcada pelo admin, o funcionário não pode selecionar disponibilidade
+      if (!config.isCommon && !config.isParty) {
+        return;
+      }
       
       if (config.isCommon && config.isParty) {
         setEmployeeChoiceDate(day);
@@ -360,6 +415,9 @@ export default function CalendarView({
             </p>
             {!isAdmin && !isDeadlinePassed && (
               <p className="text-[10px] text-yellow-400/80 mt-0.5 font-bold">Toque nos dias do calendário para marcar/desmarcar os dias em que você pode trabalhar.</p>
+            )}
+            {isAdmin && (
+              <p className="text-[10px] text-emerald-400/80 mt-0.5 font-bold">⚡ Clique simples para ativar/desativar o dia comum de atividades. Clique duplo para gerenciar a equipe ou definir festa.</p>
             )}
             {!isAdmin && isDeadlinePassed && (
               <p className="text-[10px] text-red-400/80 mt-0.5 font-bold">As datas deste mês foram travadas. Caso precise alterar, entre em contato com um administrador.</p>
@@ -486,8 +544,8 @@ export default function CalendarView({
                   // Status for employee view
                   const isMyCancelledCommon = myEmployee?.workDays?.some(d => d.date === dayStr && d.type === 'common' && d.isCancelled);
                   const isMyCancelledParty = myEmployee?.workDays?.some(d => d.date === dayStr && d.type === 'party' && d.isCancelled);
-                  const isMyAvailableCommon = !isMyCancelledCommon && (myEmployee?.availabilities?.includes(dayStr) || myEmployee?.availabilities?.includes(`${dayStr}_common`));
-                  const isMyAvailableParty = !isMyCancelledParty && myEmployee?.availabilities?.includes(`${dayStr}_party`);
+                  const isMyAvailableCommon = config.isCommon && !isMyCancelledCommon && (myEmployee?.availabilities?.includes(dayStr) || myEmployee?.availabilities?.includes(`${dayStr}_common`));
+                  const isMyAvailableParty = config.isParty && !isMyCancelledParty && myEmployee?.availabilities?.includes(`${dayStr}_party`);
                   const isMyScheduledCommon = myEmployee?.workDays?.some(d => d.date === dayStr && d.type === 'common' && !d.isCancelled);
                   const isMyScheduledParty = myEmployee?.workDays?.some(d => d.date === dayStr && d.type === 'party' && !d.isCancelled);
 
@@ -509,8 +567,18 @@ export default function CalendarView({
                       className={cn(
                         "min-h-[60px] md:min-h-[110px] p-1 md:p-3 border-b border-r border-brand-border transition-all relative group",
                         !isCurrentMonth && "bg-brand-bg/20 opacity-30 pointer-events-none",
-                        isCurrentMonth && (isAdmin ? "hover:bg-brand-primary/5 cursor-pointer" : isDeadlinePassed ? "cursor-not-allowed opacity-80" : "hover:bg-emerald-500/5 cursor-pointer"),
+                        isCurrentMonth && (
+                          isAdmin 
+                            ? "hover:bg-brand-primary/5 cursor-pointer" 
+                            : isDeadlinePassed 
+                              ? "cursor-not-allowed opacity-80" 
+                              : (config.isCommon || config.isParty)
+                                ? "hover:bg-emerald-500/5 cursor-pointer"
+                                : "cursor-not-allowed opacity-30"
+                        ),
                         isAdmin && isSelected && !isReadOnly && "bg-brand-primary/10 ring-1 ring-brand-primary ring-inset z-10",
+                        isAdmin && !isSelected && config.isCommon && "bg-emerald-500/[0.03]",
+                        isAdmin && !isSelected && config.isParty && "bg-purple-500/[0.03]",
                         !isAdmin && isMyAvailable && "bg-emerald-500/5",
                         !isAdmin && isMyScheduled && "bg-brand-primary/10 ring-1 ring-brand-primary/50 ring-inset z-10",
                         idx % 7 === 6 && "border-r-0"
@@ -528,7 +596,8 @@ export default function CalendarView({
                           "text-xs md:text-sm font-black w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full transition-colors",
                           isTodayDate ? "bg-brand-primary text-brand-bg" : "text-gray-400 group-hover:text-white",
                           isAdmin && isSelected && !isTodayDate && !isReadOnly && "text-brand-primary",
-                          !isAdmin && isMyScheduled && "bg-brand-primary text-brand-bg"
+                          !isAdmin && isMyScheduled && "bg-brand-primary text-brand-bg",
+                          !isAdmin && !isMyScheduled && !config.isCommon && !config.isParty && "text-gray-600"
                         )}>
                           {format(day, 'd')}
                         </span>
@@ -554,6 +623,12 @@ export default function CalendarView({
                                   >
                                     <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full"></span>
                                     {availablesCommonCount}
+                                  </div>
+                                )}
+                                {workersCommonCount === 0 && availablesCommonCount === 0 && (
+                                  <div className="bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded-full text-[8px] md:text-[10px] font-black shrink-0 flex items-center gap-1 select-none">
+                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shrink-0"></span>
+                                    Ativo
                                   </div>
                                 )}
                               </>
@@ -1058,7 +1133,7 @@ export default function CalendarView({
           copiedTeam={copiedTeam}
           onCopyTeam={handleCopyTeam}
           onPasteTeam={handlePasteTeam}
-          dayConfig={selectedDay ? getDayConfig(format(selectedDay, 'yyyy-MM-dd')) : { isCommon: true, isParty: false }}
+          dayConfig={selectedDay ? getDayConfig(format(selectedDay, 'yyyy-MM-dd')) : { isCommon: false, isParty: false }}
           onUpdateDayConfig={onUpdateDayConfig || (() => {})}
         />
       )}
