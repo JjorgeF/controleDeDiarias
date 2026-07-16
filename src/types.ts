@@ -6,6 +6,9 @@ export interface WorkDay {
   date: string; // ISO string YYYY-MM-DD
   type: DayType;
   extraHours?: number;
+  isCancelled?: boolean;
+  cancelledAt?: string;
+  cancellationViewed?: boolean;
 }
 
 export interface Employee {
@@ -23,3 +26,13 @@ export interface Employee {
 }
 
 export type ViewMode = 'grid' | 'list' | 'calendar';
+
+export interface CancellationLog {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  date: string; // YYYY-MM-DD
+  type: 'common' | 'party';
+  cancelledAt: string; // ISO string
+  viewedByAdmins: boolean;
+}
