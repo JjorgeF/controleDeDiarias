@@ -45,7 +45,8 @@ export default function EmployeeList({
           </thead>
           <tbody className="divide-y divide-brand-border">
             {employees.map((emp) => {
-              const monthWorkDays = emp.workDays.filter(day => {
+              const monthWorkDays = (emp.workDays || []).filter(day => {
+                if (day.isCancelled) return false;
                 const date = parseISO(day.date);
                 return isSameMonth(date, currentMonth);
               });
