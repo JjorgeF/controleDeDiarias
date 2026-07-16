@@ -47,17 +47,19 @@ export default function DayManagementModal({
      emp.artisticName.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  const availableMarked = filteredAvailable.filter(emp => 
-    emp.availabilities?.includes(selectedDayStr) ||
-    emp.availabilities?.includes(`${selectedDayStr}_common`) ||
-    emp.availabilities?.includes(`${selectedDayStr}_party`)
-  );
+  const availableMarked = filteredAvailable.filter(emp => {
+    const commonAvailable = !!dayConfig.isCommon && 
+      (emp.availabilities?.includes(selectedDayStr) || emp.availabilities?.includes(`${selectedDayStr}_common`));
+    const partyAvailable = !!dayConfig.isParty && 
+      emp.availabilities?.includes(`${selectedDayStr}_party`);
+    return commonAvailable || partyAvailable;
+  });
 
-  const availableOthers = filteredAvailable.filter(emp => 
-    !emp.availabilities?.includes(selectedDayStr) &&
-    !emp.availabilities?.includes(`${selectedDayStr}_common`) &&
-    !emp.availabilities?.includes(`${selectedDayStr}_party`)
-  );
+  const availableOthers = filteredAvailable.filter(emp => {
+    const isMarked = (!!dayConfig.isCommon && (emp.availabilities?.includes(selectedDayStr) || emp.availabilities?.includes(`${selectedDayStr}_common`))) ||
+      (!!dayConfig.isParty && emp.availabilities?.includes(`${selectedDayStr}_party`));
+    return !isMarked;
+  });
 
   const toggleSchedule = (employee: Employee, type: 'common' | 'party') => {
     const hasThisWork = employee.workDays.some(d => d.date === selectedDayStr && d.type === type && !d.isCancelled);
@@ -139,7 +141,7 @@ export default function DayManagementModal({
             <label className="flex items-center gap-2 cursor-pointer text-xs md:text-sm text-white select-none group">
               <input 
                 type="checkbox"
-                checked={dayConfig.isCommon !== false}
+                checked={!!dayConfig.isCommon}
                 onChange={(e) => onUpdateDayConfig(selectedDayStr, { ...dayConfig, isCommon: e.target.checked })}
                 className="rounded border-brand-border text-brand-primary bg-brand-bg focus:ring-brand-primary w-4 h-4 cursor-pointer"
               />
