@@ -201,7 +201,7 @@ export default function ManageDaysModal({ isOpen, onClose, employee, onUpdateDay
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-sm">
                   <div className="w-4 h-4 rounded bg-brand-primary"></div>
-                  <span>Dia Comum</span>
+                  <span>Dia CCSP</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <div className="w-4 h-4 rounded bg-purple-600"></div>
