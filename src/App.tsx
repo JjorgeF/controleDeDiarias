@@ -139,6 +139,20 @@ export default function App() {
       })) as Employee[];
       
       setEmployees(emps);
+
+      // Auto-vincular o UID do usuário autenticado se ele for funcionário e o campo userId estiver vazio
+      if (!isAdmin && emps.length > 0 && user) {
+        const myEmp = emps[0];
+        if (!myEmp.userId || myEmp.userId !== user.uid) {
+          try {
+            const empRef = doc(db, 'employees', myEmp.id);
+            await updateDoc(empRef, { userId: user.uid });
+            console.log("userId vinculado com sucesso para o funcionário:", myEmp.name);
+          } catch (err) {
+            console.warn("Não foi possível auto-vincular o userId:", err);
+          }
+        }
+      }
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'employees');
     });
@@ -303,8 +317,9 @@ export default function App() {
     try {
       const empRef = doc(db, 'employees', employeeId);
       await updateDoc(empRef, { availabilities });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating availabilities:", error);
+      alert("Erro ao salvar suas disponibilidades: " + (error.message || "Verifique sua conexão e permissões do banco de dados."));
       handleFirestoreError(error, OperationType.UPDATE, `employees/${employeeId}`);
     }
   };
