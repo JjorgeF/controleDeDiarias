@@ -58,7 +58,12 @@ export default function ManageDaysModal({ isOpen, onClose, employee, onUpdateDay
       setTempDays([...tempDays, { date: dateStr, type: 'common', extraHours: 0 }]);
     } else {
       const existingDay = tempDays[existingDayIndex];
-      if (existingDay.type === 'common') {
+      if (existingDay.isCancelled) {
+        // If cancelled, uncancel it as a common day
+        const newDays = [...tempDays];
+        newDays[existingDayIndex] = { ...existingDay, isCancelled: false, cancellationViewed: false, type: 'common' };
+        setTempDays(newDays);
+      } else if (existingDay.type === 'common') {
         // Second click: party day
         const newDays = [...tempDays];
         newDays[existingDayIndex] = { ...existingDay, type: 'party' };
@@ -143,14 +148,14 @@ export default function ManageDaysModal({ isOpen, onClose, employee, onUpdateDay
                     className={cn(
                       "aspect-square flex items-center justify-center rounded-lg text-sm font-medium transition-all relative",
                       !isCurrentMonth && "opacity-20",
-                      !dayData && isCurrentMonth && "hover:bg-white/5",
-                      dayData?.type === 'common' && "bg-brand-primary text-brand-bg",
-                      dayData?.type === 'party' && "bg-purple-600 text-white",
+                      (!dayData || dayData.isCancelled) && isCurrentMonth && "hover:bg-white/5",
+                      dayData?.type === 'common' && !dayData.isCancelled && "bg-brand-primary text-brand-bg",
+                      dayData?.type === 'party' && !dayData.isCancelled && "bg-purple-600 text-white",
                       isSelected && "ring-2 ring-white ring-offset-2 ring-offset-brand-card"
                     )}
                   >
                     {format(day, 'd')}
-                    {dayData?.extraHours ? (
+                    {dayData?.extraHours && !dayData.isCancelled ? (
                       <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 text-[8px] flex items-center justify-center rounded-full border border-brand-card">
                         +{dayData.extraHours}
                       </span>
