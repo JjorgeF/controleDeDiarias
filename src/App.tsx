@@ -38,7 +38,7 @@ export default function App() {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [deadlines, setDeadlines] = useState<Record<string, string>>({}); // Key: "yyyy-MM", Value: "yyyy-MM-ddTHH:mm"
-  const [dayConfigs, setDayConfigs] = useState<Record<string, { isCommon: boolean; isParty: boolean }>>({});
+  const [dayConfigs, setDayConfigs] = useState<Record<string, { isCommon: boolean; isParty: boolean; partyTime?: string }>>({});
   const [sidebarTab, setSidebarTab] = useState<'availabilities' | 'cancellations'>('availabilities');
   
   // Estado para simulação de papéis (Role simulation)
@@ -73,7 +73,7 @@ export default function App() {
     if (!db || !user) return;
     const unsub = onSnapshot(doc(db, 'settings', 'dayConfigs'), (snapshot) => {
       if (snapshot.exists()) {
-        setDayConfigs(snapshot.data() as Record<string, { isCommon: boolean; isParty: boolean }>);
+        setDayConfigs(snapshot.data() as Record<string, { isCommon: boolean; isParty: boolean; partyTime?: string }>);
       } else {
         setDayConfigs({});
       }
@@ -362,7 +362,7 @@ export default function App() {
     }
   };
 
-  const handleUpdateDayConfig = async (dateStr: string, config: { isCommon: boolean; isParty: boolean }) => {
+  const handleUpdateDayConfig = async (dateStr: string, config: { isCommon: boolean; isParty: boolean; partyTime?: string }) => {
     if (!db) return;
     try {
       const docRef = doc(db, 'settings', 'dayConfigs');
