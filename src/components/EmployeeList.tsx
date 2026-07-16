@@ -76,7 +76,7 @@ export default function EmployeeList({
                   <td className="p-4 hidden md:table-cell">
                     <div className="flex flex-col gap-1 text-[10px] text-gray-500">
                       <div className="flex justify-between w-32">
-                        <span>Comum:</span>
+                        <span>CCSP:</span>
                         <span className="text-white font-bold">{formatCurrency(emp.dailyRate)}</span>
                       </div>
                       <div className="flex justify-between w-32">
