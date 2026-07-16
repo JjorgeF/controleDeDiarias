@@ -156,17 +156,22 @@ export default function App() {
   const handleSaveEmployee = async (data: Partial<Employee>): Promise<{ success: boolean; error?: string }> => {
     if (!user || !db) return { success: false, error: "Usuário não autenticado." };
 
+    const sanitizedData = { ...data };
+    if (sanitizedData.email) {
+      sanitizedData.email = sanitizedData.email.trim().toLowerCase();
+    }
+
     // Validation: Unique Artistic Name
-    if (data.artisticName) {
+    if (sanitizedData.artisticName) {
       const isArtisticNameTaken = employees.some(emp => 
-        emp.artisticName.trim().toLowerCase() === data.artisticName?.trim().toLowerCase() && 
+        emp.artisticName.trim().toLowerCase() === sanitizedData.artisticName?.trim().toLowerCase() && 
         emp.id !== selectedEmployee?.id
       );
 
       if (isArtisticNameTaken) {
         return { 
           success: false, 
-          error: `O nome artístico "${data.artisticName}" já está em uso. Por favor, escolha outro.` 
+          error: `O nome artístico "${sanitizedData.artisticName}" já está em uso. Por favor, escolha outro.` 
         };
       }
     }
@@ -174,13 +179,13 @@ export default function App() {
     try {
       if (selectedEmployee) {
         const empRef = doc(db, 'employees', selectedEmployee.id);
-        await updateDoc(empRef, data);
+        await updateDoc(empRef, sanitizedData);
       } else {
         // Ao criar novo, o userId pode ser vazio se for um convite por email
         // Se o email for do próprio admin, vincula a ele, senão deixa para o funcionário vincular no primeiro login
-        const isSelf = data.email === user.email;
+        const isSelf = sanitizedData.email === user.email?.trim().toLowerCase();
         await addDoc(collection(db, 'employees'), {
-          ...data,
+          ...sanitizedData,
           userId: isSelf ? user.uid : '',
           workDays: []
         });
