@@ -125,7 +125,7 @@ export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, emplo
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Valor da Diária (R$)</label>
+              <label className="block text-sm font-medium text-gray-400 mb-1">Valor da Diária CCSP (R$)</label>
               <input
                 type="number"
                 value={formData.dailyRate}
