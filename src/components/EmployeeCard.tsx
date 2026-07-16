@@ -21,7 +21,8 @@ const EmployeeCard: React.FC<EmployeeCardProps> = ({
   isReadOnly = false
 }) => {
 
-  const monthWorkDays = employee.workDays.filter(day => {
+  const monthWorkDays = (employee.workDays || []).filter(day => {
+    if (day.isCancelled) return false;
     const date = parseISO(day.date);
     return isSameMonth(date, currentMonth);
   });
