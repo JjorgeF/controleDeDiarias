@@ -300,7 +300,7 @@ export default function App() {
         const dayLabel = format(day, 'dd/MM');
         
         if (workDay) {
-          let typeLabel = workDay.type === 'common' ? 'Comum' : 'Festa';
+          let typeLabel = workDay.type === 'common' ? 'CCSP' : 'Festa';
           if (workDay.extraHours) typeLabel += ` (+${workDay.extraHours}h)`;
           row[dayLabel] = typeLabel;
         } else {
