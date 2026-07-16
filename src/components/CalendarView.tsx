@@ -471,7 +471,7 @@ export default function CalendarView({
               <p className="text-[10px] text-yellow-400/80 mt-0.5 font-bold">Toque nos dias do calendário para marcar/desmarcar os dias em que você pode trabalhar.</p>
             )}
             {isAdmin && (
-              <p className="text-[10px] text-emerald-400/80 mt-0.5 font-bold">⚡ Clique simples para ativar/desativar o dia comum de atividades. Clique duplo para gerenciar a equipe ou definir festa.</p>
+              <p className="text-[10px] text-emerald-400/80 mt-0.5 font-bold">⚡ Clique simples para ativar/desativar o dia de atividades CCSP. Clique duplo para gerenciar a equipe ou definir festa.</p>
             )}
             {!isAdmin && isDeadlinePassed && (
               <p className="text-[10px] text-red-400/80 mt-0.5 font-bold">As datas deste mês foram travadas. Caso precise alterar, entre em contato com um administrador.</p>
@@ -664,7 +664,7 @@ export default function CalendarView({
                               <>
                                 {workersCommonCount > 0 && (
                                   <div 
-                                    title={`${workersCommonCount} escalados (Dia Comum)`}
+                                    title={`${workersCommonCount} escalados (CCSP)`}
                                     className="bg-brand-primary/20 text-brand-primary px-1.5 py-0.5 rounded-full text-[8px] md:text-[10px] font-black shrink-0"
                                   >
                                     {workersCommonCount} C
@@ -672,7 +672,7 @@ export default function CalendarView({
                                 )}
                                 {availablesCommonCount > 0 && (
                                   <div 
-                                    title={`${availablesCommonCount} disponíveis (Dia Comum)`}
+                                    title={`${availablesCommonCount} disponíveis (CCSP)`}
                                     className="bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full text-[8px] md:text-[10px] font-black shrink-0 flex items-center gap-0.5"
                                   >
                                     <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full"></span>
@@ -1071,11 +1071,11 @@ export default function CalendarView({
               <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
                 <AlertTriangle size={32} />
               </div>
-              <h3 className="text-xl font-bold text-white">Desativar Dia Comum?</h3>
+              <h3 className="text-xl font-bold text-white">Desativar Dia CCSP?</h3>
               <p className="text-gray-400 text-sm leading-relaxed">
-                Você tem certeza que deseja desativar o dia <span className="text-brand-primary font-bold">{format(deactivateTargetDay, "dd/MM")}</span> como disponível para atividades comuns?
+                Você tem certeza que deseja desativar o dia <span className="text-brand-primary font-bold">{format(deactivateTargetDay, "dd/MM")}</span> como disponível para atividades CCSP?
                 <br />
-                <span className="text-xs text-red-400/80 mt-2 block font-medium">Os funcionários não poderão marcar disponibilidade para atividades comuns nesta data.</span>
+                <span className="text-xs text-red-400/80 mt-2 block font-medium">Os funcionários não poderão marcar disponibilidade para atividades CCSP nesta data.</span>
               </p>
             </div>
             <div className="p-4 bg-brand-bg/50 border-t border-brand-border flex gap-3">
@@ -1136,7 +1136,7 @@ export default function CalendarView({
                       : "bg-brand-bg/40 border-brand-border text-gray-400 hover:border-brand-primary/30"
                   )}>
                     <div className="flex flex-col">
-                      <span className="font-bold text-sm text-white">Dia Comum</span>
+                      <span className="font-bold text-sm text-white">Dia CCSP</span>
                       <span className="text-xs text-gray-400">Trabalho padrão do dia a dia</span>
                     </div>
                     <input 
