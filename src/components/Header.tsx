@@ -82,7 +82,7 @@ export default function Header({
       <div className="max-w-7xl mx-auto px-2 md:px-4 h-14 md:h-16 flex items-center justify-between gap-2 md:gap-4">
         <div className="flex items-center gap-2 md:gap-8">
           <div className="flex items-center gap-2">
-            <Logo size={36} className="w-8 h-8 md:w-10 md:h-10 shrink-0" />
+            <Logo size={36} className="w-8 h-8 md:w-10 md:h-10 shrink-0" animate={true} />
             <h1 className="text-lg md:text-2xl font-bold text-brand-primary whitespace-nowrap font-playful tracking-wide">
               Liga Positiva{(import.meta.env.VITE_ENABLE_SIMULATION?.toLowerCase() === 'true' || import.meta.env.DEV) ? ' Dev2' : ''}
             </h1>
