@@ -23,6 +23,7 @@ import EmployeeModal from './components/EmployeeModal';
 import ManageDaysModal from './components/ManageDaysModal';
 import SimulationBanner from './components/SimulationBanner';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
+import Logo from './components/Logo';
 import { LogIn, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format, isSameMonth, parseISO, eachDayOfInterval, startOfMonth, endOfMonth } from 'date-fns';
@@ -489,7 +490,10 @@ export default function App() {
   if (!user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-brand-bg p-4">
-        <div className="bg-brand-card border border-brand-border p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
+        <div className="bg-brand-card border border-brand-border p-8 rounded-2xl shadow-2xl max-w-md w-full text-center flex flex-col items-center">
+          <div className="mb-6 flex justify-center">
+            <Logo size={96} />
+          </div>
           <h1 className="text-2xl md:text-4xl font-black text-brand-primary mb-2">
             Liga Positiva{isSimulationEnabled ? ' Dev2' : ''}
           </h1>
