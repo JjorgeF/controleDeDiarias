@@ -1,0 +1,54 @@
+<svg viewBox="0 0 512 512" width="100%" height="100%" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g transform="translate(256, 256)">
+    <!-- Yellow Wing (Rotated 270) -->
+    <g transform="rotate(270)">
+      <path d="M 0 0 L 5 -215 L -118 -100 Z" fill="#fcb913" />
+      <rect x="15" y="-215" width="205" height="5" rx="1.5" fill="#fcb913" />
+      <rect x="39" y="-199" width="178" height="5" rx="1.5" fill="#fcb913" />
+      <rect x="63" y="-183" width="151" height="5" rx="1.5" fill="#fcb913" />
+      <rect x="87" y="-167" width="124" height="5" rx="1.5" fill="#fcb913" />
+      <rect x="111" y="-151" width="97" height="5" rx="1.5" fill="#fcb913" />
+      <rect x="135" y="-135" width="70" height="5" rx="1.5" fill="#fcb913" />
+      <rect x="159" y="-119" width="43" height="5" rx="1.5" fill="#fcb913" />
+      <rect x="183" y="-103" width="16" height="5" rx="1.5" fill="#fcb913" />
+    </g>
+    <!-- Navy Blue Wing (Rotated 180) -->
+    <g transform="rotate(180)">
+      <path d="M 0 0 L 5 -215 L -118 -100 Z" fill="#242867" />
+      <rect x="15" y="-215" width="205" height="5" rx="1.5" fill="#242867" />
+      <rect x="39" y="-199" width="178" height="5" rx="1.5" fill="#242867" />
+      <rect x="63" y="-183" width="151" height="5" rx="1.5" fill="#242867" />
+      <rect x="87" y="-167" width="124" height="5" rx="1.5" fill="#242867" />
+      <rect x="111" y="-151" width="97" height="5" rx="1.5" fill="#242867" />
+      <rect x="135" y="-135" width="70" height="5" rx="1.5" fill="#242867" />
+      <rect x="159" y="-119" width="43" height="5" rx="1.5" fill="#242867" />
+      <rect x="183" y="-103" width="16" height="5" rx="1.5" fill="#242867" />
+    </g>
+    <!-- Green Wing (Rotated 90) -->
+    <g transform="rotate(90)">
+      <path d="M 0 0 L 5 -215 L -118 -100 Z" fill="#1ca249" />
+      <rect x="15" y="-215" width="205" height="5" rx="1.5" fill="#1ca249" />
+      <rect x="39" y="-199" width="178" height="5" rx="1.5" fill="#1ca249" />
+      <rect x="63" y="-183" width="151" height="5" rx="1.5" fill="#1ca249" />
+      <rect x="87" y="-167" width="124" height="5" rx="1.5" fill="#1ca249" />
+      <rect x="111" y="-151" width="97" height="5" rx="1.5" fill="#1ca249" />
+      <rect x="135" y="-135" width="70" height="5" rx="1.5" fill="#1ca249" />
+      <rect x="159" y="-119" width="43" height="5" rx="1.5" fill="#1ca249" />
+      <rect x="183" y="-103" width="16" height="5" rx="1.5" fill="#1ca249" />
+    </g>
+    <!-- Purple Wing (Rotated 0) -->
+    <g transform="rotate(0)">
+      <path d="M 0 0 L 5 -215 L -118 -100 Z" fill="#b2127a" />
+      <rect x="15" y="-215" width="205" height="5" rx="1.5" fill="#b2127a" />
+      <rect x="39" y="-199" width="178" height="5" rx="1.5" fill="#b2127a" />
+      <rect x="63" y="-183" width="151" height="5" rx="1.5" fill="#b2127a" />
+      <rect x="87" y="-167" width="124" height="5" rx="1.5" fill="#b2127a" />
+      <rect x="111" y="-151" width="97" height="5" rx="1.5" fill="#b2127a" />
+      <rect x="135" y="-135" width="70" height="5" rx="1.5" fill="#b2127a" />
+      <rect x="159" y="-119" width="43" height="5" rx="1.5" fill="#b2127a" />
+      <rect x="183" y="-103" width="16" height="5" rx="1.5" fill="#b2127a" />
+    </g>
+    <!-- Central White Circle -->
+    <circle cx="0" cy="0" r="54" fill="#ffffff" />
+  </g>
+</svg>
