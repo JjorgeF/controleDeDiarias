@@ -22,22 +22,22 @@ export function PWAInstallPrompt() {
       window.matchMedia('(display-mode: standalone)').matches || 
       (window.navigator as any).standalone === true;
 
-    if (isStandalone && !isTestMode) {
-      return;
-    }
-
-    // 2. Check dismissal cookie/localStorage (hidden for 7 days)
+    // 2. Check dismissal (hidden for 7 days)
     const dismissedAt = localStorage.getItem('liga_positiva_pwa_dismissed_at');
-    if (dismissedAt && !isTestMode) {
+    let isDismissedRecently = false;
+    if (dismissedAt) {
       const dismissedTime = parseInt(dismissedAt, 10);
       const now = Date.now();
       const differenceInDays = (now - dismissedTime) / (1000 * 60 * 60 * 24);
       if (differenceInDays < 7) {
-        return; // Don't show if dismissed less than 7 days ago
+        isDismissedRecently = true;
       }
     }
 
-    // 3. Detect iOS
+    // Auto-prompt condition
+    const shouldAutoPrompt = !isStandalone && !isDismissedRecently;
+
+    // 3. Detect Platform (iOS, Android, Desktop)
     const iosDetection = 
       (/iPad|iPhone|iPod/.test(navigator.userAgent) || 
       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) && 
@@ -47,7 +47,6 @@ export function PWAInstallPrompt() {
     if (iosDetection) {
       setInstructionPlatform('ios');
     } else {
-      // Check if it's a mobile device or desktop
       const mobileDetection = /Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       setInstructionPlatform(mobileDetection ? 'android' : 'desktop');
     }
@@ -56,27 +55,46 @@ export function PWAInstallPrompt() {
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      // Prompt is ready natively! Show it after 2 seconds
-      const timer = setTimeout(() => {
-        setShowPrompt(true);
-      }, 2000);
-      return () => clearTimeout(timer);
+      
+      // Only show automatically if user hasn't dismissed it recently & not standalone
+      if (shouldAutoPrompt || isTestMode) {
+        const timer = setTimeout(() => {
+          setShowPrompt(true);
+        }, 2000);
+        return () => clearTimeout(timer);
+      }
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-    // 5. Fallback timer: if the native prompt event doesn't fire after 4 seconds
-    // (e.g. inside an iframe, on unsupported browser, or lack of user interaction),
-    // we STILL show the custom visual prompt so the user can see it and manually install.
-    const fallbackTimer = setTimeout(() => {
+    // 5. Fallback timer: if the native event doesn't fire after 4 seconds (e.g. inside an iframe, on iOS Safari, unsupported browser),
+    // we STILL show the custom visual prompt automatically if they haven't dismissed it.
+    let fallbackTimer: NodeJS.Timeout | undefined;
+    if (shouldAutoPrompt || isTestMode) {
+      fallbackTimer = setTimeout(() => {
+        setShowPrompt(true);
+      }, isTestMode ? 1000 : 4000);
+    }
+
+    // 6. Manual trigger event listener (used by Header/Menu buttons)
+    const handleShowPromptEvent = () => {
       setShowPrompt(true);
-    }, isTestMode ? 1000 : 4000);
+      // If native install is not available (e.g. Safari, inside iframe, in-app browser),
+      // directly show the step-by-step instructions tab!
+      if (!deferredPrompt) {
+        setShowInstructions(true);
+      } else {
+        setShowInstructions(false);
+      }
+    };
+    window.addEventListener('show-pwa-prompt', handleShowPromptEvent);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      clearTimeout(fallbackTimer);
+      window.removeEventListener('show-pwa-prompt', handleShowPromptEvent);
+      if (fallbackTimer) clearTimeout(fallbackTimer);
     };
-  }, []);
+  }, [deferredPrompt]);
 
   const handleInstallClick = async () => {
     // If native prompt is available, trigger it!
