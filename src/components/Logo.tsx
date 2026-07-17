@@ -3,15 +3,16 @@ import React from 'react';
 interface LogoProps {
   className?: string;
   size?: number;
+  animate?: boolean;
 }
 
-export default function Logo({ className, size = 32 }: LogoProps) {
+export default function Logo({ className, size = 32, animate = false }: LogoProps) {
   return (
     <svg 
       viewBox="0 0 512 512" 
       width={size} 
       height={size} 
-      className={`${className || ''} animate-gentle-spin`}
+      className={`${className || ''} ${animate ? 'animate-gentle-spin' : ''}`}
       fill="none" 
       xmlns="http://www.w3.org/2000/svg"
       style={{ transformBox: 'fill-box' }}
