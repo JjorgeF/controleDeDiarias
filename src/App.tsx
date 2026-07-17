@@ -19,6 +19,7 @@ import Header from './components/Header';
 import EmployeeCard from './components/EmployeeCard';
 import EmployeeList from './components/EmployeeList';
 import CalendarView from './components/CalendarView';
+import AdminDashboard from './components/AdminDashboard';
 import EmployeeModal from './components/EmployeeModal';
 import ManageDaysModal from './components/ManageDaysModal';
 import SimulationBanner from './components/SimulationBanner';
@@ -111,6 +112,67 @@ export default function App() {
           // Verifica se o documento com o email do usuário existe na coleção usuarios_admin
           const adminDoc = await getDoc(doc(db, 'usuarios_admin', user.email));
           setIsAdmin(adminDoc.exists());
+
+          // Registra o log de acesso se ainda não tiver registrado nesta sessão do navegador
+          const sessionLoggedKey = `logged_${user.email}_${new Date().toISOString().split('T')[0]}`;
+          if (!sessionStorage.getItem(sessionLoggedKey)) {
+            try {
+              const logData = {
+                type: 'access_log',
+                email: user.email,
+                name: user.displayName || user.email.split('@')[0],
+                timestamp: new Date().toISOString()
+              };
+
+              // Tentativa 1: Escreve na coleção 'cancellations' (que permite isSignedIn)
+              try {
+                const logRef = doc(collection(db, 'cancellations'));
+                await setDoc(logRef, logData);
+                console.log("Log de acesso salvo na coleção 'cancellations' com sucesso.");
+                sessionStorage.setItem(sessionLoggedKey, 'true');
+              } catch (err: any) {
+                console.warn("Falha ao salvar log em 'cancellations', tentando fallback:", err);
+
+                // Fallback:
+                if (adminDoc.exists()) {
+                  // Se for admin, grava em settings/access_logs
+                  const settingsLogRef = doc(db, 'settings', 'access_logs');
+                  const logId = `log_${Date.now()}`;
+                  await setDoc(settingsLogRef, {
+                    [logId]: {
+                      email: user.email,
+                      name: user.displayName || user.email.split('@')[0],
+                      timestamp: new Date().toISOString()
+                    }
+                  }, { merge: true });
+                  console.log("Log de acesso do admin salvo em settings/access_logs.");
+                  sessionStorage.setItem(sessionLoggedKey, 'true');
+                } else {
+                  // Se for funcionário, grava em seu próprio registro na lista de availabilities
+                  const qEmp = query(collection(db, 'employees'), where('email', '==', user.email.trim().toLowerCase()));
+                  const querySnapshot = await getDocs(qEmp);
+                  if (!querySnapshot.empty) {
+                    const empDoc = querySnapshot.docs[0];
+                    const empData = empDoc.data() as Employee;
+                    const currentAvails = empData.availabilities || [];
+                    const loginToken = `login_${new Date().toISOString()}`;
+                    
+                    // Mantém apenas os últimos 5 logs de login no array de availabilities para não poluir
+                    const cleanAvails = currentAvails.filter(av => !av.startsWith('login_'));
+                    const lastLogins = currentAvails.filter(av => av.startsWith('login_')).slice(-4);
+                    
+                    await updateDoc(doc(db, 'employees', empDoc.id), {
+                      availabilities: [...cleanAvails, ...lastLogins, loginToken]
+                    });
+                    console.log("Log de acesso do funcionário salvo em availabilities:", loginToken);
+                    sessionStorage.setItem(sessionLoggedKey, 'true');
+                  }
+                }
+              }
+            } catch (logErr) {
+              console.error("Erro geral ao salvar log de acesso:", logErr);
+            }
+          }
         } catch (error) {
           console.error("Erro ao verificar status de admin:", error);
           setIsAdmin(false);
@@ -620,6 +682,7 @@ export default function App() {
         isDarkMode={isDarkMode}
         toggleTheme={() => setIsDarkMode(!isDarkMode)}
         onExportExcel={handleExportExcel}
+        isAdmin={isViewingAsAdmin}
       />
 
       <main className="w-full mx-auto px-2 md:px-4 py-4 md:py-8 max-w-7xl">
@@ -707,6 +770,13 @@ export default function App() {
             onMarkCancellationRead={handleMarkCancellationRead}
             sidebarTab={sidebarTab}
             onSidebarTabChange={setSidebarTab}
+          />
+        )}
+
+        {viewMode === 'dashboard' && isViewingAsAdmin && (
+          <AdminDashboard 
+            employees={employees}
+            currentMonth={currentMonth}
           />
         )}
       </main>
