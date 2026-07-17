@@ -1,82 +1,16 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fredoka:wght@400;500;600;700&display=swap');
-@import "tailwindcss";
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <link rel="apple-touch-icon" href="/logo.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <title>Liga Positiva</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
 
-@theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-playful: "Fredoka", sans-serif;
-  
-  --color-brand-bg: var(--bg);
-  --color-brand-card: var(--card);
-  --color-brand-primary: #fbbf24;
-  --color-brand-primary-hover: #f59e0b;
-  --color-brand-border: var(--border);
-}
-
-:root {
-  --bg: #f1f5f9;
-  --card: #ffffff;
-  --border: rgba(0, 0, 0, 0.08);
-  --text-main: #0f172a;
-  --text-muted: #64748b;
-  --scrollbar-thumb: rgba(148, 163, 184, 0.3);
-  --scrollbar-thumb-hover: rgba(100, 116, 139, 0.5);
-}
-
-.dark {
-  --bg: #0f172a;
-  --card: #1e293b;
-  --border: rgba(255, 255, 255, 0.1);
-  --text-main: #ffffff;
-  --text-muted: #94a3b8;
-  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
-  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.35);
-}
-
-@layer base {
-  body {
-    @apply bg-brand-bg text-[var(--text-main)] font-sans antialiased transition-colors duration-300;
-  }
-  
-  .text-gray-400 {
-    color: var(--text-muted);
-  }
-  
-  .text-white {
-    color: var(--text-main);
-  }
-
-  /* Global elegant thin scrollbars */
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: transparent transparent;
-    transition: scrollbar-color 0.3s ease;
-  }
-
-  *:hover {
-    scrollbar-color: var(--scrollbar-thumb) transparent;
-  }
-
-  /* Webkit support (Chrome, Safari, Edge, Opera) */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background: transparent;
-    border-radius: 9999px;
-    transition: background-color 0.3s ease;
-  }
-
-  *:hover::-webkit-scrollbar-thumb {
-    background: var(--scrollbar-thumb);
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background: var(--scrollbar-thumb-hover) !important;
-  }
-}
