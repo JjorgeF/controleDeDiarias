@@ -79,13 +79,7 @@ export function PWAInstallPrompt() {
     // 6. Manual trigger event listener (used by Header/Menu buttons)
     const handleShowPromptEvent = () => {
       setShowPrompt(true);
-      // If native install is not available (e.g. Safari, inside iframe, in-app browser),
-      // directly show the step-by-step instructions tab!
-      if (!deferredPrompt) {
-        setShowInstructions(true);
-      } else {
-        setShowInstructions(false);
-      }
+      setShowInstructions(true); // Always show the step-by-step guide immediately when manually triggered!
     };
     window.addEventListener('show-pwa-prompt', handleShowPromptEvent);
 
@@ -123,21 +117,36 @@ export function PWAInstallPrompt() {
     setShowPrompt(false);
   };
 
-  if (!showPrompt) return null;
-
   return (
     <AnimatePresence>
-      <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-[400px] z-50">
-        {!showInstructions ? (
-          <motion.div
-            initial={{ opacity: 0, y: 50, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="bg-brand-card border border-brand-border/80 rounded-2xl shadow-2xl p-4 md:p-5 flex flex-col gap-4 backdrop-blur-md relative overflow-hidden"
-          >
-            {/* Background Accent glow */}
-            <div className="absolute top-0 right-0 w-24 h-24 bg-brand-primary/5 rounded-full blur-2xl pointer-events-none" />
+      {showPrompt && (
+        <>
+          {/* Backdrop Overlay - only for instructions modal */}
+          {showInstructions && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={handleDismiss}
+              className="fixed inset-0 bg-black/75 backdrop-blur-sm z-45"
+            />
+          )}
+
+          <div className={
+            showInstructions 
+              ? "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-[420px] z-50"
+              : "fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-[400px] z-50"
+          }>
+            {!showInstructions ? (
+              <motion.div
+                initial={{ opacity: 0, y: 50, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                className="bg-brand-card border border-brand-border/80 rounded-2xl shadow-2xl p-4 md:p-5 flex flex-col gap-4 backdrop-blur-md relative overflow-hidden"
+              >
+                {/* Background Accent glow */}
+                <div className="absolute top-0 right-0 w-24 h-24 bg-brand-primary/5 rounded-full blur-2xl pointer-events-none" />
 
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary shrink-0 border border-brand-primary/20 shadow-inner">
@@ -356,7 +365,9 @@ export function PWAInstallPrompt() {
           </motion.div>
         )}
       </div>
-    </AnimatePresence>
+      </>
+    )}
+  </AnimatePresence>
   );
 }
 
