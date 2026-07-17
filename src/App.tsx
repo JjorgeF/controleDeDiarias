@@ -508,6 +508,7 @@ export default function App() {
             Ao entrar, você concorda com nossos termos de serviço.
           </p>
         </div>
+        <PWAInstallPrompt />
       </div>
     );
   }
@@ -585,6 +586,7 @@ export default function App() {
             </div>
           )}
         </main>
+        <PWAInstallPrompt />
       </div>
     );
   }
