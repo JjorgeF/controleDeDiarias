@@ -221,7 +221,7 @@ export function PWAInstallPrompt() {
                       1
                     </span>
                     <p className="text-gray-300 leading-normal">
-                      Toque no ícone de <strong className="text-white inline-flex items-center gap-0.5 bg-white/5 px-1.5 py-0.5 rounded border border-white/10 font-bold text-[10px]">Compartilhar <Share size={10} className="inline mx-0.5" /></strong> na barra inferior do Safari.
+                      Toque nos <strong className="text-white inline-flex items-center gap-0.5 bg-white/5 px-1.5 py-0.5 rounded border border-white/10 font-bold text-[10px]">3 pontinhos <MoreVertical size={10} className="inline mx-0.5" /></strong> no canto da tela (ou diretamente no ícone de <strong className="text-white inline-flex items-center gap-0.5 bg-white/5 px-1.5 py-0.5 rounded border border-white/10 font-bold text-[10px]">Compartilhar <Share size={10} className="inline mx-0.5" /></strong>).
                     </p>
                   </div>
 
@@ -230,13 +230,22 @@ export function PWAInstallPrompt() {
                       2
                     </span>
                     <p className="text-gray-300 leading-normal">
-                      Role a lista para baixo e toque em <strong className="text-white inline-flex items-center gap-0.5 bg-white/5 px-1.5 py-0.5 rounded border border-white/10 font-bold text-[10px]">Adicionar à Tela de Início <Plus size={10} className="inline mx-0.5" /></strong>.
+                      Selecione a opção <strong className="text-white inline-flex items-center gap-0.5 bg-white/5 px-1.5 py-0.5 rounded border border-white/10 font-bold text-[10px]">Compartilhar <Share size={10} className="inline mx-0.5" /></strong> se tiver clicado nos 3 pontinhos.
                     </p>
                   </div>
 
                   <div className="flex items-start gap-2.5">
                     <span className="w-5 h-5 rounded-full bg-brand-primary/10 border border-brand-primary/20 text-brand-primary flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">
                       3
+                    </span>
+                    <p className="text-gray-300 leading-normal">
+                      Role a lista para baixo e toque em <strong className="text-white inline-flex items-center gap-0.5 bg-white/5 px-1.5 py-0.5 rounded border border-white/10 font-bold text-[10px]">Adicionar à Tela de Início <Plus size={10} className="inline mx-0.5" /></strong>.
+                    </p>
+                  </div>
+
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-brand-primary/10 border border-brand-primary/20 text-brand-primary flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">
+                      4
                     </span>
                     <p className="text-gray-300 leading-normal">
                       Confirme tocando em <strong className="text-brand-primary bg-brand-primary/10 px-1.5 py-0.5 rounded border border-brand-primary/20 font-black text-[10px]">Adicionar</strong> no canto superior direito.
