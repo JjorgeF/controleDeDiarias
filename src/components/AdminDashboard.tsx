@@ -1,0 +1,530 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  collection, 
+  query, 
+  orderBy, 
+  limit, 
+  onSnapshot, 
+  getDocs,
+  doc,
+  Timestamp
+} from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { Employee, WorkDay } from '../types';
+import { 
+  Users, 
+  Calendar, 
+  Clock, 
+  TrendingUp, 
+  Award, 
+  History, 
+  Activity, 
+  Sparkles,
+  Search,
+  CheckCircle2,
+  CalendarDays,
+  ShieldCheck,
+  AlertCircle
+} from 'lucide-react';
+import { format, parseISO, formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { cn } from '../lib/utils';
+
+interface AdminDashboardProps {
+  employees: Employee[];
+  currentMonth: Date;
+}
+
+interface AccessLog {
+  id: string;
+  email: string;
+  name: string;
+  timestamp: string;
+}
+
+export default function AdminDashboard({ employees, currentMonth }: AdminDashboardProps) {
+  const [cancellationsLogs, setCancellationsLogs] = useState<AccessLog[]>([]);
+  const [adminSettingsLogs, setAdminSettingsLogs] = useState<AccessLog[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(true);
+  const [rankMetric, setRankMetric] = useState<'confirmed' | 'availabilities'>('confirmed');
+  const [logSearchQuery, setLogSearchQuery] = useState('');
+
+  const currentMonthKey = format(currentMonth, 'yyyy-MM');
+
+  // Load access logs
+  useEffect(() => {
+    if (!db) {
+      setLoadingLogs(false);
+      return;
+    }
+
+    let unsubscribeCancellations = () => {};
+    let unsubscribeSettings = () => {};
+    let completedCancellations = false;
+    let completedSettings = false;
+
+    const checkLoading = () => {
+      if (completedCancellations && completedSettings) {
+        setLoadingLogs(false);
+      }
+    };
+
+    // 1. Listen to cancellations collection for access logs (which isSignedIn users can access)
+    try {
+      const qCancel = query(collection(db, 'cancellations'));
+      unsubscribeCancellations = onSnapshot(qCancel, (snapshot) => {
+        const logs: AccessLog[] = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data.type === 'access_log') {
+            logs.push({
+              id: doc.id,
+              email: data.email || '',
+              name: data.name || '',
+              timestamp: data.timestamp || new Date().toISOString()
+            });
+          }
+        });
+        setCancellationsLogs(logs);
+        completedCancellations = true;
+        checkLoading();
+      }, (error) => {
+        console.warn("Permission restricted for loading access logs from cancellations:", error);
+        completedCancellations = true;
+        checkLoading();
+      });
+    } catch (err) {
+      console.warn("Error setting up cancellations logs listener:", err);
+      completedCancellations = true;
+      checkLoading();
+    }
+
+    // 2. Listen to settings/access_logs (admin logs)
+    try {
+      const settingsRef = doc(db, 'settings', 'access_logs');
+      unsubscribeSettings = onSnapshot(settingsRef, (docSnap) => {
+        const logs: AccessLog[] = [];
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          Object.entries(data).forEach(([logId, logVal]: [string, any]) => {
+            if (logVal && typeof logVal === 'object') {
+              logs.push({
+                id: logId,
+                email: logVal.email || '',
+                name: logVal.name || '',
+                timestamp: logVal.timestamp || new Date().toISOString()
+              });
+            }
+          });
+        }
+        setAdminSettingsLogs(logs);
+        completedSettings = true;
+        checkLoading();
+      }, (error) => {
+        console.warn("Permission restricted for loading access logs from settings:", error);
+        completedSettings = true;
+        checkLoading();
+      });
+    } catch (err) {
+      console.warn("Error setting up settings logs listener:", err);
+      completedSettings = true;
+      checkLoading();
+    }
+
+    // Backup safety timeout to hide loader
+    const timeout = setTimeout(() => {
+      setLoadingLogs(false);
+    }, 2000);
+
+    return () => {
+      unsubscribeCancellations();
+      unsubscribeSettings();
+      clearTimeout(timeout);
+    };
+  }, []);
+
+  // 3. Extract logins directly from employees prop (reactive, zero-DB read, 100% bypass of permission blocks)
+  const employeeLogs = useMemo(() => {
+    const logs: AccessLog[] = [];
+    employees.forEach(emp => {
+      const avails = emp.availabilities || [];
+      avails.forEach(av => {
+        if (av.startsWith('login_')) {
+          const timestamp = av.substring('login_'.length);
+          logs.push({
+            id: `${emp.id}_${timestamp}`,
+            email: emp.email || '',
+            name: emp.artisticName || emp.name,
+            timestamp: timestamp
+          });
+        }
+      });
+    });
+    return logs;
+  }, [employees]);
+
+  // Merge, de-duplicate and sort all three log sources
+  const accessLogs = useMemo(() => {
+    const all = [...cancellationsLogs, ...adminSettingsLogs, ...employeeLogs];
+    const seen = new Set<string>();
+    const unique: AccessLog[] = [];
+    
+    const sorted = all.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    
+    sorted.forEach(log => {
+      const key = `${log.email}_${log.timestamp.split('.')[0]}`; // Deduplicate logs from exact same second
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(log);
+      }
+    });
+    
+    return unique.slice(0, 100);
+  }, [cancellationsLogs, adminSettingsLogs, employeeLogs]);
+
+  // Filtered logs
+  const filteredLogs = useMemo(() => {
+    if (!logSearchQuery.trim()) return accessLogs;
+    const lower = logSearchQuery.toLowerCase();
+    return accessLogs.filter(log => 
+      log.name.toLowerCase().includes(lower) || 
+      log.email.toLowerCase().includes(lower)
+    );
+  }, [accessLogs, logSearchQuery]);
+
+  // Overall Statistics
+  const stats = useMemo(() => {
+    const totalEmployees = employees.length;
+    
+    // Total work days scheduled across all employees this month
+    let totalScheduledDaysThisMonth = 0;
+    let totalAvailabilitiesThisMonth = 0;
+
+    employees.forEach(emp => {
+      // Confirmed days in this month
+      const monthWorkDays = emp.workDays?.filter(d => 
+        d.date.startsWith(currentMonthKey) && !d.isCancelled
+      ) || [];
+      totalScheduledDaysThisMonth += monthWorkDays.length;
+
+      // Availabilities in this month
+      const monthAvailabilities = emp.availabilities?.filter(date => 
+        date.startsWith(currentMonthKey)
+      ) || [];
+      totalAvailabilitiesThisMonth += monthAvailabilities.length;
+    });
+
+    return {
+      totalEmployees,
+      totalScheduledDaysThisMonth,
+      totalAvailabilitiesThisMonth,
+    };
+  }, [employees, currentMonthKey]);
+
+  // Ranking data
+  const rankingData = useMemo(() => {
+    const data = employees.map(emp => {
+      const confirmedThisMonth = emp.workDays?.filter(d => 
+        d.date.startsWith(currentMonthKey) && !d.isCancelled
+      ).length || 0;
+
+      const availabilitiesThisMonth = emp.availabilities?.filter(date => 
+        date.startsWith(currentMonthKey)
+      ).length || 0;
+
+      const totalConfirmedAllTime = emp.workDays?.filter(d => !d.isCancelled).length || 0;
+      const totalAvailabilitiesAllTime = emp.availabilities?.length || 0;
+
+      return {
+        id: emp.id,
+        name: emp.name,
+        artisticName: emp.artisticName || emp.name,
+        level: emp.level,
+        confirmedThisMonth,
+        availabilitiesThisMonth,
+        totalConfirmedAllTime,
+        totalAvailabilitiesAllTime,
+      };
+    });
+
+    // Sort based on the selected metric
+    if (rankMetric === 'confirmed') {
+      return [...data].sort((a, b) => b.confirmedThisMonth - a.confirmedThisMonth || b.totalConfirmedAllTime - a.totalConfirmedAllTime);
+    } else {
+      return [...data].sort((a, b) => b.availabilitiesThisMonth - a.availabilitiesThisMonth || b.totalAvailabilitiesAllTime - a.totalAvailabilitiesAllTime);
+    }
+  }, [employees, currentMonthKey, rankMetric]);
+
+  const maxMetricValue = useMemo(() => {
+    if (rankingData.length === 0) return 1;
+    return Math.max(
+      ...rankingData.map(item => 
+        rankMetric === 'confirmed' ? item.confirmedThisMonth : item.availabilitiesThisMonth
+      ),
+      1
+    );
+  }, [rankingData, rankMetric]);
+
+  const formatLogTime = (isoString: string) => {
+    try {
+      const date = parseISO(isoString);
+      const relative = formatDistanceToNow(date, { addSuffix: true, locale: ptBR });
+      const absolute = format(date, "dd 'de' MMMM 'às' HH:mm", { locale: ptBR });
+      return { relative, absolute };
+    } catch (e) {
+      return { relative: 'agora pouco', absolute: '' };
+    }
+  };
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-300">
+      {/* Title Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-brand-card p-6 rounded-2xl border border-brand-border shadow-sm">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="text-brand-primary" size={24} />
+            <h2 className="text-2xl font-black text-white tracking-wide font-playful">
+              Painel de Administração e Auditoria
+            </h2>
+          </div>
+          <p className="text-sm text-gray-400 font-semibold">
+            Visualização consolidada de métricas, rankings de dedicação e controle de acessos em tempo real.
+          </p>
+        </div>
+        <div className="bg-brand-primary/10 border border-brand-primary/20 text-brand-primary font-bold text-xs py-2 px-4 rounded-xl flex items-center gap-1.5 uppercase tracking-wider">
+          <Activity className="animate-pulse" size={14} />
+          <span>Mês de {format(currentMonth, "MMMM 'de' yyyy", { locale: ptBR })}</span>
+        </div>
+      </div>
+
+      {/* Stats Bento Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        {/* Stat 1 */}
+        <div className="bg-gradient-to-br from-brand-card to-brand-card/50 p-6 rounded-2xl border border-brand-border hover:border-brand-primary/25 transition-all duration-300 group shadow-lg">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase text-gray-500 tracking-wider">Total de Recriadores</span>
+            <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary group-hover:scale-110 duration-200">
+              <Users size={20} />
+            </div>
+          </div>
+          <div className="mt-4">
+            <span className="text-3xl font-black text-white">{stats.totalEmployees}</span>
+            <p className="text-[11px] text-gray-400 font-semibold mt-1">Colaboradores ativos cadastrados</p>
+          </div>
+        </div>
+
+        {/* Stat 2 */}
+        <div className="bg-gradient-to-br from-brand-card to-brand-card/50 p-6 rounded-2xl border border-brand-border hover:border-brand-primary/25 transition-all duration-300 group shadow-lg">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase text-gray-500 tracking-wider">Escalas Confirmadas (Mês)</span>
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:scale-110 duration-200">
+              <CheckCircle2 size={20} />
+            </div>
+          </div>
+          <div className="mt-4">
+            <span className="text-3xl font-black text-emerald-400">{stats.totalScheduledDaysThisMonth}</span>
+            <p className="text-[11px] text-gray-400 font-semibold mt-1">Dias de trabalho agendados neste mês</p>
+          </div>
+        </div>
+
+        {/* Stat 3 */}
+        <div className="bg-gradient-to-br from-brand-card to-brand-card/50 p-6 rounded-2xl border border-brand-border hover:border-brand-primary/25 transition-all duration-300 group shadow-lg">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase text-gray-500 tracking-wider">Disponibilidades Dadas (Mês)</span>
+            <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 group-hover:scale-110 duration-200">
+              <CalendarDays size={20} />
+            </div>
+          </div>
+          <div className="mt-4">
+            <span className="text-3xl font-black text-purple-400">{stats.totalAvailabilitiesThisMonth}</span>
+            <p className="text-[11px] text-gray-400 font-semibold mt-1">Datas de disponibilidade enviadas</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Left Col: Rankings (8 cols) */}
+        <div className="lg:col-span-7 bg-brand-card border border-brand-border rounded-2xl p-6 shadow-md flex flex-col h-fit">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-brand-border/60 mb-6">
+            <div className="flex items-center gap-2.5">
+              <Award className="text-brand-primary" size={20} />
+              <h3 className="text-lg font-bold text-white uppercase tracking-wider font-playful">
+                Ranking de Dedicação
+              </h3>
+            </div>
+            
+            {/* Toggle metric */}
+            <div className="flex bg-brand-bg/60 p-1 rounded-xl border border-brand-border self-start">
+              <button
+                onClick={() => setRankMetric('confirmed')}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-bold rounded-lg transition-all",
+                  rankMetric === 'confirmed' 
+                    ? "bg-brand-primary text-brand-bg shadow-md" 
+                    : "text-gray-400 hover:text-white"
+                )}
+              >
+                Dias Agendados
+              </button>
+              <button
+                onClick={() => setRankMetric('availabilities')}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-bold rounded-lg transition-all",
+                  rankMetric === 'availabilities' 
+                    ? "bg-purple-500 text-white shadow-md" 
+                    : "text-gray-400 hover:text-white"
+                )}
+              >
+                Disponibilidades
+              </button>
+            </div>
+          </div>
+
+          {/* Ranking list */}
+          <div className="space-y-5">
+            {rankingData.map((item, index) => {
+              const currentValue = rankMetric === 'confirmed' ? item.confirmedThisMonth : item.availabilitiesThisMonth;
+              const allTimeValue = rankMetric === 'confirmed' ? item.totalConfirmedAllTime : item.totalAvailabilitiesAllTime;
+              const percentage = Math.max((currentValue / maxMetricValue) * 100, 2); // At least 2% so bar is visible
+
+              // Rank Badge background
+              const isFirst = index === 0;
+              const isSecond = index === 1;
+              const isThird = index === 2;
+
+              return (
+                <div key={item.id} className="group relative flex items-center gap-4 p-3.5 rounded-xl bg-brand-bg/40 border border-brand-border/40 hover:border-brand-primary/20 hover:bg-brand-bg/80 transition-all duration-200">
+                  {/* Position number / medal */}
+                  <div className={cn(
+                    "w-8 h-8 rounded-full shrink-0 flex items-center justify-center font-black text-sm",
+                    isFirst ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 scale-110" :
+                    isSecond ? "bg-slate-300/20 text-slate-300 border border-slate-300/30" :
+                    isThird ? "bg-amber-700/20 text-amber-500 border border-amber-700/30" :
+                    "bg-brand-card text-gray-500 border border-brand-border/60"
+                  )}>
+                    {isFirst ? "🥇" : isSecond ? "🥈" : isThird ? "🥉" : index + 1}
+                  </div>
+
+                  {/* Avatar Initials */}
+                  <div className="w-10 h-10 rounded-full bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center font-extrabold text-sm text-brand-primary uppercase shrink-0">
+                    {item.artisticName.substring(0, 2)}
+                  </div>
+
+                  {/* Name and Bar details */}
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <div className="flex justify-between items-baseline gap-2">
+                      <div className="truncate">
+                        <span className="text-sm font-bold text-white">{item.artisticName}</span>
+                        <span className="ml-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{item.level}</span>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <span className={cn(
+                          "text-sm font-black",
+                          rankMetric === 'confirmed' ? "text-brand-primary" : "text-purple-400"
+                        )}>
+                          {currentValue} {rankMetric === 'confirmed' ? 'dias' : 'disps'}
+                        </span>
+                        <span className="block text-[9px] font-semibold text-gray-500 mt-0.5">
+                          Acumulado: {allTimeValue}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full h-2.5 bg-brand-card rounded-full overflow-hidden border border-brand-border/40">
+                      <div 
+                        className={cn(
+                          "h-full rounded-full transition-all duration-500 ease-out",
+                          rankMetric === 'confirmed' 
+                            ? "bg-gradient-to-r from-brand-primary/60 to-brand-primary shadow-[0_0_8px_rgba(251,191,36,0.3)]" 
+                            : "bg-gradient-to-r from-purple-500/60 to-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.3)]"
+                        )}
+                        style={{ width: `${percentage}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {rankingData.length === 0 && (
+              <div className="text-center py-12 border-2 border-dashed border-brand-border rounded-xl">
+                <p className="text-gray-500 font-semibold text-sm">Nenhum funcionário cadastrado para o ranking.</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Col: Access Logs (5 cols) */}
+        <div className="lg:col-span-5 bg-brand-card border border-brand-border rounded-2xl p-6 shadow-md flex flex-col h-[650px]">
+          <div className="pb-5 border-b border-brand-border/60 mb-5 space-y-4">
+            <div className="flex items-center gap-2.5">
+              <History className="text-purple-400" size={20} />
+              <h3 className="text-lg font-bold text-white uppercase tracking-wider font-playful">
+                Últimos Acessos e Logins
+              </h3>
+            </div>
+
+            {/* Search filter for logs */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14} />
+              <input 
+                type="text"
+                placeholder="Buscar logs por email ou nome..."
+                value={logSearchQuery}
+                onChange={(e) => setLogSearchQuery(e.target.value)}
+                className="w-full bg-brand-bg/80 border border-brand-border/80 rounded-xl py-1.5 pl-9 pr-4 text-xs focus:outline-none focus:border-brand-primary transition-colors text-white font-medium"
+              />
+            </div>
+          </div>
+
+          {/* Logs timeline */}
+          <div className="flex-1 overflow-y-auto space-y-4 pr-1.5 custom-scrollbar">
+            {loadingLogs ? (
+              <div className="flex flex-col items-center justify-center h-full py-10 text-center gap-2">
+                <div className="w-8 h-8 rounded-full border-4 border-brand-primary border-t-transparent animate-spin" />
+                <span className="text-xs text-gray-500 font-bold">Carregando logs de auditoria...</span>
+              </div>
+            ) : filteredLogs.map((log) => {
+              const { relative, absolute } = formatLogTime(log.timestamp);
+              return (
+                <div key={log.id} className="group flex gap-3.5 p-3 rounded-xl bg-brand-bg/30 border border-brand-border/40 hover:bg-brand-bg/60 transition-colors">
+                  {/* Initials badge */}
+                  <div className="w-9 h-9 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 flex items-center justify-center font-black text-xs shrink-0 uppercase">
+                    {log.name.substring(0, 2)}
+                  </div>
+
+                  {/* details */}
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex justify-between items-baseline gap-2">
+                      <span className="text-xs font-bold text-white truncate">{log.name}</span>
+                      <span className="text-[9px] font-black uppercase text-brand-primary tracking-wider bg-brand-primary/10 border border-brand-primary/20 px-1.5 py-0.5 rounded shrink-0">
+                        Acesso OK
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-400 truncate">{log.email}</p>
+                    
+                    <div className="flex items-center gap-1.5 mt-2 pt-1.5 border-t border-brand-border/20 text-[10px] text-gray-500 font-semibold">
+                      <Clock size={11} className="text-purple-400" />
+                      <span className="text-purple-300" title={absolute}>{relative}</span>
+                      <span className="text-gray-600">•</span>
+                      <span className="truncate max-w-[140px]" title={absolute}>{format(parseISO(log.timestamp), 'dd/MM/yy HH:mm')}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {!loadingLogs && filteredLogs.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-full py-20 text-center gap-2">
+                <AlertCircle className="text-gray-500" size={24} />
+                <p className="text-xs text-gray-500 font-bold">Nenhum log de acesso encontrado.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
