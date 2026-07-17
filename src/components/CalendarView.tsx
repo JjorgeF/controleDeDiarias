@@ -16,7 +16,7 @@ import {
 import { ptBR } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, Users, Search, UserPlus, UserMinus, Clock, Copy, ClipboardPaste, AlertTriangle, Maximize2, Lock, Unlock, Save, Calendar, CheckCircle2, AlertCircle, X, Check, Trash2 } from 'lucide-react';
 import { Employee, WorkDay, DayType, CancellationLog } from '../types';
-import { cn } from '../lib/utils';
+import { cn, formatCurrency } from '../lib/utils';
 import DayManagementModal from './DayManagementModal';
 
 interface CalendarViewProps {
@@ -435,6 +435,16 @@ export default function CalendarView({
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [myEmployee, currentMonth]);
 
+  const totalEarningsThisMonth = React.useMemo(() => {
+    if (!myEmployee) return 0;
+    return scheduledDaysThisMonth.reduce((acc, d) => {
+      const isParty = d.type === 'party';
+      const dayBase = isParty ? myEmployee.partyRate : myEmployee.dailyRate;
+      const extra = (d.extraHours || 0) * myEmployee.extraHourRate;
+      return acc + dayBase + extra;
+    }, 0);
+  }, [myEmployee, scheduledDaysThisMonth]);
+
   const handleSaveDeadline = () => {
     if (onUpdateDeadline && deadlineInputDate && deadlineInputTime) {
       onUpdateDeadline(currentMonthKey, `${deadlineInputDate}T${deadlineInputTime}`);
@@ -788,90 +798,140 @@ export default function CalendarView({
 
               <div className="p-4 md:p-6">
                 {scheduledDaysThisMonth.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {scheduledDaysThisMonth.map((d) => {
-                      const dateObj = parseISO(d.date);
-                      const isParty = d.type === 'party';
-                      const config = getDayConfig(d.date);
-                      const partyTime = config.partyTime;
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {scheduledDaysThisMonth.map((d) => {
+                        const dateObj = parseISO(d.date);
+                        const isParty = d.type === 'party';
+                        const config = getDayConfig(d.date);
+                        const partyTime = config.partyTime;
 
-                      return (
-                        <div 
-                          key={d.date}
-                          onClick={() => {
-                            setCancelTargetDate(dateObj);
-                            setIsCancelModalOpen(true);
-                          }}
-                          className={cn(
-                            "flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none hover:scale-[1.01] duration-150 group",
-                            isParty 
-                              ? "bg-purple-500/5 border-purple-500/20 hover:border-purple-500/45 hover:bg-purple-500/10" 
-                              : "bg-brand-primary/5 border-brand-primary/20 hover:border-brand-primary/45 hover:bg-brand-primary/10"
-                          )}
-                        >
-                          <div className="flex items-center gap-3 animate-in fade-in duration-200">
-                            {/* Date circle badge */}
-                            <div className={cn(
-                              "w-11 h-11 rounded-xl flex flex-col items-center justify-center font-black shrink-0 shadow-md transition-all",
+                        const dayBase = isParty ? myEmployee.partyRate : myEmployee.dailyRate;
+                        const extra = (d.extraHours || 0) * myEmployee.extraHourRate;
+                        const dayTotal = dayBase + extra;
+
+                        return (
+                          <div 
+                            key={d.date}
+                            onClick={() => {
+                              setCancelTargetDate(dateObj);
+                              setIsCancelModalOpen(true);
+                            }}
+                            className={cn(
+                              "flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none hover:scale-[1.01] duration-150 group",
                               isParty 
-                                ? "bg-purple-600 text-white group-hover:bg-purple-500" 
-                                : "bg-brand-primary text-brand-bg group-hover:bg-brand-primary-hover"
-                            )}>
-                              <span className="text-sm leading-none">{format(dateObj, 'dd')}</span>
-                              <span className="text-[8px] uppercase tracking-wider leading-none mt-0.5 font-bold">
-                                {format(dateObj, 'EEE', { locale: ptBR }).substring(0, 3)}
+                                ? "bg-purple-500/5 border-purple-500/20 hover:border-purple-500/45 hover:bg-purple-500/10" 
+                                : "bg-brand-primary/5 border-brand-primary/20 hover:border-brand-primary/45 hover:bg-brand-primary/10"
+                            )}
+                          >
+                            <div className="flex items-center gap-3 animate-in fade-in duration-200">
+                              {/* Date circle badge */}
+                              <div className={cn(
+                                "w-11 h-11 rounded-xl flex flex-col items-center justify-center font-black shrink-0 shadow-md transition-all",
+                                isParty 
+                                  ? "bg-purple-600 text-white group-hover:bg-purple-500" 
+                                  : "bg-brand-primary text-brand-bg group-hover:bg-brand-primary-hover"
+                              )}>
+                                <span className="text-sm leading-none">{format(dateObj, 'dd')}</span>
+                                <span className="text-[8px] uppercase tracking-wider leading-none mt-0.5 font-bold">
+                                  {format(dateObj, 'EEE', { locale: ptBR }).substring(0, 3)}
+                                </span>
+                              </div>
+
+                              {/* Details */}
+                              <div className="space-y-0.5">
+                                <p className="text-xs font-bold text-white capitalize">
+                                  {format(dateObj, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                                </p>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {isParty ? (
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded">
+                                      Festa 🥳
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-brand-primary/20 text-brand-primary px-1.5 py-0.5 rounded">
+                                      Dia CCSP 🏢
+                                    </span>
+                                  )}
+
+                                  {d.extraHours ? (
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-bold bg-yellow-500/20 text-yellow-300 px-1.5 py-0.5 rounded">
+                                      +{d.extraHours}h extras
+                                    </span>
+                                  ) : null}
+
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                    {formatCurrency(dayTotal)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Party Time or Action badge */}
+                            <div className="flex flex-col items-end gap-1.5 shrink-0 pl-2">
+                              {isParty && partyTime ? (
+                                <div className="text-right">
+                                  <span className="block text-[8px] text-gray-500 font-bold uppercase tracking-wider">Horário</span>
+                                  <span className="inline-block bg-purple-500/20 border border-purple-500/30 text-purple-300 font-black text-[10px] px-2 py-0.5 rounded-lg shadow-sm">
+                                    {partyTime}
+                                  </span>
+                                </div>
+                              ) : !isParty ? (
+                                <div className="text-right">
+                                  <span className="block text-[8px] text-gray-500 font-bold uppercase tracking-wider">Período</span>
+                                  <span className="inline-block bg-brand-primary/10 border border-brand-primary/20 text-brand-primary font-black text-[10px] px-2 py-0.5 rounded-lg">
+                                    Dia Inteiro
+                                  </span>
+                                </div>
+                              ) : null}
+                              <span className="text-[9px] font-bold text-red-400 group-hover:opacity-100 opacity-0 transition-opacity uppercase tracking-wider">
+                                Desistir ✕
                               </span>
                             </div>
-
-                            {/* Details */}
-                            <div className="space-y-0.5">
-                              <p className="text-xs font-bold text-white capitalize">
-                                {format(dateObj, "EEEE, dd 'de' MMMM", { locale: ptBR })}
-                              </p>
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                {isParty ? (
-                                  <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded">
-                                    Festa 🥳
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-brand-primary/20 text-brand-primary px-1.5 py-0.5 rounded">
-                                    Dia CCSP 🏢
-                                  </span>
-                                )}
-
-                                {d.extraHours ? (
-                                  <span className="inline-flex items-center gap-1 text-[9px] font-bold bg-yellow-500/20 text-yellow-300 px-1.5 py-0.5 rounded">
-                                    +{d.extraHours}h extras
-                                  </span>
-                                ) : null}
-                              </div>
-                            </div>
                           </div>
+                        );
+                      })}
+                    </div>
 
-                          {/* Party Time or Action badge */}
-                          <div className="flex flex-col items-end gap-1.5 shrink-0 pl-2">
-                            {isParty && partyTime ? (
-                              <div className="text-right">
-                                <span className="block text-[8px] text-gray-500 font-bold uppercase tracking-wider">Horário</span>
-                                <span className="inline-block bg-purple-500/20 border border-purple-500/30 text-purple-300 font-black text-[10px] px-2 py-0.5 rounded-lg shadow-sm">
-                                  {partyTime}
-                                </span>
-                              </div>
-                            ) : !isParty ? (
-                              <div className="text-right">
-                                <span className="block text-[8px] text-gray-500 font-bold uppercase tracking-wider">Período</span>
-                                <span className="inline-block bg-brand-primary/10 border border-brand-primary/20 text-brand-primary font-black text-[10px] px-2 py-0.5 rounded-lg">
-                                  Dia Inteiro
-                                </span>
-                              </div>
-                            ) : null}
-                            <span className="text-[9px] font-bold text-red-400 group-hover:opacity-100 opacity-0 transition-opacity uppercase tracking-wider">
-                              Desistir ✕
+                    {/* Final Earnings Summary Demonstrative Card */}
+                    <div className="pt-5 border-t border-brand-border/60 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-brand-primary/[0.02] p-5 rounded-2xl border border-brand-primary/10">
+                      <div className="space-y-1">
+                        <h4 className="text-sm font-bold text-white uppercase tracking-wider font-playful">Demonstrativo de Ganhos Estimados</h4>
+                        <p className="text-[11px] text-gray-400 font-semibold">Valores baseados em suas diárias e horas extras acordadas</p>
+                      </div>
+                      
+                      <div className="flex flex-wrap items-center gap-4 md:gap-8 text-xs font-bold text-gray-300">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] uppercase text-gray-500 tracking-wider font-extrabold">Dias CCSP ({scheduledDaysThisMonth.filter(d => d.type === 'common').length}x)</span>
+                          <span className="text-sm text-brand-primary font-black mt-0.5">
+                            {formatCurrency(scheduledDaysThisMonth.filter(d => d.type === 'common').length * myEmployee.dailyRate)}
+                          </span>
+                        </div>
+                        
+                        <div className="flex flex-col">
+                          <span className="text-[10px] uppercase text-gray-500 tracking-wider font-extrabold">Dias Festa ({scheduledDaysThisMonth.filter(d => d.type === 'party').length}x)</span>
+                          <span className="text-sm text-purple-300 font-black mt-0.5">
+                            {formatCurrency(scheduledDaysThisMonth.filter(d => d.type === 'party').length * myEmployee.partyRate)}
+                          </span>
+                        </div>
+
+                        {scheduledDaysThisMonth.reduce((acc, d) => acc + (d.extraHours || 0), 0) > 0 && (
+                          <div className="flex flex-col">
+                            <span className="text-[10px] uppercase text-gray-500 tracking-wider font-extrabold">Horas Extras ({scheduledDaysThisMonth.reduce((acc, d) => acc + (d.extraHours || 0), 0)}h)</span>
+                            <span className="text-sm text-yellow-400 font-black mt-0.5">
+                              {formatCurrency(scheduledDaysThisMonth.reduce((acc, d) => acc + (d.extraHours || 0) * myEmployee.extraHourRate, 0))}
                             </span>
                           </div>
+                        )}
+                        
+                        <div className="flex flex-col bg-brand-primary/10 border border-brand-primary/20 px-4 py-2 rounded-xl">
+                          <span className="text-[9px] uppercase text-brand-primary tracking-wider font-black">Total Estimado</span>
+                          <span className="text-xl text-brand-primary font-black leading-none mt-1">
+                            {formatCurrency(totalEarningsThisMonth)}
+                          </span>
                         </div>
-                      );
-                    })}
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-12 px-4 border-2 border-dashed border-brand-border rounded-xl text-center">
