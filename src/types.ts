@@ -25,7 +25,7 @@ export interface Employee {
   email?: string; // Access email for the employee
 }
 
-export type ViewMode = 'grid' | 'list' | 'calendar';
+export type ViewMode = 'grid' | 'list' | 'calendar' | 'dashboard';
 
 export interface CancellationLog {
   id: string;
