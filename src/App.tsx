@@ -22,6 +22,7 @@ import CalendarView from './components/CalendarView';
 import EmployeeModal from './components/EmployeeModal';
 import ManageDaysModal from './components/ManageDaysModal';
 import SimulationBanner from './components/SimulationBanner';
+import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import { LogIn, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format, isSameMonth, parseISO, eachDayOfInterval, startOfMonth, endOfMonth } from 'date-fns';
@@ -720,6 +721,8 @@ export default function App() {
           onUpdateDays={handleUpdateDays}
         />
       )}
+      
+      <PWAInstallPrompt />
     </div>
   );
 }
