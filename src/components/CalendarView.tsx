@@ -424,6 +424,17 @@ export default function CalendarView({
     }).sort((a, b) => b.availabilitiesCount - a.availabilitiesCount);
   }, [employees, currentMonthKey]);
 
+  const scheduledDaysThisMonth = React.useMemo(() => {
+    if (!myEmployee || !myEmployee.workDays) return [];
+    return myEmployee.workDays
+      .filter(d => {
+        if (d.isCancelled) return false;
+        const date = parseISO(d.date);
+        return isSameMonth(date, currentMonth);
+      })
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [myEmployee, currentMonth]);
+
   const handleSaveDeadline = () => {
     if (onUpdateDeadline && deadlineInputDate && deadlineInputTime) {
       onUpdateDeadline(currentMonthKey, `${deadlineInputDate}T${deadlineInputTime}`);
@@ -756,6 +767,124 @@ export default function CalendarView({
               </div>
             </div>
           </div>
+
+          {/* Employee Scheduled Days List (Below Calendar) */}
+          {!isAdmin && myEmployee && (
+            <div className="bg-brand-card border border-brand-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-4">
+              <div className="p-4 md:p-6 border-b border-brand-border bg-brand-bg/30 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm md:text-base font-black text-white flex items-center gap-2">
+                    <Calendar className="text-brand-primary" size={18} />
+                    Suas Escalas Confirmadas — {format(currentMonth, 'MMMM', { locale: ptBR })}
+                  </h3>
+                  <p className="text-[10px] md:text-xs text-gray-400 font-semibold mt-0.5">
+                    Estes são os dias que você está escalado para trabalhar neste mês
+                  </p>
+                </div>
+                <span className="bg-brand-primary/10 text-brand-primary text-xs font-black px-3 py-1 rounded-full border border-brand-primary/20">
+                  {scheduledDaysThisMonth.length} {scheduledDaysThisMonth.length === 1 ? 'dia' : 'dias'}
+                </span>
+              </div>
+
+              <div className="p-4 md:p-6">
+                {scheduledDaysThisMonth.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {scheduledDaysThisMonth.map((d) => {
+                      const dateObj = parseISO(d.date);
+                      const isParty = d.type === 'party';
+                      const config = getDayConfig(d.date);
+                      const partyTime = config.partyTime;
+
+                      return (
+                        <div 
+                          key={d.date}
+                          onClick={() => {
+                            setCancelTargetDate(dateObj);
+                            setIsCancelModalOpen(true);
+                          }}
+                          className={cn(
+                            "flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none hover:scale-[1.01] duration-150 group",
+                            isParty 
+                              ? "bg-purple-500/5 border-purple-500/20 hover:border-purple-500/45 hover:bg-purple-500/10" 
+                              : "bg-brand-primary/5 border-brand-primary/20 hover:border-brand-primary/45 hover:bg-brand-primary/10"
+                          )}
+                        >
+                          <div className="flex items-center gap-3 animate-in fade-in duration-200">
+                            {/* Date circle badge */}
+                            <div className={cn(
+                              "w-11 h-11 rounded-xl flex flex-col items-center justify-center font-black shrink-0 shadow-md transition-all",
+                              isParty 
+                                ? "bg-purple-600 text-white group-hover:bg-purple-500" 
+                                : "bg-brand-primary text-brand-bg group-hover:bg-brand-primary-hover"
+                            )}>
+                              <span className="text-sm leading-none">{format(dateObj, 'dd')}</span>
+                              <span className="text-[8px] uppercase tracking-wider leading-none mt-0.5 font-bold">
+                                {format(dateObj, 'EEE', { locale: ptBR }).substring(0, 3)}
+                              </span>
+                            </div>
+
+                            {/* Details */}
+                            <div className="space-y-0.5">
+                              <p className="text-xs font-bold text-white capitalize">
+                                {format(dateObj, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                              </p>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {isParty ? (
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded">
+                                    Festa 🥳
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-brand-primary/20 text-brand-primary px-1.5 py-0.5 rounded">
+                                    Dia CCSP 🏢
+                                  </span>
+                                )}
+
+                                {d.extraHours ? (
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-bold bg-yellow-500/20 text-yellow-300 px-1.5 py-0.5 rounded">
+                                    +{d.extraHours}h extras
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Party Time or Action badge */}
+                          <div className="flex flex-col items-end gap-1.5 shrink-0 pl-2">
+                            {isParty && partyTime ? (
+                              <div className="text-right">
+                                <span className="block text-[8px] text-gray-500 font-bold uppercase tracking-wider">Horário</span>
+                                <span className="inline-block bg-purple-500/20 border border-purple-500/30 text-purple-300 font-black text-[10px] px-2 py-0.5 rounded-lg shadow-sm">
+                                  {partyTime}
+                                </span>
+                              </div>
+                            ) : !isParty ? (
+                              <div className="text-right">
+                                <span className="block text-[8px] text-gray-500 font-bold uppercase tracking-wider">Período</span>
+                                <span className="inline-block bg-brand-primary/10 border border-brand-primary/20 text-brand-primary font-black text-[10px] px-2 py-0.5 rounded-lg">
+                                  Dia Inteiro
+                                </span>
+                              </div>
+                            ) : null}
+                            <span className="text-[9px] font-bold text-red-400 group-hover:opacity-100 opacity-0 transition-opacity uppercase tracking-wider">
+                              Desistir ✕
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-12 px-4 border-2 border-dashed border-brand-border rounded-xl text-center">
+                    <div className="w-12 h-12 rounded-full bg-gray-800/50 flex items-center justify-center text-gray-500 mb-3">
+                      <Calendar size={24} />
+                    </div>
+                    <p className="text-sm text-gray-400 font-semibold">Nenhuma escala confirmada para este mês.</p>
+                    <p className="text-xs text-gray-500 mt-1">Marque suas disponibilidades no calendário acima para ser escalado.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Management Panel (Below Calendar) */}
           {isAdmin && !isReadOnly && selectedDay && (
