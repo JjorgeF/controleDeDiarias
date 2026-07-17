@@ -9,7 +9,8 @@ import {
   Sun, 
   Moon,
   ChevronDown,
-  FileDown
+  FileDown,
+  Smartphone
 } from 'lucide-react';
 import { auth, googleProvider } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
@@ -41,6 +42,14 @@ export default function Header({
   hideControls = false
 }: HeaderProps) {
   const [user, setUser] = useState<User | null>(null);
+  const [isStandalone, setIsStandalone] = useState(false);
+
+  useEffect(() => {
+    const checkStandalone = 
+      window.matchMedia('(display-mode: standalone)').matches || 
+      (window.navigator as any).standalone === true;
+    setIsStandalone(checkStandalone);
+  }, []);
 
   useEffect(() => {
     if (!auth) return;
@@ -147,6 +156,19 @@ export default function Header({
                 <span className="hidden lg:inline">Exportar Excel</span>
               </button>
             </>
+          )}
+
+          {!isStandalone && (
+            <button 
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('show-pwa-prompt'));
+              }}
+              className="flex items-center gap-1.5 bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary border border-brand-primary/20 font-bold py-1.5 px-2 md:px-3 rounded-md transition-all text-xs cursor-pointer"
+              title="Instalar Aplicativo (PWA)"
+            >
+              <Smartphone size={14} className="animate-bounce-subtle" />
+              <span>Instalar App</span>
+            </button>
           )}
 
           <button 
