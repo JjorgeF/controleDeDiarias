@@ -10,7 +10,8 @@ import {
   Moon,
   ChevronDown,
   FileDown,
-  Smartphone
+  Smartphone,
+  BarChart3
 } from 'lucide-react';
 import { auth, googleProvider } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
@@ -28,6 +29,7 @@ interface HeaderProps {
   toggleTheme: () => void;
   onExportExcel: () => void;
   hideControls?: boolean;
+  isAdmin?: boolean;
 }
 
 export default function Header({ 
@@ -39,7 +41,8 @@ export default function Header({
   isDarkMode,
   toggleTheme,
   onExportExcel,
-  hideControls = false
+  hideControls = false,
+  isAdmin = false
 }: HeaderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isStandalone, setIsStandalone] = useState(false);
@@ -96,6 +99,7 @@ export default function Header({
                   "p-1.5 rounded transition-colors",
                   viewMode === 'grid' ? "bg-brand-bg text-brand-primary" : "text-gray-400 hover:text-white"
                 )}
+                title="Visualização em Grade"
               >
                 <LayoutGrid size={18} />
               </button>
@@ -105,6 +109,7 @@ export default function Header({
                   "p-1.5 rounded transition-colors",
                   viewMode === 'list' ? "bg-brand-bg text-brand-primary" : "text-gray-400 hover:text-white"
                 )}
+                title="Visualização em Lista"
               >
                 <List size={18} />
               </button>
@@ -114,9 +119,22 @@ export default function Header({
                   "p-1.5 rounded transition-colors",
                   viewMode === 'calendar' ? "bg-brand-bg text-brand-primary" : "text-gray-400 hover:text-white"
                 )}
+                title="Calendário de Escalas"
               >
                 <CalendarIcon size={18} />
               </button>
+              {isAdmin && (
+                <button 
+                  onClick={() => setViewMode('dashboard')}
+                  className={cn(
+                    "p-1.5 rounded transition-colors border-l border-brand-border/40 pl-2 ml-1",
+                    viewMode === 'dashboard' ? "bg-brand-bg text-brand-primary" : "text-gray-400 hover:text-white"
+                  )}
+                  title="Dashboard de Estatísticas"
+                >
+                  <BarChart3 size={18} />
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -246,6 +264,18 @@ export default function Header({
             >
               <CalendarIcon size={18} />
             </button>
+            {isAdmin && (
+              <button 
+                onClick={() => setViewMode('dashboard')}
+                className={cn(
+                  "p-1.5 rounded transition-colors border-l border-brand-border/40 pl-2 ml-1",
+                  viewMode === 'dashboard' ? "bg-brand-bg text-brand-primary" : "text-gray-400 hover:text-white"
+                )}
+                title="Dashboard"
+              >
+                <BarChart3 size={18} />
+              </button>
+            )}
           </div>
         </div>
       )}
