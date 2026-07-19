@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface LogoProps {
   className?: string;
@@ -6,43 +6,94 @@ interface LogoProps {
   animate?: boolean;
 }
 
-export default function Logo({ className, size = 32, animate = false }: LogoProps) {
+const LOGO_FORMATS = ['png', 'svg', 'webp', 'jpg', 'jpeg'];
+
+export default function Logo({ className = '', size = 32, animate = false }: LogoProps) {
+  const [formatIndex, setFormatIndex] = useState(0);
+  const [useFallback, setUseFallback] = useState(false);
+
+  // If size or component updates, reset attempt to find custom logo
+  useEffect(() => {
+    setFormatIndex(0);
+    setUseFallback(false);
+  }, []);
+
+  const handleImageError = () => {
+    if (formatIndex < LOGO_FORMATS.length - 1) {
+      setFormatIndex(prev => prev + 1);
+    } else {
+      setUseFallback(true);
+    }
+  };
+
+  const currentFormat = LOGO_FORMATS[formatIndex];
+  const customLogoSrc = `/brand/logo-custom.${currentFormat}`;
+
+  // Custom keyframes style for the gentle spin rotation
+  const animationStyles = animate ? (
+    <style>{`
+      @keyframes logo-spin {
+        0% { transform: rotate(0deg); }
+        77.78% { transform: rotate(280deg); }
+        83.33% { transform: rotate(356.25deg); }
+        88.89% { transform: rotate(500deg); }
+        91.11% { transform: rotate(561.28deg); }
+        94.44% { transform: rotate(643.75deg); }
+        100% { transform: rotate(720deg); }
+      }
+      .animate-gentle-spin {
+        animation: logo-spin 9s linear infinite;
+        transform-origin: center;
+        will-change: transform;
+      }
+    `}</style>
+  ) : null;
+
+  if (!useFallback) {
+    return (
+      <div 
+        className={`${className} relative flex items-center justify-center`}
+        style={{ width: size, height: size }}
+      >
+        {animationStyles}
+        <img
+          src={customLogoSrc}
+          alt="Logo"
+          onError={handleImageError}
+          className={`w-full h-full object-contain ${animate ? 'animate-gentle-spin' : ''}`}
+          style={{ 
+            maxWidth: '100%', 
+            maxHeight: '100%',
+            imageRendering: 'crisp-edges'
+          }}
+        />
+      </div>
+    );
+  }
+
+  // Fallback to beautiful, original inline vector SVG logo
   return (
     <svg 
       viewBox="0 0 512 512" 
       width={size} 
       height={size} 
-      className={`${className || ''} ${animate ? 'animate-gentle-spin' : ''}`}
+      className={`${className} ${animate ? 'animate-gentle-spin' : ''}`}
       fill="none" 
       xmlns="http://www.w3.org/2000/svg"
       style={{ transformBox: 'fill-box' }}
     >
       <style>{`
-        @keyframes logo-spin {
-          0% {
-            transform: rotate(0deg);
-          }
-          77.78% { /* 7s - Base gentle rotation at 40 deg/s */
-            transform: rotate(280deg);
-          }
-          83.33% { /* 7.5s - Smoothly accelerating */
-            transform: rotate(356.25deg);
-          }
-          88.89% { /* 8s - Peak gust speed of the spin */
-            transform: rotate(500deg);
-          }
-          91.11% { /* 8.2s - Decelerating back down */
-            transform: rotate(561.28deg);
-          }
-          94.44% { /* 8.5s - Continuing smooth deceleration */
-            transform: rotate(643.75deg);
-          }
-          100% { /* 9s - Back to base speed of 40 deg/s, perfectly looping to 0% */
-            transform: rotate(720deg);
-          }
+        @keyframes logo-spin-svg {
+          0% { transform: rotate(0deg); }
+          77.78% { transform: rotate(280deg); }
+          83.33% { transform: rotate(356.25deg); }
+          88.89% { transform: rotate(500deg); }
+          91.11% { transform: rotate(561.28deg); }
+          94.44% { transform: rotate(643.75deg); }
+          100% { transform: rotate(720deg); }
         }
         .animate-gentle-spin {
-          animation: logo-spin 9s linear infinite;
+          animation: logo-spin-svg 9s linear infinite;
           transform-origin: center;
           will-change: transform;
         }
