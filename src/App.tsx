@@ -97,6 +97,48 @@ export default function App() {
     }
   }, [isDarkMode]);
 
+  // Dynamic custom logo & PWA manifest updater
+  useEffect(() => {
+    const checkCustomLogo = async () => {
+      const formats = ['png', 'svg', 'webp', 'jpg', 'jpeg'];
+      for (const format of formats) {
+        try {
+          const logoUrl = `/brand/logo-custom.${format}`;
+          const response = await fetch(logoUrl, { method: 'HEAD' });
+          if (response.ok) {
+            // Check if the file is empty (e.g. 0 bytes placeholder)
+            const contentLength = response.headers.get('content-length');
+            if (contentLength === '0') {
+              continue;
+            }
+
+            // Found a custom logo! Update favicon & apple-touch-icon
+            const favicon = document.querySelector('link[rel="icon"]');
+            if (favicon) {
+              favicon.setAttribute('href', logoUrl);
+              favicon.setAttribute('type', format === 'svg' ? 'image/svg+xml' : `image/${format}`);
+            }
+            
+            const appleTouch = document.querySelector('link[rel="apple-touch-icon"]');
+            if (appleTouch) {
+              appleTouch.setAttribute('href', logoUrl);
+            }
+            
+            // Update manifest to append query parameter so Service Worker can serve custom icon
+            const manifestLink = document.querySelector('link[rel="manifest"]');
+            if (manifestLink) {
+              manifestLink.setAttribute('href', `/manifest.json?logo=logo-custom.${format}`);
+            }
+            break;
+          }
+        } catch (e) {
+          // Ignore
+        }
+      }
+    };
+    checkCustomLogo();
+  }, []);
+
   useEffect(() => {
     if (!auth) {
       setAdminCheckLoading(false);
