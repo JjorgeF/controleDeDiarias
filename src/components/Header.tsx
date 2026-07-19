@@ -66,8 +66,18 @@ export default function Header({
     if (!auth) return;
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-      console.error("Login error:", error);
+    } catch (error: any) {
+      const isCancelError = error && (
+        error.code === 'auth/cancelled-popup-request' || 
+        error.code === 'auth/popup-closed-by-user' ||
+        error.message?.includes('cancelled-popup-request') ||
+        error.message?.includes('popup-closed-by-user')
+      );
+      if (isCancelError) {
+        console.log("Login cancelado pelo usuário ou janela fechada.");
+      } else {
+        console.error("Login error:", error);
+      }
     }
   };
 
