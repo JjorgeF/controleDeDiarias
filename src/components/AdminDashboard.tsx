@@ -33,6 +33,7 @@ import { cn } from '../lib/utils';
 interface AdminDashboardProps {
   employees: Employee[];
   currentMonth: Date;
+  dayConfigs?: Record<string, { isCommon: boolean; isParty: boolean; partyTime?: string }>;
 }
 
 interface AccessLog {
@@ -42,7 +43,7 @@ interface AccessLog {
   timestamp: string;
 }
 
-export default function AdminDashboard({ employees, currentMonth }: AdminDashboardProps) {
+export default function AdminDashboard({ employees, currentMonth, dayConfigs = {} }: AdminDashboardProps) {
   const [cancellationsLogs, setCancellationsLogs] = useState<AccessLog[]>([]);
   const [adminSettingsLogs, setAdminSettingsLogs] = useState<AccessLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
@@ -50,6 +51,41 @@ export default function AdminDashboard({ employees, currentMonth }: AdminDashboa
   const [logSearchQuery, setLogSearchQuery] = useState('');
 
   const currentMonthKey = format(currentMonth, 'yyyy-MM');
+
+  const getDayConfig = (dateStr: string) => {
+    const config = dayConfigs?.[dateStr];
+    if (config) {
+      return {
+        isCommon: !!config.isCommon,
+        isParty: !!config.isParty,
+        partyTime: config.partyTime || '',
+      };
+    }
+
+    const hasCommonWorkers = employees.some(emp => 
+      emp.workDays?.some(d => d.date === dateStr && d.type === 'common' && !d.isCancelled)
+    );
+    const hasPartyWorkers = employees.some(emp => 
+      emp.workDays?.some(d => d.date === dateStr && d.type === 'party' && !d.isCancelled)
+    );
+    
+    const hasPastAvailabilities = employees.some(emp => 
+      emp.availabilities?.some(av => av === dateStr || av === `${dateStr}_common`)
+    );
+    const hasPastPartyAvailabilities = employees.some(emp => 
+      emp.availabilities?.some(av => av === `${dateStr}_party`)
+    );
+
+    if (hasCommonWorkers || hasPartyWorkers || hasPastAvailabilities || hasPastPartyAvailabilities) {
+      return {
+        isCommon: hasCommonWorkers || hasPastAvailabilities || (!hasPartyWorkers && !hasPastPartyAvailabilities),
+        isParty: hasPartyWorkers || hasPastPartyAvailabilities,
+        partyTime: '',
+      };
+    }
+
+    return { isCommon: false, isParty: false, partyTime: '' };
+  };
 
   // Load access logs
   useEffect(() => {
@@ -172,14 +208,14 @@ export default function AdminDashboard({ employees, currentMonth }: AdminDashboa
     const sorted = all.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     
     sorted.forEach(log => {
-      const key = `${log.email}_${log.timestamp.split('.')[0]}`; // Deduplicate logs from exact same second
+      const key = log.email.trim().toLowerCase(); // Deduplicate by email so only the latest login remains
       if (!seen.has(key)) {
         seen.add(key);
         unique.push(log);
       }
     });
     
-    return unique.slice(0, 100);
+    return unique;
   }, [cancellationsLogs, adminSettingsLogs, employeeLogs]);
 
   // Filtered logs
@@ -207,10 +243,20 @@ export default function AdminDashboard({ employees, currentMonth }: AdminDashboa
       ) || [];
       totalScheduledDaysThisMonth += monthWorkDays.length;
 
-      // Availabilities in this month
-      const monthAvailabilities = emp.availabilities?.filter(date => 
-        date.startsWith(currentMonthKey)
-      ) || [];
+      // Availabilities in this month (filtering for active configs only)
+      const monthAvailabilities = emp.availabilities?.filter(dateStr => {
+        if (!dateStr.startsWith(currentMonthKey)) return false;
+        if (dateStr.startsWith('login_')) return false;
+
+        const datePart = dateStr.includes('_') ? dateStr.split('_')[0] : dateStr;
+        const config = getDayConfig(datePart);
+        const isPartyAvail = dateStr.endsWith('_party');
+        if (isPartyAvail) {
+          return config.isParty;
+        } else {
+          return config.isCommon;
+        }
+      }) || [];
       totalAvailabilitiesThisMonth += monthAvailabilities.length;
     });
 
@@ -219,7 +265,7 @@ export default function AdminDashboard({ employees, currentMonth }: AdminDashboa
       totalScheduledDaysThisMonth,
       totalAvailabilitiesThisMonth,
     };
-  }, [employees, currentMonthKey]);
+  }, [employees, currentMonthKey, dayConfigs]);
 
   // Ranking data
   const rankingData = useMemo(() => {
@@ -228,12 +274,34 @@ export default function AdminDashboard({ employees, currentMonth }: AdminDashboa
         d.date.startsWith(currentMonthKey) && !d.isCancelled
       ).length || 0;
 
-      const availabilitiesThisMonth = emp.availabilities?.filter(date => 
-        date.startsWith(currentMonthKey)
-      ).length || 0;
+      const availabilitiesThisMonth = emp.availabilities?.filter(dateStr => {
+        if (!dateStr.startsWith(currentMonthKey)) return false;
+        if (dateStr.startsWith('login_')) return false;
+
+        const datePart = dateStr.includes('_') ? dateStr.split('_')[0] : dateStr;
+        const config = getDayConfig(datePart);
+        const isPartyAvail = dateStr.endsWith('_party');
+        if (isPartyAvail) {
+          return config.isParty;
+        } else {
+          return config.isCommon;
+        }
+      }).length || 0;
 
       const totalConfirmedAllTime = emp.workDays?.filter(d => !d.isCancelled).length || 0;
-      const totalAvailabilitiesAllTime = emp.availabilities?.length || 0;
+      
+      const totalAvailabilitiesAllTime = emp.availabilities?.filter(dateStr => {
+        if (dateStr.startsWith('login_')) return false;
+
+        const datePart = dateStr.includes('_') ? dateStr.split('_')[0] : dateStr;
+        const config = getDayConfig(datePart);
+        const isPartyAvail = dateStr.endsWith('_party');
+        if (isPartyAvail) {
+          return config.isParty;
+        } else {
+          return config.isCommon;
+        }
+      }).length || 0;
 
       return {
         id: emp.id,
@@ -253,7 +321,7 @@ export default function AdminDashboard({ employees, currentMonth }: AdminDashboa
     } else {
       return [...data].sort((a, b) => b.availabilitiesThisMonth - a.availabilitiesThisMonth || b.totalAvailabilitiesAllTime - a.totalAvailabilitiesAllTime);
     }
-  }, [employees, currentMonthKey, rankMetric]);
+  }, [employees, currentMonthKey, rankMetric, dayConfigs]);
 
   const maxMetricValue = useMemo(() => {
     if (rankingData.length === 0) return 1;
