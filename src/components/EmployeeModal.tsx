@@ -30,7 +30,16 @@ export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, emplo
     setIsDeleting(false);
     setError(null);
     if (employee) {
-      setFormData(employee);
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      const todayStr = `${year}-${month}-${day}`;
+      
+      setFormData({
+        ...employee,
+        promotionEffectiveDate: employee.promotionEffectiveDate || todayStr
+      });
     } else {
       setFormData({
         name: '',
@@ -153,6 +162,23 @@ export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, emplo
               className="w-full bg-brand-bg border border-brand-border rounded-lg py-2 px-4 text-white focus:outline-none focus:border-brand-primary"
             />
           </div>
+
+          {employee && (
+            <div className="bg-yellow-500/[0.03] border border-yellow-500/20 rounded-xl p-3.5 space-y-2">
+              <label className="block text-xs font-bold text-yellow-500 uppercase tracking-wider">
+                Vigência da Promoção / Novas Taxas 📅
+              </label>
+              <input
+                type="date"
+                value={formData.promotionEffectiveDate || ''}
+                onChange={(e) => setFormData({ ...formData, promotionEffectiveDate: e.target.value })}
+                className="w-full bg-brand-bg border border-yellow-500/30 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-yellow-500 text-sm font-semibold"
+              />
+              <p className="text-[10px] text-gray-400 leading-normal">
+                Indique a partir de qual data o novo nível e valores passam a vigorar. O sistema atualizará de forma retroativa ou futura todos os dias de trabalho agendados desse funcionário que ocorram a partir dessa data.
+              </p>
+            </div>
+          )}
 
           <div className="flex flex-col gap-3 pt-4">
             <div className="flex gap-3">
