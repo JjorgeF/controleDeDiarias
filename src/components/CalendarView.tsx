@@ -202,7 +202,15 @@ export default function CalendarView({
       newDays = employee.workDays.filter(d => d.date !== dateStr);
     } else {
       const filtered = employee.workDays.filter(d => d.date !== dateStr);
-      newDays = [...filtered, { date: dateStr, type: 'common' as DayType, extraHours: 0 }];
+      newDays = [...filtered, { 
+        date: dateStr, 
+        type: 'common' as DayType, 
+        extraHours: 0,
+        dailyRateAtTime: employee.dailyRate,
+        partyRateAtTime: employee.partyRate,
+        extraHourRateAtTime: employee.extraHourRate,
+        levelAtTime: employee.level
+      }];
     }
     
     onUpdateDays(employee.id, newDays);
@@ -228,7 +236,15 @@ export default function CalendarView({
     copiedTeam.forEach(empId => {
       const employee = employees.find(e => e.id === empId);
       if (employee && !employee.workDays.some(d => d.date === selectedDayStr)) {
-        const newDays = [...employee.workDays, { date: selectedDayStr, type: 'common' as DayType, extraHours: 0 }];
+        const newDays = [...employee.workDays, { 
+          date: selectedDayStr, 
+          type: 'common' as DayType, 
+          extraHours: 0,
+          dailyRateAtTime: employee.dailyRate,
+          partyRateAtTime: employee.partyRate,
+          extraHourRateAtTime: employee.extraHourRate,
+          levelAtTime: employee.level
+        }];
         onUpdateDays(empId, newDays);
       }
     });
@@ -475,8 +491,11 @@ export default function CalendarView({
     if (!myEmployee) return 0;
     return scheduledDaysThisMonth.reduce((acc, d) => {
       const isParty = d.type === 'party';
-      const dayBase = isParty ? myEmployee.partyRate : myEmployee.dailyRate;
-      const extra = (d.extraHours || 0) * myEmployee.extraHourRate;
+      const dayBase = isParty 
+        ? (d.partyRateAtTime !== undefined ? d.partyRateAtTime : myEmployee.partyRate) 
+        : (d.dailyRateAtTime !== undefined ? d.dailyRateAtTime : myEmployee.dailyRate);
+      const extraRate = d.extraHourRateAtTime !== undefined ? d.extraHourRateAtTime : myEmployee.extraHourRate;
+      const extra = (d.extraHours || 0) * extraRate;
       return acc + dayBase + extra;
     }, 0);
   }, [myEmployee, scheduledDaysThisMonth]);
@@ -842,8 +861,11 @@ export default function CalendarView({
                         const config = getDayConfig(d.date);
                         const partyTime = config.partyTime;
 
-                        const dayBase = isParty ? myEmployee.partyRate : myEmployee.dailyRate;
-                        const extra = (d.extraHours || 0) * myEmployee.extraHourRate;
+                        const dayBase = isParty 
+                          ? (d.partyRateAtTime !== undefined ? d.partyRateAtTime : myEmployee.partyRate) 
+                          : (d.dailyRateAtTime !== undefined ? d.dailyRateAtTime : myEmployee.dailyRate);
+                        const extraRate = d.extraHourRateAtTime !== undefined ? d.extraHourRateAtTime : myEmployee.extraHourRate;
+                        const extra = (d.extraHours || 0) * extraRate;
                         const dayTotal = dayBase + extra;
 
                         return (
@@ -940,14 +962,20 @@ export default function CalendarView({
                         <div className="flex flex-col">
                           <span className="text-[10px] uppercase text-gray-500 tracking-wider font-extrabold">Dias CCSP ({scheduledDaysThisMonth.filter(d => d.type === 'common').length}x)</span>
                           <span className="text-sm text-brand-primary font-black mt-0.5">
-                            {formatCurrency(scheduledDaysThisMonth.filter(d => d.type === 'common').length * myEmployee.dailyRate)}
+                            {formatCurrency(scheduledDaysThisMonth.filter(d => d.type === 'common').reduce((acc, d) => {
+                              const rate = d.dailyRateAtTime !== undefined ? d.dailyRateAtTime : myEmployee.dailyRate;
+                              return acc + rate;
+                            }, 0))}
                           </span>
                         </div>
                         
                         <div className="flex flex-col">
                           <span className="text-[10px] uppercase text-gray-500 tracking-wider font-extrabold">Dias Festa ({scheduledDaysThisMonth.filter(d => d.type === 'party').length}x)</span>
                           <span className="text-sm text-purple-300 font-black mt-0.5">
-                            {formatCurrency(scheduledDaysThisMonth.filter(d => d.type === 'party').length * myEmployee.partyRate)}
+                            {formatCurrency(scheduledDaysThisMonth.filter(d => d.type === 'party').reduce((acc, d) => {
+                              const rate = d.partyRateAtTime !== undefined ? d.partyRateAtTime : myEmployee.partyRate;
+                              return acc + rate;
+                            }, 0))}
                           </span>
                         </div>
 
@@ -955,7 +983,10 @@ export default function CalendarView({
                           <div className="flex flex-col">
                             <span className="text-[10px] uppercase text-gray-500 tracking-wider font-extrabold">Horas Extras ({scheduledDaysThisMonth.reduce((acc, d) => acc + (d.extraHours || 0), 0)}h)</span>
                             <span className="text-sm text-yellow-400 font-black mt-0.5">
-                              {formatCurrency(scheduledDaysThisMonth.reduce((acc, d) => acc + (d.extraHours || 0) * myEmployee.extraHourRate, 0))}
+                              {formatCurrency(scheduledDaysThisMonth.reduce((acc, d) => {
+                                const rate = d.extraHourRateAtTime !== undefined ? d.extraHourRateAtTime : myEmployee.extraHourRate;
+                                return acc + (d.extraHours || 0) * rate;
+                              }, 0))}
                             </span>
                           </div>
                         )}
