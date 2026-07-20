@@ -126,11 +126,35 @@ export default function CalendarView({
     emp.workDays.some(d => d.date === selectedDayStr && !d.isCancelled)
   );
 
-  const employeesAvailable = employees.filter(emp => 
-    !emp.workDays.some(d => d.date === selectedDayStr && !d.isCancelled) &&
-    (emp.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-     emp.artisticName.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const { availablesMarked, availablesOthers } = React.useMemo(() => {
+    const config = getDayConfig(selectedDayStr);
+    const marked: Employee[] = [];
+    const others: Employee[] = [];
+    
+    employees.forEach(emp => {
+      const isWorking = emp.workDays.some(d => d.date === selectedDayStr && !d.isCancelled);
+      if (isWorking) return;
+      
+      const matchesQuery = !searchQuery || 
+        emp.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        (emp.artisticName && emp.artisticName.toLowerCase().includes(searchQuery.toLowerCase()));
+        
+      if (!matchesQuery) return;
+      
+      const commonAvailable = !!config.isCommon && 
+        (emp.availabilities?.includes(selectedDayStr) || emp.availabilities?.includes(`${selectedDayStr}_common`));
+      const partyAvailable = !!config.isParty && 
+        emp.availabilities?.includes(`${selectedDayStr}_party`);
+        
+      if (commonAvailable || partyAvailable) {
+        marked.push(emp);
+      } else {
+        others.push(emp);
+      }
+    });
+    
+    return { availablesMarked: marked, availablesOthers: others };
+  }, [employees, selectedDayStr, searchQuery, dayConfigs]);
 
   const toggleWorkDay = (employee: Employee, date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
@@ -419,10 +443,22 @@ export default function CalendarView({
 
   const employeesWithAvailabilitiesCount = React.useMemo(() => {
     return employees.map(emp => {
-      const count = emp.availabilities?.filter(dateStr => dateStr.startsWith(currentMonthKey)).length || 0;
+      const count = emp.availabilities?.filter(dateStr => {
+        if (!dateStr.startsWith(currentMonthKey)) return false;
+        if (dateStr.startsWith('login_')) return false;
+        
+        const datePart = dateStr.includes('_') ? dateStr.split('_')[0] : dateStr;
+        const config = getDayConfig(datePart);
+        const isPartyAvail = dateStr.endsWith('_party');
+        if (isPartyAvail) {
+          return config.isParty;
+        } else {
+          return config.isCommon;
+        }
+      }).length || 0;
       return { ...emp, availabilitiesCount: count };
     }).sort((a, b) => b.availabilitiesCount - a.availabilitiesCount);
-  }, [employees, currentMonthKey]);
+  }, [employees, currentMonthKey, dayConfigs]);
 
   const scheduledDaysThisMonth = React.useMemo(() => {
     if (!myEmployee || !myEmployee.workDays) return [];
@@ -1068,31 +1104,68 @@ export default function CalendarView({
                 </div>
 
                 {/* Available List */}
-                {searchQuery && (
-                  <div className="animate-in fade-in slide-in-from-bottom-4">
-                    <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4">Disponíveis</h4>
+                <div className="space-y-6">
+                  {/* Recreadores Disponíveis Sinalizados */}
+                  <div>
+                    <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
+                      Disponibilidades Sinalizadas ({availablesMarked.length})
+                    </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {employeesAvailable.map(emp => (
+                      {availablesMarked.map(emp => (
                         <div 
                           key={emp.id} 
                           onClick={() => toggleWorkDay(emp, selectedDay)}
-                          className="flex items-center justify-between bg-brand-bg/40 border border-brand-border p-3 rounded-xl hover:border-brand-primary/30 hover:bg-brand-primary/5 transition-all cursor-pointer group"
+                          className="flex items-center justify-between bg-emerald-500/[0.02] border border-emerald-500/20 hover:border-emerald-500/40 hover:bg-emerald-500/[0.05] p-3 rounded-xl transition-all cursor-pointer group"
                         >
                           <div>
-                            <p className="text-sm font-bold text-white group-hover:text-brand-primary transition-colors">{emp.artisticName || emp.name}</p>
-                            <p className="text-[10px] text-gray-500 font-medium">{emp.level}</p>
+                            <p className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors">
+                              {emp.artisticName || emp.name}
+                            </p>
+                            <p className="text-[10px] text-gray-500 font-medium uppercase">{emp.level}</p>
                           </div>
-                          <div className="p-2 text-brand-primary group-hover:scale-110 transition-transform">
+                          <div className="p-2 text-emerald-400 group-hover:scale-110 transition-transform">
                             <UserPlus size={20} />
                           </div>
                         </div>
                       ))}
-                      {employeesAvailable.length === 0 && (
-                        <p className="text-xs text-gray-500 text-center py-2 col-span-full">Nenhum recreador encontrado.</p>
+                      {availablesMarked.length === 0 && (
+                        <p className="text-xs text-gray-500 italic py-2 col-span-full">Nenhuma sinalização de disponibilidade para este dia.</p>
                       )}
                     </div>
                   </div>
-                )}
+
+                  {/* Outros Recreadores (Shown only when searching) */}
+                  {searchQuery && (
+                    <div className="animate-in fade-in slide-in-from-bottom-2">
+                      <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">
+                        Outros Recreadores ({availablesOthers.length})
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {availablesOthers.map(emp => (
+                          <div 
+                            key={emp.id} 
+                            onClick={() => toggleWorkDay(emp, selectedDay)}
+                            className="flex items-center justify-between bg-brand-bg/40 border border-brand-border p-3 rounded-xl hover:border-brand-primary/30 hover:bg-brand-primary/5 transition-all cursor-pointer group"
+                          >
+                            <div>
+                              <p className="text-sm font-bold text-white group-hover:text-brand-primary transition-colors">
+                                {emp.artisticName || emp.name}
+                              </p>
+                              <p className="text-[10px] text-gray-500 font-medium uppercase">{emp.level}</p>
+                            </div>
+                            <div className="p-2 text-brand-primary group-hover:scale-110 transition-transform">
+                              <UserPlus size={20} />
+                            </div>
+                          </div>
+                        ))}
+                        {availablesOthers.length === 0 && (
+                          <p className="text-xs text-gray-500 italic py-2 col-span-full">Nenhum outro recreador encontrado.</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
