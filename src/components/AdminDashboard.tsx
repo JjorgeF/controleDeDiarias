@@ -24,15 +24,18 @@ import {
   CheckCircle2,
   CalendarDays,
   ShieldCheck,
-  AlertCircle
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
-import { format, parseISO, formatDistanceToNow } from 'date-fns';
+import { format, parseISO, formatDistanceToNow, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '../lib/utils';
 
 interface AdminDashboardProps {
   employees: Employee[];
   currentMonth: Date;
+  setCurrentMonth: React.Dispatch<React.SetStateAction<Date>>;
   dayConfigs?: Record<string, { isCommon: boolean; isParty: boolean; partyTime?: string }>;
 }
 
@@ -43,7 +46,7 @@ interface AccessLog {
   timestamp: string;
 }
 
-export default function AdminDashboard({ employees, currentMonth, dayConfigs = {} }: AdminDashboardProps) {
+export default function AdminDashboard({ employees, currentMonth, setCurrentMonth, dayConfigs = {} }: AdminDashboardProps) {
   const [cancellationsLogs, setCancellationsLogs] = useState<AccessLog[]>([]);
   const [adminSettingsLogs, setAdminSettingsLogs] = useState<AccessLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
@@ -370,9 +373,27 @@ export default function AdminDashboard({ employees, currentMonth, dayConfigs = {
             Visualização consolidada de métricas, rankings de dedicação e controle de acessos em tempo real.
           </p>
         </div>
-        <div className="bg-brand-primary/10 border border-brand-primary/20 text-brand-primary font-bold text-xs py-2 px-4 rounded-xl flex items-center gap-1.5 uppercase tracking-wider">
-          <Activity className="animate-pulse" size={14} />
-          <span>Mês de {format(currentMonth, "MMMM 'de' yyyy", { locale: ptBR })}</span>
+        <div className="flex items-center gap-3 bg-brand-bg/60 border border-brand-border p-2 rounded-xl">
+          <div className="flex items-center gap-1 bg-brand-bg border border-brand-border rounded-lg p-1 shrink-0">
+            <button 
+              onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+              className="p-1.5 hover:bg-white/5 rounded-md transition-colors text-gray-400 hover:text-white"
+              title="Mês anterior"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <button 
+              onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+              className="p-1.5 hover:bg-white/5 rounded-md transition-colors text-gray-400 hover:text-white"
+              title="Próximo mês"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+          <div className="text-right pr-2">
+            <span className="block text-[10px] uppercase tracking-wider font-extrabold text-gray-500">Mês de Auditoria</span>
+            <span className="text-sm font-black text-white capitalize">{format(currentMonth, 'MMMM yyyy', { locale: ptBR })}</span>
+          </div>
         </div>
       </div>
 
