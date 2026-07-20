@@ -39,6 +39,7 @@ export interface Employee {
   userId: string; // To associate with the logged in user
   email?: string; // Access email for the employee
   promotions?: Promotion[];
+  promotionEffectiveDate?: string;
 }
 
 export type ViewMode = 'grid' | 'list' | 'calendar' | 'dashboard';
