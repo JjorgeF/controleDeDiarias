@@ -274,19 +274,28 @@ export default function AdminDashboard({ employees, currentMonth, dayConfigs = {
         d.date.startsWith(currentMonthKey) && !d.isCancelled
       ).length || 0;
 
-      const availabilitiesThisMonth = emp.availabilities?.filter(dateStr => {
-        if (!dateStr.startsWith(currentMonthKey)) return false;
-        if (dateStr.startsWith('login_')) return false;
+      // Track exact dates with active/inactive state
+      const activeAvails: { day: string; type: 'common' | 'party' }[] = [];
+      const inactiveAvails: { day: string; type: 'common' | 'party' }[] = [];
+
+      emp.availabilities?.forEach(dateStr => {
+        if (!dateStr.startsWith(currentMonthKey)) return;
+        if (dateStr.startsWith('login_')) return;
 
         const datePart = dateStr.includes('_') ? dateStr.split('_')[0] : dateStr;
         const config = getDayConfig(datePart);
-        const isPartyAvail = dateStr.endsWith('_party');
-        if (isPartyAvail) {
-          return config.isParty;
+        const isParty = dateStr.endsWith('_party');
+        const isActive = isParty ? config.isParty : config.isCommon;
+        const dayNum = datePart.split('-')[2];
+
+        if (isActive) {
+          activeAvails.push({ day: dayNum, type: isParty ? 'party' : 'common' });
         } else {
-          return config.isCommon;
+          inactiveAvails.push({ day: dayNum, type: isParty ? 'party' : 'common' });
         }
-      }).length || 0;
+      });
+
+      const availabilitiesThisMonth = activeAvails.length;
 
       const totalConfirmedAllTime = emp.workDays?.filter(d => !d.isCancelled).length || 0;
       
@@ -312,6 +321,8 @@ export default function AdminDashboard({ employees, currentMonth, dayConfigs = {
         availabilitiesThisMonth,
         totalConfirmedAllTime,
         totalAvailabilitiesAllTime,
+        activeAvails: activeAvails.sort((a, b) => a.day.localeCompare(b.day)),
+        inactiveAvails: inactiveAvails.sort((a, b) => a.day.localeCompare(b.day)),
       };
     });
 
@@ -511,6 +522,35 @@ export default function AdminDashboard({ employees, currentMonth, dayConfigs = {
                         style={{ width: `${percentage}%` }}
                       />
                     </div>
+
+                    {/* Micro-lista de datas para depuração transparente */}
+                    {rankMetric === 'availabilities' && (item.activeAvails.length > 0 || item.inactiveAvails.length > 0) && (
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1.5 text-[10px]">
+                        {item.activeAvails.map((av, idx) => (
+                          <span 
+                            key={`act-${idx}`} 
+                            className={cn(
+                              "px-1.5 py-0.5 rounded font-black border text-[9px] flex items-center gap-0.5",
+                              av.type === 'party' 
+                                ? "bg-purple-500/10 border-purple-500/20 text-purple-300" 
+                                : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                            )}
+                            title={av.type === 'party' ? `Disponibilidade de Festa para dia ${av.day}` : `Disponibilidade de CCSP para dia ${av.day}`}
+                          >
+                            Dia {av.day} {av.type === 'party' ? '🎉' : '🏢'}
+                          </span>
+                        ))}
+                        {item.inactiveAvails.map((av, idx) => (
+                          <span 
+                            key={`inact-${idx}`} 
+                            className="px-1.5 py-0.5 rounded font-black bg-gray-500/5 border border-gray-500/10 text-gray-500 line-through text-[9px]"
+                            title={`Registrou para o dia ${av.day}, mas este dia não está ativo no calendário (CCSP/Festa)`}
+                          >
+                            Dia {av.day} (Inativo)
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
