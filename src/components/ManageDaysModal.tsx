@@ -55,18 +55,42 @@ export default function ManageDaysModal({ isOpen, onClose, employee, onUpdateDay
 
     if (existingDayIndex === -1) {
       // First click: common day
-      setTempDays([...tempDays, { date: dateStr, type: 'common', extraHours: 0 }]);
+      setTempDays([...tempDays, { 
+        date: dateStr, 
+        type: 'common', 
+        extraHours: 0,
+        dailyRateAtTime: employee.dailyRate,
+        partyRateAtTime: employee.partyRate,
+        extraHourRateAtTime: employee.extraHourRate,
+        levelAtTime: employee.level
+      }]);
     } else {
       const existingDay = tempDays[existingDayIndex];
       if (existingDay.isCancelled) {
         // If cancelled, uncancel it as a common day
         const newDays = [...tempDays];
-        newDays[existingDayIndex] = { ...existingDay, isCancelled: false, cancellationViewed: false, type: 'common' };
+        newDays[existingDayIndex] = { 
+          ...existingDay, 
+          isCancelled: false, 
+          cancellationViewed: false, 
+          type: 'common',
+          dailyRateAtTime: existingDay.dailyRateAtTime !== undefined ? existingDay.dailyRateAtTime : employee.dailyRate,
+          partyRateAtTime: existingDay.partyRateAtTime !== undefined ? existingDay.partyRateAtTime : employee.partyRate,
+          extraHourRateAtTime: existingDay.extraHourRateAtTime !== undefined ? existingDay.extraHourRateAtTime : employee.extraHourRate,
+          levelAtTime: existingDay.levelAtTime || employee.level
+        };
         setTempDays(newDays);
       } else if (existingDay.type === 'common') {
         // Second click: party day
         const newDays = [...tempDays];
-        newDays[existingDayIndex] = { ...existingDay, type: 'party' };
+        newDays[existingDayIndex] = { 
+          ...existingDay, 
+          type: 'party',
+          dailyRateAtTime: existingDay.dailyRateAtTime !== undefined ? existingDay.dailyRateAtTime : employee.dailyRate,
+          partyRateAtTime: existingDay.partyRateAtTime !== undefined ? existingDay.partyRateAtTime : employee.partyRate,
+          extraHourRateAtTime: existingDay.extraHourRateAtTime !== undefined ? existingDay.extraHourRateAtTime : employee.extraHourRate,
+          levelAtTime: existingDay.levelAtTime || employee.level
+        };
         setTempDays(newDays);
       } else {
         // Third click: remove day
