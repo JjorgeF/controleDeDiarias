@@ -9,6 +9,21 @@ export interface WorkDay {
   isCancelled?: boolean;
   cancelledAt?: string;
   cancellationViewed?: boolean;
+  dailyRateAtTime?: number;
+  partyRateAtTime?: number;
+  extraHourRateAtTime?: number;
+  levelAtTime?: EmployeeLevel;
+}
+
+export interface Promotion {
+  id: string;
+  date: string; // YYYY-MM-DD format
+  previousLevel: EmployeeLevel;
+  newLevel: EmployeeLevel;
+  previousDailyRate: number;
+  newDailyRate: number;
+  previousPartyRate: number;
+  newPartyRate: number;
 }
 
 export interface Employee {
@@ -23,6 +38,7 @@ export interface Employee {
   availabilities?: string[]; // Date strings 'YYYY-MM-DD'
   userId: string; // To associate with the logged in user
   email?: string; // Access email for the employee
+  promotions?: Promotion[];
 }
 
 export type ViewMode = 'grid' | 'list' | 'calendar' | 'dashboard';
