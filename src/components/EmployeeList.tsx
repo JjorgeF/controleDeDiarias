@@ -53,12 +53,21 @@ export default function EmployeeList({
 
               const totalEarnings = monthWorkDays.reduce((acc, day) => {
                 let dayBase = 0;
-                if (day.type === 'common') dayBase = emp.dailyRate;
-                else if (day.type === 'party') dayBase = emp.partyRate;
+                if (day.type === 'common') {
+                  dayBase = day.dailyRateAtTime !== undefined ? day.dailyRateAtTime : emp.dailyRate;
+                } else if (day.type === 'party') {
+                  dayBase = day.partyRateAtTime !== undefined ? day.partyRateAtTime : emp.partyRate;
+                }
                 
-                const extra = (day.extraHours || 0) * emp.extraHourRate;
+                const extraRate = day.extraHourRateAtTime !== undefined ? day.extraHourRateAtTime : emp.extraHourRate;
+                const extra = (day.extraHours || 0) * extraRate;
                 return acc + dayBase + extra;
               }, 0);
+
+              const monthPromotion = (emp.promotions || []).find(promo => {
+                const promoDate = parseISO(promo.date);
+                return isSameMonth(promoDate, currentMonth);
+              });
 
               return (
                 <tr key={emp.id} className="hover:bg-white/5 transition-colors group">
@@ -69,9 +78,16 @@ export default function EmployeeList({
                     </div>
                   </td>
                   <td className="p-4">
-                    <span className="text-xs bg-brand-bg border border-brand-border px-2 py-1 rounded text-gray-400">
-                      {emp.level}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs bg-brand-bg border border-brand-border px-2 py-1 rounded text-gray-400">
+                        {emp.level}
+                      </span>
+                      {monthPromotion && (
+                        <span className="bg-yellow-500/10 text-yellow-500 text-[8px] font-black px-1.5 py-0.5 rounded border border-yellow-500/20 uppercase tracking-wider animate-pulse" title="Promovido(a) este mês!">
+                          ✨ PROMO
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="p-4 hidden md:table-cell">
                     <div className="flex flex-col gap-1 text-[10px] text-gray-500">
