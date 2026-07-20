@@ -326,6 +326,29 @@ export default function App() {
     try {
       if (selectedEmployee) {
         const empRef = doc(db, 'employees', selectedEmployee.id);
+        
+        // Detect if level or rates changed
+        const levelChanged = sanitizedData.level && sanitizedData.level !== selectedEmployee.level;
+        const dailyRateChanged = sanitizedData.dailyRate !== undefined && sanitizedData.dailyRate !== selectedEmployee.dailyRate;
+        const partyRateChanged = sanitizedData.partyRate !== undefined && sanitizedData.partyRate !== selectedEmployee.partyRate;
+
+        if (levelChanged || dailyRateChanged || partyRateChanged) {
+          const todayStr = format(new Date(), 'yyyy-MM-dd');
+          const newPromotion = {
+            id: Math.random().toString(36).substring(2, 9),
+            date: todayStr,
+            previousLevel: selectedEmployee.level,
+            newLevel: sanitizedData.level || selectedEmployee.level,
+            previousDailyRate: selectedEmployee.dailyRate,
+            newDailyRate: sanitizedData.dailyRate !== undefined ? sanitizedData.dailyRate : selectedEmployee.dailyRate,
+            previousPartyRate: selectedEmployee.partyRate,
+            newPartyRate: sanitizedData.partyRate !== undefined ? sanitizedData.partyRate : selectedEmployee.partyRate,
+          };
+
+          const currentPromotions = selectedEmployee.promotions || [];
+          sanitizedData.promotions = [...currentPromotions, newPromotion];
+        }
+
         await updateDoc(empRef, sanitizedData);
       } else {
         // Ao criar novo, o userId pode ser vazio se for um convite por email
@@ -382,13 +405,17 @@ export default function App() {
     });
 
     const data = employees.map(emp => {
-      const monthDays = emp.workDays.filter(d => isSameMonth(parseISO(d.date), currentMonth));
+      const monthDays = emp.workDays.filter(d => isSameMonth(parseISO(d.date), currentMonth) && !d.isCancelled);
       
       const earnings = monthDays.reduce((acc, day) => {
         let dayBase = 0;
-        if (day.type === 'common') dayBase = emp.dailyRate;
-        else if (day.type === 'party') dayBase = emp.partyRate;
-        const extra = (day.extraHours || 0) * emp.extraHourRate;
+        if (day.type === 'common') {
+          dayBase = day.dailyRateAtTime !== undefined ? day.dailyRateAtTime : emp.dailyRate;
+        } else if (day.type === 'party') {
+          dayBase = day.partyRateAtTime !== undefined ? day.partyRateAtTime : emp.partyRate;
+        }
+        const extraRate = day.extraHourRateAtTime !== undefined ? day.extraHourRateAtTime : emp.extraHourRate;
+        const extra = (day.extraHours || 0) * extraRate;
         return acc + dayBase + extra;
       }, 0);
 
