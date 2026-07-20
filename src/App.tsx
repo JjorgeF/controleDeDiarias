@@ -327,16 +327,18 @@ export default function App() {
       if (selectedEmployee) {
         const empRef = doc(db, 'employees', selectedEmployee.id);
         
-        // Detect if level or rates changed
+        // Detect if level, rates or extra rates changed
         const levelChanged = sanitizedData.level && sanitizedData.level !== selectedEmployee.level;
         const dailyRateChanged = sanitizedData.dailyRate !== undefined && sanitizedData.dailyRate !== selectedEmployee.dailyRate;
         const partyRateChanged = sanitizedData.partyRate !== undefined && sanitizedData.partyRate !== selectedEmployee.partyRate;
+        const extraHourRateChanged = sanitizedData.extraHourRate !== undefined && sanitizedData.extraHourRate !== selectedEmployee.extraHourRate;
 
-        if (levelChanged || dailyRateChanged || partyRateChanged) {
-          const todayStr = format(new Date(), 'yyyy-MM-dd');
+        if (levelChanged || dailyRateChanged || partyRateChanged || extraHourRateChanged) {
+          const effectiveDate = sanitizedData.promotionEffectiveDate || format(new Date(), 'yyyy-MM-dd');
+          
           const newPromotion = {
             id: Math.random().toString(36).substring(2, 9),
-            date: todayStr,
+            date: effectiveDate,
             previousLevel: selectedEmployee.level,
             newLevel: sanitizedData.level || selectedEmployee.level,
             previousDailyRate: selectedEmployee.dailyRate,
@@ -347,8 +349,33 @@ export default function App() {
 
           const currentPromotions = selectedEmployee.promotions || [];
           sanitizedData.promotions = [...currentPromotions, newPromotion];
+
+          // Retroactive adjustment: Update all workDays that are on or after the effective date
+          if (selectedEmployee.workDays && selectedEmployee.workDays.length > 0) {
+            const updatedWorkDays = selectedEmployee.workDays.map(day => {
+              if (day.date >= effectiveDate) {
+                return {
+                  ...day,
+                  dailyRateAtTime: sanitizedData.dailyRate !== undefined ? sanitizedData.dailyRate : selectedEmployee.dailyRate,
+                  partyRateAtTime: sanitizedData.partyRate !== undefined ? sanitizedData.partyRate : selectedEmployee.partyRate,
+                  extraHourRateAtTime: sanitizedData.extraHourRate !== undefined ? sanitizedData.extraHourRate : selectedEmployee.extraHourRate,
+                  levelAtTime: sanitizedData.level || selectedEmployee.level
+                };
+              } else {
+                return {
+                  ...day,
+                  dailyRateAtTime: day.dailyRateAtTime !== undefined ? day.dailyRateAtTime : selectedEmployee.dailyRate,
+                  partyRateAtTime: day.partyRateAtTime !== undefined ? day.partyRateAtTime : selectedEmployee.partyRate,
+                  extraHourRateAtTime: day.extraHourRateAtTime !== undefined ? day.extraHourRateAtTime : selectedEmployee.extraHourRate,
+                  levelAtTime: day.levelAtTime || selectedEmployee.level
+                };
+              }
+            });
+            sanitizedData.workDays = updatedWorkDays;
+          }
         }
 
+        delete sanitizedData.promotionEffectiveDate;
         await updateDoc(empRef, sanitizedData);
       } else {
         // Ao criar novo, o userId pode ser vazio se for um convite por email
