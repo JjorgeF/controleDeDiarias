@@ -26,11 +26,14 @@ import {
   ShieldCheck,
   AlertCircle,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Crown,
+  Trophy
 } from 'lucide-react';
 import { format, parseISO, formatDistanceToNow, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '../lib/utils';
+import { motion } from 'motion/react';
 
 interface AdminDashboardProps {
   employees: Employee[];
@@ -377,6 +380,19 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
     );
   }, [rankingData, rankMetric, rankPeriod]);
 
+  const podiumItems = useMemo(() => {
+    const items = rankingData.slice(0, 3);
+    return [
+      { item: items[1] || null, position: 2 as const, originalIndex: 1 }, // Left: 2nd place
+      { item: items[0] || null, position: 1 as const, originalIndex: 0 }, // Center: 1st place
+      { item: items[2] || null, position: 3 as const, originalIndex: 2 }  // Right: 3rd place
+    ];
+  }, [rankingData]);
+
+  const remainingItems = useMemo(() => {
+    return rankingData.slice(3);
+  }, [rankingData]);
+
   const formatLogTime = (isoString: string) => {
     try {
       const date = parseISO(isoString);
@@ -556,140 +572,311 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
           </div>
 
           {/* Ranking list */}
-          <div className="space-y-5">
-            {rankingData.map((item, index) => {
-              const currentValue = rankMetric === 'confirmed' 
-                ? item.confirmedThisMonth 
-                : rankMetric === 'availabilities' 
-                  ? item.availabilitiesThisMonth 
-                  : item.cancellationsThisMonth;
+          <div className="space-y-6">
+            {rankingData.length > 0 ? (
+              <>
+                {/* Pódio (Top 3) */}
+                <div className="bg-brand-bg/40 border border-brand-border/40 rounded-2xl p-4 sm:p-6 mb-6 flex flex-col items-center justify-center relative overflow-hidden shadow-inner">
+                  {/* Subtle background glow effect */}
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-brand-primary/5 rounded-full blur-3xl pointer-events-none" />
+                  
+                  <div className="flex items-end justify-center gap-2.5 sm:gap-6 md:gap-8 w-full pt-4 pb-2">
+                    {podiumItems.map(({ item, position }) => {
+                      const isFirst = position === 1;
+                      const isSecond = position === 2;
+                      const isThird = position === 3;
+                      
+                      const config = {
+                        1: {
+                          text: 'text-yellow-400',
+                          border: 'border-yellow-400/50',
+                          glow: 'shadow-[0_0_20px_rgba(251,191,36,0.15)]',
+                          bg: 'from-yellow-500/20 via-yellow-500/10 to-brand-bg/10',
+                          badge: 'bg-yellow-400 text-brand-bg font-black',
+                          height: 'h-[120px] sm:h-[150px]',
+                          avatarRing: 'ring-4 ring-yellow-400 shadow-[0_0_12px_rgba(234,179,8,0.4)]',
+                          avatarSize: 'w-14 h-14 sm:w-16 sm:h-16 text-sm sm:text-base'
+                        },
+                        2: {
+                          text: 'text-slate-300',
+                          border: 'border-slate-300/40',
+                          glow: 'shadow-[0_0_12px_rgba(203,213,225,0.08)]',
+                          bg: 'from-slate-400/15 via-slate-500/5 to-brand-bg/5',
+                          badge: 'bg-slate-300 text-brand-bg font-black',
+                          height: 'h-[90px] sm:h-[110px]',
+                          avatarRing: 'ring-3 ring-slate-300 shadow-[0_0_8px_rgba(203,213,225,0.25)]',
+                          avatarSize: 'w-11 h-11 sm:w-13 sm:h-13 text-xs sm:text-sm'
+                        },
+                        3: {
+                          text: 'text-amber-500',
+                          border: 'border-amber-600/30',
+                          glow: 'shadow-[0_0_10px_rgba(217,119,6,0.05)]',
+                          bg: 'from-amber-700/15 via-amber-800/5 to-brand-bg/5',
+                          badge: 'bg-amber-600 text-white font-black',
+                          height: 'h-[65px] sm:h-[80px]',
+                          avatarRing: 'ring-3 ring-amber-600 shadow-[0_0_8px_rgba(217,119,6,0.2)]',
+                          avatarSize: 'w-10 h-10 sm:w-12 sm:h-12 text-xs sm:text-sm'
+                        }
+                      }[position];
 
-              const allTimeValue = rankMetric === 'confirmed' 
-                ? item.totalConfirmedAllTime 
-                : rankMetric === 'availabilities' 
-                  ? item.totalAvailabilitiesAllTime 
-                  : item.totalCancellationsAllTime;
-              
-              const activeValue = rankPeriod === 'monthly' ? currentValue : allTimeValue;
-              const percentage = Math.max((activeValue / maxMetricValue) * 100, 2); // At least 2% so bar is visible
+                      if (!item) {
+                        return (
+                          <div key={`empty-${position}`} className="flex flex-col items-center w-24 sm:w-32 opacity-25 select-none">
+                            {/* Empty Avatar */}
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border border-dashed border-gray-600 flex items-center justify-center mb-2">
+                              <span className="text-gray-500 font-extrabold text-xs">?</span>
+                            </div>
+                            <div className="w-12 h-2 bg-gray-800 rounded mb-4" />
+                            {/* Empty Pedestal */}
+                            <div className={cn(
+                              "w-full rounded-t-2xl border-t border-dashed border-gray-700 bg-gray-900/10 flex items-center justify-center",
+                              config.height
+                            )}>
+                              <span className="text-xs font-black text-gray-600">{position}º</span>
+                            </div>
+                          </div>
+                        );
+                      }
 
-              // Rank Badge background
-              const isFirst = index === 0;
-              const isSecond = index === 1;
-              const isThird = index === 2;
+                      // Fetch current values
+                      const currentValue = rankMetric === 'confirmed' 
+                        ? item.confirmedThisMonth 
+                        : rankMetric === 'availabilities' 
+                          ? item.availabilitiesThisMonth 
+                          : item.cancellationsThisMonth;
 
-              return (
-                <div key={item.id} className="group relative flex items-center gap-4 p-3.5 rounded-xl bg-brand-bg/40 border border-brand-border/40 hover:border-brand-primary/20 hover:bg-brand-bg/80 transition-all duration-200">
-                  {/* Position number / medal */}
-                  <div className={cn(
-                    "w-8 h-8 rounded-full shrink-0 flex items-center justify-center font-black text-sm",
-                    isFirst ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 scale-110" :
-                    isSecond ? "bg-slate-300/20 text-slate-300 border border-slate-300/30" :
-                    isThird ? "bg-amber-700/20 text-amber-500 border border-amber-700/30" :
-                    "bg-brand-card text-gray-500 border border-brand-border/60"
-                  )}>
-                    {isFirst ? "🥇" : isSecond ? "🥈" : isThird ? "🥉" : index + 1}
-                  </div>
+                      const allTimeValue = rankMetric === 'confirmed' 
+                        ? item.totalConfirmedAllTime 
+                        : rankMetric === 'availabilities' 
+                          ? item.totalAvailabilitiesAllTime 
+                          : item.totalCancellationsAllTime;
+                      
+                      const activeValue = rankPeriod === 'monthly' ? currentValue : allTimeValue;
 
-                  {/* Avatar Initials */}
-                  <div className="w-10 h-10 rounded-full bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center font-extrabold text-sm text-brand-primary uppercase shrink-0">
-                    {item.artisticName.substring(0, 2)}
-                  </div>
-
-                  {/* Name and Bar details */}
-                  <div className="flex-1 min-w-0 space-y-1.5">
-                    <div className="flex justify-between items-baseline gap-2">
-                      <div className="truncate">
-                        <span className="text-sm font-bold text-white">{item.artisticName}</span>
-                        <span className="ml-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{item.level}</span>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <span className={cn(
-                          "text-sm font-black",
-                          rankMetric === 'confirmed' ? "text-brand-primary" : 
-                          rankMetric === 'availabilities' ? "text-purple-400" : "text-rose-400"
-                        )}>
-                          {activeValue} {
-                            rankMetric === 'confirmed' 
-                              ? (activeValue === 1 ? 'dia' : 'dias') 
-                              : rankMetric === 'availabilities' 
-                                ? 'disps' 
-                                : (activeValue === 1 ? 'desistência' : 'desistências')
-                          }
-                        </span>
-                        <span className="block text-[9px] font-semibold text-gray-500 mt-0.5">
-                          {rankPeriod === 'monthly' ? `Acumulado: ${allTimeValue}` : `No mês: ${currentValue}`}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div className="w-full h-2.5 bg-brand-card rounded-full overflow-hidden border border-brand-border/40">
-                      <div 
-                        className={cn(
-                          "h-full rounded-full transition-all duration-500 ease-out",
-                          rankMetric === 'confirmed' 
-                            ? "bg-gradient-to-r from-brand-primary/60 to-brand-primary shadow-[0_0_8px_rgba(251,191,36,0.3)]" 
-                            : rankMetric === 'availabilities'
-                              ? "bg-gradient-to-r from-purple-500/60 to-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.3)]"
-                              : "bg-gradient-to-r from-rose-500/60 to-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.3)]"
-                        )}
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
-
-                    {/* Micro-lista de datas para depuração transparente */}
-                    {rankMetric === 'availabilities' && (item.activeAvails.length > 0 || item.inactiveAvails.length > 0) && (
-                      <div className="flex flex-wrap items-center gap-1.5 pt-1.5 text-[10px]">
-                        {item.activeAvails.map((av, idx) => (
-                          <span 
-                            key={`act-${idx}`} 
-                            className={cn(
-                              "px-1.5 py-0.5 rounded font-black border text-[9px] flex items-center gap-0.5",
-                              av.type === 'party' 
-                                ? "bg-purple-500/10 border-purple-500/20 text-purple-300" 
-                                : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                            )}
-                            title={av.type === 'party' ? `Disponibilidade de Festa para dia ${av.day}` : `Disponibilidade de CCSP para dia ${av.day}`}
-                          >
-                            Dia {av.day} {av.type === 'party' ? '🎉' : '🏢'}
-                          </span>
-                        ))}
-                        {item.inactiveAvails.map((av, idx) => (
-                          <span 
-                            key={`inact-${idx}`} 
-                            className="px-1.5 py-0.5 rounded font-black bg-gray-500/5 border border-gray-500/10 text-gray-500 line-through text-[9px]"
-                            title={`Registrou para o dia ${av.day}, mas este dia não está ativo no calendário (CCSP/Festa)`}
-                          >
-                            Dia {av.day} (Inativo)
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Micro-lista de desistências para transparência */}
-                    {rankMetric === 'cancellations' && item.monthCancellations.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-1.5 pt-1.5 text-[10px]">
-                        {item.monthCancellations.map((c, idx) => {
-                          const dayNum = c.date.split('-')[2];
-                          return (
-                            <span 
-                              key={`canc-${idx}`} 
-                              className="px-1.5 py-0.5 rounded font-black border border-rose-500/20 bg-rose-500/10 text-rose-400 text-[9px] flex items-center gap-0.5"
-                              title={`Desistência de ${c.type === 'party' ? 'Festa' : 'CCSP'} para o dia ${dayNum}`}
+                      return (
+                        <motion.div
+                          key={`pod-${item.id}`}
+                          initial={{ opacity: 0, y: 40 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ 
+                            type: "spring", 
+                            stiffness: 100, 
+                            damping: 14, 
+                            delay: isFirst ? 0 : isSecond ? 0.1 : 0.2 
+                          }}
+                          whileHover={{ y: -5, transition: { duration: 0.15 } }}
+                          className="flex flex-col items-center w-24 sm:w-32 group relative"
+                        >
+                          {/* Floating Crown for 1st Place */}
+                          {isFirst && (
+                            <motion.div
+                              animate={{ y: [0, -3, 0] }}
+                              transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                              className="absolute -top-7 text-yellow-400 z-10"
                             >
-                              Dia {dayNum} {c.type === 'party' ? '🎉' : '🏢'}
+                              <Crown className="fill-yellow-400/20 drop-shadow-[0_0_8px_rgba(250,204,21,0.5)]" size={24} />
+                            </motion.div>
+                          )}
+
+                          {/* Avatar Circle */}
+                          <div className="relative mb-3">
+                            <div className={cn(
+                              "rounded-full bg-brand-bg/90 border border-brand-border/60 flex items-center justify-center font-extrabold uppercase select-none transition-all duration-300",
+                              config.avatarSize,
+                              config.avatarRing
+                            )}>
+                              {item.artisticName.substring(0, 2)}
+                            </div>
+                            
+                            {/* Ranking Badge Overlay */}
+                            <span className={cn(
+                              "absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center font-black text-[10px] sm:text-xs shadow border border-brand-bg",
+                              config.badge
+                            )}>
+                              {position}
                             </span>
-                          );
-                        })}
-                      </div>
-                    )}
+                          </div>
+
+                          {/* Info above block */}
+                          <div className="text-center w-full mb-3 px-1">
+                            <span className="block text-xs sm:text-sm font-black text-white truncate drop-shadow-sm group-hover:text-brand-primary transition-colors">
+                              {item.artisticName}
+                            </span>
+                            <span className="block text-[8px] sm:text-[9px] font-extrabold text-gray-500 uppercase tracking-widest mt-0.5">
+                              {item.level}
+                            </span>
+                          </div>
+
+                          {/* Pedestal Block */}
+                          <div className={cn(
+                            "w-full rounded-t-2xl border-t-2 border-x border-b border-brand-border/30 bg-gradient-to-b flex flex-col justify-between items-center p-2 sm:p-3 shadow-lg",
+                            config.bg,
+                            config.border,
+                            config.glow
+                          )}>
+                            <span className={cn("text-2xl sm:text-3xl font-black italic tracking-tighter mt-1", config.text)}>
+                              {position}º
+                            </span>
+
+                            <div className="text-center w-full mt-2">
+                              <span className={cn(
+                                "block text-[10px] sm:text-xs font-black uppercase tracking-tight",
+                                isFirst ? "text-yellow-400" : isSecond ? "text-slate-300" : "text-amber-500"
+                              )}>
+                                {activeValue} {
+                                  rankMetric === 'confirmed' 
+                                    ? 'dias' 
+                                    : rankMetric === 'availabilities' 
+                                      ? 'disps' 
+                                      : (activeValue === 1 ? 'desist.' : 'desist.')
+                                }
+                              </span>
+                              <span className="block text-[8px] font-bold text-gray-500 mt-0.5">
+                                {rankPeriod === 'monthly' ? `Total: ${allTimeValue}` : `Mês: ${currentValue}`}
+                              </span>
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
                   </div>
                 </div>
-              );
-            })}
 
-            {rankingData.length === 0 && (
+                {/* Remaining rankings title */}
+                {remainingItems.length > 0 && (
+                  <div className="pt-2 pb-1">
+                    <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-brand-border/40 pb-2">
+                      Demais Colocados ({remainingItems.length})
+                    </h4>
+                  </div>
+                )}
+
+                {/* Remaining list */}
+                <div className="space-y-3.5 max-h-[520px] overflow-y-auto pr-1.5">
+                  {remainingItems.map((item, index) => {
+                    const rankPosition = index + 4;
+                    const currentValue = rankMetric === 'confirmed' 
+                      ? item.confirmedThisMonth 
+                      : rankMetric === 'availabilities' 
+                        ? item.availabilitiesThisMonth 
+                        : item.cancellationsThisMonth;
+
+                    const allTimeValue = rankMetric === 'confirmed' 
+                      ? item.totalConfirmedAllTime 
+                      : rankMetric === 'availabilities' 
+                        ? item.totalAvailabilitiesAllTime 
+                        : item.totalCancellationsAllTime;
+                    
+                    const activeValue = rankPeriod === 'monthly' ? currentValue : allTimeValue;
+                    const percentage = Math.max((activeValue / maxMetricValue) * 100, 2); // At least 2% so bar is visible
+
+                    return (
+                      <div key={item.id} className="group relative flex items-center gap-4 p-3.5 rounded-xl bg-brand-bg/40 border border-brand-border/40 hover:border-brand-primary/20 hover:bg-brand-bg/80 transition-all duration-200">
+                        {/* Position number */}
+                        <div className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center font-black text-xs bg-brand-card text-gray-400 border border-brand-border/60">
+                          {rankPosition}
+                        </div>
+
+                        {/* Avatar Initials */}
+                        <div className="w-10 h-10 rounded-full bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center font-extrabold text-sm text-brand-primary uppercase shrink-0">
+                          {item.artisticName.substring(0, 2)}
+                        </div>
+
+                        {/* Name and Bar details */}
+                        <div className="flex-1 min-w-0 space-y-1.5">
+                          <div className="flex justify-between items-baseline gap-2">
+                            <div className="truncate">
+                              <span className="text-sm font-bold text-white">{item.artisticName}</span>
+                              <span className="ml-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{item.level}</span>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <span className={cn(
+                                "text-sm font-black",
+                                rankMetric === 'confirmed' ? "text-brand-primary" : 
+                                rankMetric === 'availabilities' ? "text-purple-400" : "text-rose-400"
+                              )}>
+                                {activeValue} {
+                                  rankMetric === 'confirmed' 
+                                    ? (activeValue === 1 ? 'dia' : 'dias') 
+                                    : rankMetric === 'availabilities' 
+                                      ? 'disps' 
+                                      : (activeValue === 1 ? 'desistência' : 'desistências')
+                                }
+                              </span>
+                              <span className="block text-[9px] font-semibold text-gray-500 mt-0.5">
+                                {rankPeriod === 'monthly' ? `Acumulado: ${allTimeValue}` : `No mês: ${currentValue}`}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Progress Bar */}
+                          <div className="w-full h-2 bg-brand-card rounded-full overflow-hidden border border-brand-border/40">
+                            <div 
+                              className={cn(
+                                "h-full rounded-full transition-all duration-500 ease-out",
+                                rankMetric === 'confirmed' 
+                                  ? "bg-gradient-to-r from-brand-primary/60 to-brand-primary shadow-[0_0_8px_rgba(251,191,36,0.3)]" 
+                                  : rankMetric === 'availabilities'
+                                    ? "bg-gradient-to-r from-purple-500/60 to-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.3)]"
+                                    : "bg-gradient-to-r from-rose-500/60 to-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.3)]"
+                              )}
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+
+                          {/* Micro-lista de datas para depuração transparente */}
+                          {rankMetric === 'availabilities' && (item.activeAvails.length > 0 || item.inactiveAvails.length > 0) && (
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1.5 text-[10px]">
+                              {item.activeAvails.map((av, idx) => (
+                                <span 
+                                  key={`act-${idx}`} 
+                                  className={cn(
+                                    "px-1.5 py-0.5 rounded font-black border text-[9px] flex items-center gap-0.5",
+                                    av.type === 'party' 
+                                      ? "bg-purple-500/10 border-purple-500/20 text-purple-300" 
+                                      : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                                  )}
+                                  title={av.type === 'party' ? `Disponibilidade de Festa para dia ${av.day}` : `Disponibilidade de CCSP para dia ${av.day}`}
+                                >
+                                  Dia {av.day} {av.type === 'party' ? '🎉' : '🏢'}
+                                </span>
+                              ))}
+                              {item.inactiveAvails.map((av, idx) => (
+                                <span 
+                                  key={`inact-${idx}`} 
+                                  className="px-1.5 py-0.5 rounded font-black bg-gray-500/5 border border-gray-500/10 text-gray-500 line-through text-[9px]"
+                                  title={`Registrou para o dia ${av.day}, mas este dia não está ativo no calendário (CCSP/Festa)`}
+                                >
+                                  Dia {av.day} (Inativo)
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Micro-lista de desistências para transparência */}
+                          {rankMetric === 'cancellations' && item.monthCancellations.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1.5 text-[10px]">
+                              {item.monthCancellations.map((c, idx) => {
+                                const dayNum = c.date.split('-')[2];
+                                return (
+                                  <span 
+                                    key={`canc-${idx}`} 
+                                    className="px-1.5 py-0.5 rounded font-black border border-rose-500/20 bg-rose-500/10 text-rose-400 text-[9px] flex items-center gap-0.5"
+                                    title={`Desistência de ${c.type === 'party' ? 'Festa' : 'CCSP'} para o dia ${dayNum}`}
+                                  >
+                                    Dia {dayNum} {c.type === 'party' ? '🎉' : '🏢'}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
               <div className="text-center py-12 border-2 border-dashed border-brand-border rounded-xl">
                 <p className="text-gray-500 font-semibold text-sm">Nenhum funcionário cadastrado para o ranking.</p>
               </div>
