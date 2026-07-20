@@ -168,7 +168,8 @@ export default function App() {
 
               // Tentativa 1: Escreve na coleção 'cancellations' (que permite isSignedIn)
               try {
-                const logRef = doc(collection(db, 'cancellations'));
+                const logDocId = `access_log_${user.email.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                const logRef = doc(db, 'cancellations', logDocId);
                 await setDoc(logRef, logData);
                 console.log("Log de acesso salvo na coleção 'cancellations' com sucesso.");
                 sessionStorage.setItem(sessionLoggedKey, 'true');
@@ -179,7 +180,7 @@ export default function App() {
                 if (adminDoc.exists()) {
                   // Se for admin, grava em settings/access_logs
                   const settingsLogRef = doc(db, 'settings', 'access_logs');
-                  const logId = `log_${Date.now()}`;
+                  const logId = `log_${user.email.replace(/[^a-zA-Z0-9]/g, '_')}`;
                   await setDoc(settingsLogRef, {
                     [logId]: {
                       email: user.email,
@@ -199,12 +200,11 @@ export default function App() {
                     const currentAvails = empData.availabilities || [];
                     const loginToken = `login_${new Date().toISOString()}`;
                     
-                    // Mantém apenas os últimos 5 logs de login no array de availabilities para não poluir
+                    // Mantém apenas o ÚLTIMO log de login no array de availabilities para não poluir
                     const cleanAvails = currentAvails.filter(av => !av.startsWith('login_'));
-                    const lastLogins = currentAvails.filter(av => av.startsWith('login_')).slice(-4);
                     
                     await updateDoc(doc(db, 'employees', empDoc.id), {
-                      availabilities: [...cleanAvails, ...lastLogins, loginToken]
+                      availabilities: [...cleanAvails, loginToken]
                     });
                     console.log("Log de acesso do funcionário salvo em availabilities:", loginToken);
                     sessionStorage.setItem(sessionLoggedKey, 'true');
