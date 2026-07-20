@@ -829,6 +829,7 @@ export default function App() {
           <AdminDashboard 
             employees={employees}
             currentMonth={currentMonth}
+            setCurrentMonth={setCurrentMonth}
             dayConfigs={dayConfigs}
           />
         )}
