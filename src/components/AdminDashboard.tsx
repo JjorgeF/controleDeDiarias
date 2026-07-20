@@ -50,7 +50,8 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
   const [cancellationsLogs, setCancellationsLogs] = useState<AccessLog[]>([]);
   const [adminSettingsLogs, setAdminSettingsLogs] = useState<AccessLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
-  const [rankMetric, setRankMetric] = useState<'confirmed' | 'availabilities'>('confirmed');
+  const [rankMetric, setRankMetric] = useState<'confirmed' | 'availabilities' | 'cancellations'>('confirmed');
+  const [rankPeriod, setRankPeriod] = useState<'monthly' | 'allTime'>('monthly');
   const [logSearchQuery, setLogSearchQuery] = useState('');
 
   const currentMonthKey = format(currentMonth, 'yyyy-MM');
@@ -277,6 +278,11 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
         d.date.startsWith(currentMonthKey) && !d.isCancelled
       ).length || 0;
 
+      const cancellationsThisMonthList = emp.workDays?.filter(d => 
+        d.date.startsWith(currentMonthKey) && d.isCancelled
+      ) || [];
+      const cancellationsThisMonth = cancellationsThisMonthList.length;
+
       // Track exact dates with active/inactive state
       const activeAvails: { day: string; type: 'common' | 'party' }[] = [];
       const inactiveAvails: { day: string; type: 'common' | 'party' }[] = [];
@@ -301,6 +307,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
       const availabilitiesThisMonth = activeAvails.length;
 
       const totalConfirmedAllTime = emp.workDays?.filter(d => !d.isCancelled).length || 0;
+      const totalCancellationsAllTime = emp.workDays?.filter(d => d.isCancelled).length || 0;
       
       const totalAvailabilitiesAllTime = emp.availabilities?.filter(dateStr => {
         if (dateStr.startsWith('login_')) return false;
@@ -322,30 +329,53 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
         level: emp.level,
         confirmedThisMonth,
         availabilitiesThisMonth,
+        cancellationsThisMonth,
         totalConfirmedAllTime,
         totalAvailabilitiesAllTime,
+        totalCancellationsAllTime,
         activeAvails: activeAvails.sort((a, b) => a.day.localeCompare(b.day)),
         inactiveAvails: inactiveAvails.sort((a, b) => a.day.localeCompare(b.day)),
+        monthCancellations: cancellationsThisMonthList.sort((a, b) => a.date.localeCompare(b.date)),
       };
     });
 
-    // Sort based on the selected metric
-    if (rankMetric === 'confirmed') {
-      return [...data].sort((a, b) => b.confirmedThisMonth - a.confirmedThisMonth || b.totalConfirmedAllTime - a.totalConfirmedAllTime);
+    // Sort based on the selected metric and period
+    if (rankPeriod === 'monthly') {
+      if (rankMetric === 'confirmed') {
+        return [...data].sort((a, b) => b.confirmedThisMonth - a.confirmedThisMonth || b.totalConfirmedAllTime - a.totalConfirmedAllTime);
+      } else if (rankMetric === 'availabilities') {
+        return [...data].sort((a, b) => b.availabilitiesThisMonth - a.availabilitiesThisMonth || b.totalAvailabilitiesAllTime - a.totalAvailabilitiesAllTime);
+      } else {
+        return [...data].sort((a, b) => b.cancellationsThisMonth - a.cancellationsThisMonth || b.totalCancellationsAllTime - a.totalCancellationsAllTime);
+      }
     } else {
-      return [...data].sort((a, b) => b.availabilitiesThisMonth - a.availabilitiesThisMonth || b.totalAvailabilitiesAllTime - a.totalAvailabilitiesAllTime);
+      if (rankMetric === 'confirmed') {
+        return [...data].sort((a, b) => b.totalConfirmedAllTime - a.totalConfirmedAllTime || b.confirmedThisMonth - a.confirmedThisMonth);
+      } else if (rankMetric === 'availabilities') {
+        return [...data].sort((a, b) => b.totalAvailabilitiesAllTime - a.totalAvailabilitiesAllTime || b.availabilitiesThisMonth - a.availabilitiesThisMonth);
+      } else {
+        return [...data].sort((a, b) => b.totalCancellationsAllTime - a.totalCancellationsAllTime || b.cancellationsThisMonth - a.cancellationsThisMonth);
+      }
     }
-  }, [employees, currentMonthKey, rankMetric, dayConfigs]);
+  }, [employees, currentMonthKey, rankMetric, rankPeriod, dayConfigs]);
 
   const maxMetricValue = useMemo(() => {
     if (rankingData.length === 0) return 1;
     return Math.max(
-      ...rankingData.map(item => 
-        rankMetric === 'confirmed' ? item.confirmedThisMonth : item.availabilitiesThisMonth
-      ),
+      ...rankingData.map(item => {
+        if (rankPeriod === 'monthly') {
+          if (rankMetric === 'confirmed') return item.confirmedThisMonth;
+          if (rankMetric === 'availabilities') return item.availabilitiesThisMonth;
+          return item.cancellationsThisMonth;
+        } else {
+          if (rankMetric === 'confirmed') return item.totalConfirmedAllTime;
+          if (rankMetric === 'availabilities') return item.totalAvailabilitiesAllTime;
+          return item.totalCancellationsAllTime;
+        }
+      }),
       1
     );
-  }, [rankingData, rankMetric]);
+  }, [rankingData, rankMetric, rankPeriod]);
 
   const formatLogTime = (isoString: string) => {
     try {
@@ -446,47 +476,102 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left Col: Rankings (8 cols) */}
         <div className="lg:col-span-7 bg-brand-card border border-brand-border rounded-2xl p-6 shadow-md flex flex-col h-fit">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-brand-border/60 mb-6">
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-5 border-b border-brand-border/60 mb-6">
             <div className="flex items-center gap-2.5">
               <Award className="text-brand-primary" size={20} />
-              <h3 className="text-lg font-bold text-white uppercase tracking-wider font-playful">
-                Ranking de Dedicação
-              </h3>
+              <div>
+                <h3 className="text-lg font-bold text-white uppercase tracking-wider font-playful">
+                  Ranking de Dedicação
+                </h3>
+                <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider mt-0.5">
+                  Ordenado por: {rankPeriod === 'monthly' ? 'Mês Selecionado' : 'Acumulado Geral'}
+                </p>
+              </div>
             </div>
             
-            {/* Toggle metric */}
-            <div className="flex bg-brand-bg/60 p-1 rounded-xl border border-brand-border self-start">
-              <button
-                onClick={() => setRankMetric('confirmed')}
-                className={cn(
-                  "px-3 py-1.5 text-xs font-bold rounded-lg transition-all",
-                  rankMetric === 'confirmed' 
-                    ? "bg-brand-primary text-brand-bg shadow-md" 
-                    : "text-gray-400 hover:text-white"
-                )}
-              >
-                Dias Agendados
-              </button>
-              <button
-                onClick={() => setRankMetric('availabilities')}
-                className={cn(
-                  "px-3 py-1.5 text-xs font-bold rounded-lg transition-all",
-                  rankMetric === 'availabilities' 
-                    ? "bg-purple-500 text-white shadow-md" 
-                    : "text-gray-400 hover:text-white"
-                )}
-              >
-                Disponibilidades
-              </button>
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Period Selector (Mensal vs Geral) */}
+              <div className="flex bg-brand-bg/60 p-1 rounded-xl border border-brand-border">
+                <button
+                  onClick={() => setRankPeriod('monthly')}
+                  className={cn(
+                    "px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider rounded-lg transition-all",
+                    rankPeriod === 'monthly' 
+                      ? "bg-white/10 text-white border border-white/10 shadow-sm" 
+                      : "text-gray-400 hover:text-white"
+                  )}
+                >
+                  Mensal
+                </button>
+                <button
+                  onClick={() => setRankPeriod('allTime')}
+                  className={cn(
+                    "px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider rounded-lg transition-all",
+                    rankPeriod === 'allTime' 
+                      ? "bg-white/10 text-white border border-white/10 shadow-sm" 
+                      : "text-gray-400 hover:text-white"
+                  )}
+                >
+                  Geral
+                </button>
+              </div>
+
+              {/* Metric Selector (Dias Agendados vs Disponibilidades vs Desistências) */}
+              <div className="flex bg-brand-bg/60 p-1 rounded-xl border border-brand-border flex-wrap gap-1">
+                <button
+                  onClick={() => setRankMetric('confirmed')}
+                  className={cn(
+                    "px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider rounded-lg transition-all",
+                    rankMetric === 'confirmed' 
+                      ? "bg-brand-primary text-brand-bg shadow-md" 
+                      : "text-gray-400 hover:text-white"
+                  )}
+                >
+                  Dias Agendados
+                </button>
+                <button
+                  onClick={() => setRankMetric('availabilities')}
+                  className={cn(
+                    "px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider rounded-lg transition-all",
+                    rankMetric === 'availabilities' 
+                      ? "bg-purple-500 text-white shadow-md" 
+                      : "text-gray-400 hover:text-white"
+                  )}
+                >
+                  Disponibilidades
+                </button>
+                <button
+                  onClick={() => setRankMetric('cancellations')}
+                  className={cn(
+                    "px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider rounded-lg transition-all",
+                    rankMetric === 'cancellations' 
+                      ? "bg-rose-500 text-white shadow-md" 
+                      : "text-gray-400 hover:text-white"
+                  )}
+                >
+                  Desistências
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Ranking list */}
           <div className="space-y-5">
             {rankingData.map((item, index) => {
-              const currentValue = rankMetric === 'confirmed' ? item.confirmedThisMonth : item.availabilitiesThisMonth;
-              const allTimeValue = rankMetric === 'confirmed' ? item.totalConfirmedAllTime : item.totalAvailabilitiesAllTime;
-              const percentage = Math.max((currentValue / maxMetricValue) * 100, 2); // At least 2% so bar is visible
+              const currentValue = rankMetric === 'confirmed' 
+                ? item.confirmedThisMonth 
+                : rankMetric === 'availabilities' 
+                  ? item.availabilitiesThisMonth 
+                  : item.cancellationsThisMonth;
+
+              const allTimeValue = rankMetric === 'confirmed' 
+                ? item.totalConfirmedAllTime 
+                : rankMetric === 'availabilities' 
+                  ? item.totalAvailabilitiesAllTime 
+                  : item.totalCancellationsAllTime;
+              
+              const activeValue = rankPeriod === 'monthly' ? currentValue : allTimeValue;
+              const percentage = Math.max((activeValue / maxMetricValue) * 100, 2); // At least 2% so bar is visible
 
               // Rank Badge background
               const isFirst = index === 0;
@@ -521,12 +606,19 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                       <div className="shrink-0 text-right">
                         <span className={cn(
                           "text-sm font-black",
-                          rankMetric === 'confirmed' ? "text-brand-primary" : "text-purple-400"
+                          rankMetric === 'confirmed' ? "text-brand-primary" : 
+                          rankMetric === 'availabilities' ? "text-purple-400" : "text-rose-400"
                         )}>
-                          {currentValue} {rankMetric === 'confirmed' ? 'dias' : 'disps'}
+                          {activeValue} {
+                            rankMetric === 'confirmed' 
+                              ? (activeValue === 1 ? 'dia' : 'dias') 
+                              : rankMetric === 'availabilities' 
+                                ? 'disps' 
+                                : (activeValue === 1 ? 'desistência' : 'desistências')
+                          }
                         </span>
                         <span className="block text-[9px] font-semibold text-gray-500 mt-0.5">
-                          Acumulado: {allTimeValue}
+                          {rankPeriod === 'monthly' ? `Acumulado: ${allTimeValue}` : `No mês: ${currentValue}`}
                         </span>
                       </div>
                     </div>
@@ -538,7 +630,9 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                           "h-full rounded-full transition-all duration-500 ease-out",
                           rankMetric === 'confirmed' 
                             ? "bg-gradient-to-r from-brand-primary/60 to-brand-primary shadow-[0_0_8px_rgba(251,191,36,0.3)]" 
-                            : "bg-gradient-to-r from-purple-500/60 to-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.3)]"
+                            : rankMetric === 'availabilities'
+                              ? "bg-gradient-to-r from-purple-500/60 to-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.3)]"
+                              : "bg-gradient-to-r from-rose-500/60 to-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.3)]"
                         )}
                         style={{ width: `${percentage}%` }}
                       />
@@ -570,6 +664,24 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                             Dia {av.day} (Inativo)
                           </span>
                         ))}
+                      </div>
+                    )}
+
+                    {/* Micro-lista de desistências para transparência */}
+                    {rankMetric === 'cancellations' && item.monthCancellations.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1.5 text-[10px]">
+                        {item.monthCancellations.map((c, idx) => {
+                          const dayNum = c.date.split('-')[2];
+                          return (
+                            <span 
+                              key={`canc-${idx}`} 
+                              className="px-1.5 py-0.5 rounded font-black border border-rose-500/20 bg-rose-500/10 text-rose-400 text-[9px] flex items-center gap-0.5"
+                              title={`Desistência de ${c.type === 'party' ? 'Festa' : 'CCSP'} para o dia ${dayNum}`}
+                            >
+                              Dia {dayNum} {c.type === 'party' ? '🎉' : '🏢'}
+                            </span>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
