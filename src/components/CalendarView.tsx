@@ -564,8 +564,8 @@ export default function CalendarView({
           <div className="flex items-center gap-3">
             <Clock className="text-brand-primary" size={24} />
             <div>
-              <h3 className="text-sm font-bold text-white">Prazo de Disponibilidades ({format(currentMonth, 'MMMM', { locale: ptBR })})</h3>
-              <p className="text-xs text-gray-400">Defina até quando a equipe pode registrar disponibilidade</p>
+              <h3 className="text-sm font-bold text-brand-text">Prazo de Disponibilidades ({format(currentMonth, 'MMMM', { locale: ptBR })})</h3>
+              <p className="text-xs text-brand-muted">Defina até quando a equipe pode registrar disponibilidade</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -573,24 +573,24 @@ export default function CalendarView({
               type="date"
               value={deadlineInputDate}
               onChange={(e) => setDeadlineInputDate(e.target.value)}
-              className="bg-brand-bg border border-brand-border text-xs rounded-lg py-1.5 px-3 focus:outline-none focus:border-brand-primary text-white"
+              className="bg-brand-bg border border-brand-border text-xs rounded-lg py-1.5 px-3 focus:outline-none focus:border-brand-primary text-brand-text"
             />
             <input 
               type="time"
               value={deadlineInputTime}
               onChange={(e) => setDeadlineInputTime(e.target.value)}
-              className="bg-brand-bg border border-brand-border text-xs rounded-lg py-1.5 px-3 focus:outline-none focus:border-brand-primary text-white"
+              className="bg-brand-bg border border-brand-border text-xs rounded-lg py-1.5 px-3 focus:outline-none focus:border-brand-primary text-brand-text"
             />
             <button 
               onClick={handleSaveDeadline}
-              className="bg-brand-primary hover:bg-brand-primary-hover text-brand-bg text-xs font-bold py-1.5 px-4 rounded-lg flex items-center gap-1.5 transition-colors"
+              className="bg-brand-primary hover:bg-brand-primary-hover text-slate-900 text-xs font-bold py-1.5 px-4 rounded-lg flex items-center gap-1.5 transition-colors"
             >
               <Save size={14} /> Salvar Prazo
             </button>
             {currentDeadline && (
               <button 
                 onClick={handleClearDeadline}
-                className="bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-bold py-1.5 px-3 rounded-lg transition-colors"
+                className="bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold py-1.5 px-3 rounded-lg transition-colors"
               >
                 Limpar
               </button>
@@ -607,19 +607,19 @@ export default function CalendarView({
             {/* Calendar Header */}
             <div className="flex items-center justify-between p-3 md:p-6 border-b border-brand-border bg-brand-bg/30">
               <div className="flex items-center gap-3 md:gap-4">
-                <h2 className="text-base md:text-xl font-black text-white capitalize">
+                <h2 className="text-base md:text-xl font-black text-brand-text capitalize">
                   {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
                 </h2>
                 <div className="flex items-center bg-brand-bg border border-brand-border rounded-lg p-0.5 md:p-1">
                   <button 
                     onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-                    className="p-1 md:p-1.5 hover:bg-white/5 rounded-md transition-colors text-gray-400 hover:text-white"
+                    className="p-1 md:p-1.5 hover:bg-brand-primary/10 rounded-md transition-colors text-brand-muted hover:text-brand-text"
                   >
                     <ChevronLeft size={18} className="md:w-5 md:h-5" />
                   </button>
                   <button 
                     onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-                    className="p-1 md:p-1.5 hover:bg-white/5 rounded-md transition-colors text-gray-400 hover:text-white"
+                    className="p-1 md:p-1.5 hover:bg-brand-primary/10 rounded-md transition-colors text-brand-muted hover:text-brand-text"
                   >
                     <ChevronRight size={18} className="md:w-5 md:h-5" />
                   </button>
@@ -719,7 +719,7 @@ export default function CalendarView({
                       {/* Party indicator badge */}
                       {config.isParty && (
                         <span 
-                          className="absolute top-1 right-1 text-[7px] md:text-[9px] bg-purple-500/25 text-purple-300 px-1 py-0.5 rounded font-black uppercase tracking-wider scale-90 md:scale-100 z-10 max-w-[80%] truncate"
+                          className="absolute top-1 right-1 text-[7px] md:text-[9px] bg-purple-500/10 dark:bg-purple-500/25 text-purple-700 dark:text-purple-300 px-1 py-0.5 rounded font-black uppercase tracking-wider scale-90 md:scale-100 z-10 max-w-[80%] truncate"
                           title={config.partyTime ? `Horário da Festa: ${config.partyTime}` : 'Festa'}
                         >
                           🎉 Festa{config.partyTime ? ` (${config.partyTime})` : ''}
@@ -729,10 +729,10 @@ export default function CalendarView({
                       <div className="flex flex-col items-center justify-between h-full gap-1">
                         <span className={cn(
                           "text-xs md:text-sm font-black w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full transition-colors",
-                          isTodayDate ? "bg-brand-primary text-brand-bg" : "text-gray-400 group-hover:text-white",
+                          isTodayDate ? "bg-brand-primary text-slate-900 font-extrabold shadow-sm" : "text-brand-muted group-hover:text-brand-text",
                           isAdmin && isSelected && !isTodayDate && !isReadOnly && "text-brand-primary",
-                          !isAdmin && isMyScheduled && "bg-brand-primary text-brand-bg",
-                          !isAdmin && !isMyScheduled && !config.isCommon && !config.isParty && "text-gray-600"
+                          !isAdmin && isMyScheduled && "bg-brand-primary text-slate-900 font-extrabold shadow-sm",
+                          !isAdmin && !isMyScheduled && !config.isCommon && !config.isParty && "text-brand-muted/50"
                         )}>
                           {format(day, 'd')}
                         </span>
@@ -754,14 +754,14 @@ export default function CalendarView({
                                 {availablesCommonCount > 0 && (
                                   <div 
                                     title={`${availablesCommonCount} disponíveis (CCSP)`}
-                                    className="bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full text-[8px] md:text-[10px] font-black shrink-0 flex items-center gap-0.5"
+                                    className="bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded-full text-[8px] md:text-[10px] font-black shrink-0 flex items-center gap-0.5"
                                   >
-                                    <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full"></span>
+                                    <span className="w-1.5 h-1.5 bg-emerald-500 dark:bg-emerald-400 rounded-full"></span>
                                     {availablesCommonCount}
                                   </div>
                                 )}
                                 {workersCommonCount === 0 && availablesCommonCount === 0 && (
-                                  <div className="bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded-full text-[8px] md:text-[10px] font-black shrink-0 flex items-center gap-1 select-none">
+                                  <div className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded-full text-[8px] md:text-[10px] font-black shrink-0 flex items-center gap-1 select-none">
                                     <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shrink-0"></span>
                                     Ativo
                                   </div>
@@ -775,7 +775,7 @@ export default function CalendarView({
                                 {workersPartyCount > 0 && (
                                   <div 
                                     title={`${workersPartyCount} escalados (Festa)`}
-                                    className="bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded-full text-[8px] md:text-[10px] font-black shrink-0"
+                                    className="bg-purple-500/10 dark:bg-purple-500/20 text-purple-600 dark:text-purple-300 px-1.5 py-0.5 rounded-full text-[8px] md:text-[10px] font-black shrink-0"
                                   >
                                     {workersPartyCount} F 🥳
                                   </div>
@@ -783,9 +783,9 @@ export default function CalendarView({
                                 {availablesPartyCount > 0 && (
                                   <div 
                                     title={`${availablesPartyCount} disponíveis (Festa)`}
-                                    className="bg-pink-500/20 text-pink-300 px-1.5 py-0.5 rounded-full text-[8px] md:text-[10px] font-black shrink-0 flex items-center gap-0.5"
+                                    className="bg-pink-500/10 dark:bg-pink-500/20 text-pink-600 dark:text-pink-300 px-1.5 py-0.5 rounded-full text-[8px] md:text-[10px] font-black shrink-0 flex items-center gap-0.5"
                                   >
-                                    <span className="w-1.5 h-1.5 bg-pink-400 rounded-full"></span>
+                                    <span className="w-1.5 h-1.5 bg-pink-500 dark:bg-pink-400 rounded-full"></span>
                                     {availablesPartyCount}
                                   </div>
                                 )}
@@ -802,7 +802,7 @@ export default function CalendarView({
                               </div>
                             )}
                             {config.isCommon && isMyAvailableCommon && !isMyScheduledCommon && (
-                              <div className="bg-emerald-500/20 text-emerald-400 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 flex items-center justify-center gap-0.5 w-full max-w-[54px] lg:max-w-none truncate">
+                              <div className="bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 flex items-center justify-center gap-0.5 w-full max-w-[54px] lg:max-w-none truncate">
                                 <CheckCircle2 size={8} className="shrink-0" />
                                 <span className="hidden lg:inline">Disponível</span>
                                 <span className="lg:hidden">Disp.</span>
@@ -811,13 +811,13 @@ export default function CalendarView({
                             
                             {/* Party scheduling */}
                             {config.isParty && isMyScheduledParty && (
-                              <div className="bg-purple-500/25 text-purple-300 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 w-full max-w-[54px] lg:max-w-none truncate">
+                              <div className="bg-purple-500/10 dark:bg-purple-500/25 text-purple-600 dark:text-purple-300 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 w-full max-w-[54px] lg:max-w-none truncate">
                                 <span className="hidden lg:inline">Escalado Festa</span>
                                 <span className="lg:hidden">Esc. F.</span>
                               </div>
                             )}
                             {config.isParty && isMyAvailableParty && !isMyScheduledParty && (
-                              <div className="bg-pink-500/20 text-pink-300 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 flex items-center justify-center gap-0.5 w-full max-w-[54px] lg:max-w-none truncate">
+                              <div className="bg-pink-500/10 dark:bg-pink-500/20 text-pink-600 dark:text-pink-300 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 flex items-center justify-center gap-0.5 w-full max-w-[54px] lg:max-w-none truncate">
                                 <CheckCircle2 size={8} className="shrink-0" />
                                 <span className="hidden lg:inline">Disp. Festa</span>
                                 <span className="lg:hidden">Disp. F.</span>
@@ -838,11 +838,11 @@ export default function CalendarView({
             <div className="bg-brand-card border border-brand-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-4">
               <div className="p-4 md:p-6 border-b border-brand-border bg-brand-bg/30 flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm md:text-base font-black text-white flex items-center gap-2">
+                  <h3 className="text-sm md:text-base font-black text-brand-text flex items-center gap-2">
                     <Calendar className="text-brand-primary" size={18} />
                     Suas Escalas Confirmadas — {format(currentMonth, 'MMMM', { locale: ptBR })}
                   </h3>
-                  <p className="text-[10px] md:text-xs text-gray-400 font-semibold mt-0.5">
+                  <p className="text-[10px] md:text-xs text-brand-muted font-semibold mt-0.5">
                     Estes são os dias que você está escalado para trabalhar neste mês
                   </p>
                 </div>
@@ -888,7 +888,7 @@ export default function CalendarView({
                                 "w-11 h-11 rounded-xl flex flex-col items-center justify-center font-black shrink-0 shadow-md transition-all",
                                 isParty 
                                   ? "bg-purple-600 text-white group-hover:bg-purple-500" 
-                                  : "bg-brand-primary text-brand-bg group-hover:bg-brand-primary-hover"
+                                  : "bg-brand-primary text-slate-900 group-hover:bg-brand-primary-hover"
                               )}>
                                 <span className="text-sm leading-none">{format(dateObj, 'dd')}</span>
                                 <span className="text-[8px] uppercase tracking-wider leading-none mt-0.5 font-bold">
@@ -898,27 +898,27 @@ export default function CalendarView({
 
                               {/* Details */}
                               <div className="space-y-0.5">
-                                <p className="text-xs font-bold text-white capitalize">
+                                <p className="text-xs font-bold text-brand-text capitalize">
                                   {format(dateObj, "EEEE, dd 'de' MMMM", { locale: ptBR })}
                                 </p>
                                 <div className="flex flex-wrap items-center gap-1.5">
                                   {isParty ? (
-                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded">
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-purple-500/10 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded">
                                       Festa 🥳
                                     </span>
                                   ) : (
-                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-brand-primary/20 text-brand-primary px-1.5 py-0.5 rounded">
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-brand-primary/10 dark:bg-brand-primary/20 text-amber-700 dark:text-brand-primary px-1.5 py-0.5 rounded">
                                       Dia CCSP 🏢
                                     </span>
                                   )}
 
                                   {d.extraHours ? (
-                                    <span className="inline-flex items-center gap-1 text-[9px] font-bold bg-yellow-500/20 text-yellow-300 px-1.5 py-0.5 rounded">
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-bold bg-yellow-500/10 dark:bg-yellow-500/20 text-yellow-800 dark:text-yellow-300 px-1.5 py-0.5 rounded">
                                       +{d.extraHours}h extras
                                     </span>
                                   ) : null}
 
-                                  <span className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
                                     {formatCurrency(dayTotal)}
                                   </span>
                                 </div>
@@ -929,20 +929,20 @@ export default function CalendarView({
                             <div className="flex flex-col items-end gap-1.5 shrink-0 pl-2">
                               {isParty && partyTime ? (
                                 <div className="text-right">
-                                  <span className="block text-[8px] text-gray-500 font-bold uppercase tracking-wider">Horário</span>
-                                  <span className="inline-block bg-purple-500/20 border border-purple-500/30 text-purple-300 font-black text-[10px] px-2 py-0.5 rounded-lg shadow-sm">
+                                  <span className="block text-[8px] text-brand-muted font-bold uppercase tracking-wider">Horário</span>
+                                  <span className="inline-block bg-purple-500/10 dark:bg-purple-500/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 font-black text-[10px] px-2 py-0.5 rounded-lg shadow-sm">
                                     {partyTime}
                                   </span>
                                 </div>
                               ) : !isParty ? (
                                 <div className="text-right">
-                                  <span className="block text-[8px] text-gray-500 font-bold uppercase tracking-wider">Período</span>
-                                  <span className="inline-block bg-brand-primary/10 border border-brand-primary/20 text-brand-primary font-black text-[10px] px-2 py-0.5 rounded-lg">
+                                  <span className="block text-[8px] text-brand-muted font-bold uppercase tracking-wider">Período</span>
+                                  <span className="inline-block bg-brand-primary/10 border border-brand-primary/20 text-amber-700 dark:text-brand-primary font-black text-[10px] px-2 py-0.5 rounded-lg">
                                     Dia Inteiro
                                   </span>
                                 </div>
                               ) : null}
-                              <span className="text-[9px] font-bold text-red-400 group-hover:opacity-100 opacity-0 transition-opacity uppercase tracking-wider">
+                              <span className="text-[9px] font-bold text-red-600 dark:text-red-400 group-hover:opacity-100 opacity-0 transition-opacity uppercase tracking-wider">
                                 Desistir ✕
                               </span>
                             </div>
@@ -954,14 +954,14 @@ export default function CalendarView({
                     {/* Final Earnings Summary Demonstrative Card */}
                     <div className="pt-5 border-t border-brand-border/60 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-brand-primary/[0.02] p-5 rounded-2xl border border-brand-primary/10">
                       <div className="space-y-1">
-                        <h4 className="text-sm font-bold text-white uppercase tracking-wider font-playful">Demonstrativo de Ganhos Estimados</h4>
-                        <p className="text-[11px] text-gray-400 font-semibold">Valores baseados em suas diárias e horas extras acordadas</p>
+                        <h4 className="text-sm font-bold text-brand-text uppercase tracking-wider font-playful">Demonstrativo de Ganhos Estimados</h4>
+                        <p className="text-[11px] text-brand-muted font-semibold">Valores baseados em suas diárias e horas extras acordadas</p>
                       </div>
                       
-                      <div className="flex flex-wrap items-center gap-4 md:gap-8 text-xs font-bold text-gray-300">
+                      <div className="flex flex-wrap items-center gap-4 md:gap-8 text-xs font-bold text-brand-muted">
                         <div className="flex flex-col">
-                          <span className="text-[10px] uppercase text-gray-500 tracking-wider font-extrabold">Dias CCSP ({scheduledDaysThisMonth.filter(d => d.type === 'common').length}x)</span>
-                          <span className="text-sm text-brand-primary font-black mt-0.5">
+                          <span className="text-[10px] uppercase text-brand-muted font-extrabold tracking-wider">Dias CCSP ({scheduledDaysThisMonth.filter(d => d.type === 'common').length}x)</span>
+                          <span className="text-sm text-amber-700 dark:text-brand-primary font-black mt-0.5">
                             {formatCurrency(scheduledDaysThisMonth.filter(d => d.type === 'common').reduce((acc, d) => {
                               const rate = d.dailyRateAtTime !== undefined ? d.dailyRateAtTime : myEmployee.dailyRate;
                               return acc + rate;
@@ -970,8 +970,8 @@ export default function CalendarView({
                         </div>
                         
                         <div className="flex flex-col">
-                          <span className="text-[10px] uppercase text-gray-500 tracking-wider font-extrabold">Dias Festa ({scheduledDaysThisMonth.filter(d => d.type === 'party').length}x)</span>
-                          <span className="text-sm text-purple-300 font-black mt-0.5">
+                          <span className="text-[10px] uppercase text-brand-muted font-extrabold tracking-wider">Dias Festa ({scheduledDaysThisMonth.filter(d => d.type === 'party').length}x)</span>
+                          <span className="text-sm text-purple-600 dark:text-purple-300 font-black mt-0.5">
                             {formatCurrency(scheduledDaysThisMonth.filter(d => d.type === 'party').reduce((acc, d) => {
                               const rate = d.partyRateAtTime !== undefined ? d.partyRateAtTime : myEmployee.partyRate;
                               return acc + rate;
@@ -981,8 +981,8 @@ export default function CalendarView({
 
                         {scheduledDaysThisMonth.reduce((acc, d) => acc + (d.extraHours || 0), 0) > 0 && (
                           <div className="flex flex-col">
-                            <span className="text-[10px] uppercase text-gray-500 tracking-wider font-extrabold">Horas Extras ({scheduledDaysThisMonth.reduce((acc, d) => acc + (d.extraHours || 0), 0)}h)</span>
-                            <span className="text-sm text-yellow-400 font-black mt-0.5">
+                            <span className="text-[10px] uppercase text-brand-muted font-extrabold tracking-wider">Horas Extras ({scheduledDaysThisMonth.reduce((acc, d) => acc + (d.extraHours || 0), 0)}h)</span>
+                            <span className="text-sm text-yellow-600 dark:text-yellow-400 font-black mt-0.5">
                               {formatCurrency(scheduledDaysThisMonth.reduce((acc, d) => {
                                 const rate = d.extraHourRateAtTime !== undefined ? d.extraHourRateAtTime : myEmployee.extraHourRate;
                                 return acc + (d.extraHours || 0) * rate;
@@ -992,8 +992,8 @@ export default function CalendarView({
                         )}
                         
                         <div className="flex flex-col bg-brand-primary/10 border border-brand-primary/20 px-4 py-2 rounded-xl">
-                          <span className="text-[9px] uppercase text-brand-primary tracking-wider font-black">Total Estimado</span>
-                          <span className="text-xl text-brand-primary font-black leading-none mt-1">
+                          <span className="text-[9px] uppercase text-amber-700 dark:text-brand-primary tracking-wider font-black">Total Estimado</span>
+                          <span className="text-xl text-amber-700 dark:text-brand-primary font-black leading-none mt-1">
                             {formatCurrency(totalEarningsThisMonth)}
                           </span>
                         </div>
@@ -1018,10 +1018,10 @@ export default function CalendarView({
             <div className="bg-brand-card border border-brand-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-4">
               <div className="p-4 md:p-6 border-b border-brand-border flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-brand-bg/30">
                 <div>
-                  <h3 className="text-base md:text-xl font-bold text-white capitalize">
+                  <h3 className="text-base md:text-xl font-bold text-brand-text capitalize">
                     {format(selectedDay, "EEEE, dd 'de' MMMM", { locale: ptBR })}
                   </h3>
-                  <p className="text-xs md:text-sm text-gray-400">Gerenciar equipe para este dia</p>
+                  <p className="text-xs md:text-sm text-brand-muted">Gerenciar equipe para este dia</p>
                 </div>
                 <div className="flex gap-1.5 md:gap-2">
                   <button 
@@ -1034,7 +1034,7 @@ export default function CalendarView({
                   </button>
                   <button 
                     onClick={handleCopyTeam}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-white text-[10px] md:text-xs font-bold py-2 px-2 md:px-3 rounded-lg transition-colors"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-[10px] md:text-xs font-bold py-2 px-2 md:px-3 rounded-lg transition-colors"
                     title="Copiar time deste dia"
                   >
                     <Copy size={14} />
@@ -1047,7 +1047,7 @@ export default function CalendarView({
                       "flex-1 sm:flex-none flex items-center justify-center gap-2 text-[10px] md:text-xs font-bold py-2 px-2 md:px-3 rounded-lg transition-colors",
                       copiedTeam 
                         ? "bg-brand-primary/20 text-brand-primary hover:bg-brand-primary/30" 
-                        : "bg-gray-800 text-gray-600 cursor-not-allowed"
+                        : "bg-slate-800 text-brand-muted/40 cursor-not-allowed"
                     )}
                     title="Colar time copiado"
                   >
@@ -1059,13 +1059,13 @@ export default function CalendarView({
 
               <div className="p-4 border-b border-brand-border bg-brand-bg/10">
                 <div className="relative max-w-md">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" size={16} />
                   <input 
                     type="text"
                     placeholder="Buscar recreador para adicionar..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-brand-bg border border-brand-border rounded-lg py-2 pl-9 pr-4 text-sm focus:outline-none focus:border-brand-primary transition-colors"
+                    className="w-full bg-brand-bg border border-brand-border rounded-lg py-2 pl-9 pr-4 text-sm focus:outline-none focus:border-brand-primary text-brand-text transition-colors"
                   />
                 </div>
               </div>
@@ -1073,7 +1073,7 @@ export default function CalendarView({
               <div className="p-6 space-y-6">
                 {/* Working List */}
                 <div>
-                  <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <h4 className="text-[10px] font-bold text-brand-muted uppercase tracking-widest mb-4 flex items-center gap-2">
                     <span className="w-2 h-2 bg-brand-primary rounded-full"></span>
                     Escalados ({employeesWorking.length})
                   </h4>
@@ -1086,7 +1086,7 @@ export default function CalendarView({
                         <div key={emp.id} className="bg-brand-primary/5 border border-brand-primary/20 p-4 rounded-xl space-y-4 transition-all hover:border-brand-primary/40">
                           <div className="flex items-center justify-between">
                             <div className="cursor-pointer flex-1" onClick={() => setExpandedEmployeeId(isExpanded ? null : emp.id)}>
-                              <p className="text-sm font-bold text-white">{emp.artisticName || emp.name}</p>
+                              <p className="text-sm font-bold text-brand-text">{emp.artisticName || emp.name}</p>
                               <p className="text-[10px] text-brand-primary font-bold uppercase">{emp.level}</p>
                             </div>
                             <div className="flex items-center gap-2">
@@ -1094,14 +1094,14 @@ export default function CalendarView({
                                 onClick={() => setExpandedEmployeeId(isExpanded ? null : emp.id)}
                                 className={cn(
                                   "p-2 rounded-lg transition-colors",
-                                  isExpanded ? "text-brand-primary bg-brand-primary/20" : "text-gray-400 hover:text-brand-primary hover:bg-brand-primary/10"
+                                  isExpanded ? "text-brand-primary bg-brand-primary/20" : "text-brand-muted hover:text-brand-primary hover:bg-brand-primary/10"
                                 )}
                               >
                                 <Clock size={18} />
                               </button>
                               <button 
                                 onClick={() => toggleWorkDay(emp, selectedDay)}
-                                className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                                className="p-2 text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                               >
                                 <UserMinus size={20} />
                               </button>
@@ -1110,7 +1110,7 @@ export default function CalendarView({
                           
                           {isExpanded && (
                             <div className="flex items-center gap-4 pt-4 border-t border-brand-primary/10 animate-in fade-in slide-in-from-top-2">
-                              <label className="text-xs font-bold text-gray-400 uppercase">Horas Extras:</label>
+                              <label className="text-xs font-bold text-brand-muted uppercase">Horas Extras:</label>
                               <input 
                                 type="number"
                                 min="0"
@@ -1119,7 +1119,7 @@ export default function CalendarView({
                                 value={dayData?.extraHours || ''}
                                 onChange={(e) => updateExtraHours(emp, Number(e.target.value))}
                                 placeholder="0"
-                                className="w-24 bg-brand-bg border border-brand-primary/20 rounded-lg py-1.5 px-3 text-sm focus:outline-none focus:border-brand-primary"
+                                className="w-24 bg-brand-bg border border-brand-primary/20 rounded-lg py-1.5 px-3 text-sm focus:outline-none focus:border-brand-primary text-brand-text"
                               />
                             </div>
                           )}
@@ -1128,7 +1128,7 @@ export default function CalendarView({
                     })}
                     {employeesWorking.length === 0 && (
                       <div className="col-span-full text-center py-8 border-2 border-dashed border-brand-border rounded-xl">
-                        <p className="text-sm text-gray-500 italic">Ninguém escalado para este dia.</p>
+                        <p className="text-sm text-brand-muted italic">Ninguém escalado para este dia.</p>
                       </div>
                     )}
                   </div>
@@ -1138,7 +1138,7 @@ export default function CalendarView({
                 <div className="space-y-6">
                   {/* Recreadores Disponíveis Sinalizados */}
                   <div>
-                    <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                    <h4 className="text-[10px] font-bold text-brand-muted uppercase tracking-widest mb-3 flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
                       Disponibilidades Sinalizadas ({availablesMarked.length})
                     </h4>
@@ -1150,12 +1150,12 @@ export default function CalendarView({
                           className="flex items-center justify-between bg-emerald-500/[0.02] border border-emerald-500/20 hover:border-emerald-500/40 hover:bg-emerald-500/[0.05] p-3 rounded-xl transition-all cursor-pointer group"
                         >
                           <div>
-                            <p className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors">
+                            <p className="text-sm font-bold text-brand-text group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
                               {emp.artisticName || emp.name}
                             </p>
-                            <p className="text-[10px] text-gray-500 font-medium uppercase">{emp.level}</p>
+                            <p className="text-[10px] text-brand-muted font-medium uppercase">{emp.level}</p>
                           </div>
-                          <div className="p-2 text-emerald-400 group-hover:scale-110 transition-transform">
+                          <div className="p-2 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform">
                             <UserPlus size={20} />
                           </div>
                         </div>
@@ -1169,7 +1169,7 @@ export default function CalendarView({
                   {/* Outros Recreadores (Shown only when searching) */}
                   {searchQuery && (
                     <div className="animate-in fade-in slide-in-from-bottom-2">
-                      <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">
+                      <h4 className="text-[10px] font-bold text-brand-muted uppercase tracking-widest mb-3">
                         Outros Recreadores ({availablesOthers.length})
                       </h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1180,10 +1180,10 @@ export default function CalendarView({
                             className="flex items-center justify-between bg-brand-bg/40 border border-brand-border p-3 rounded-xl hover:border-brand-primary/30 hover:bg-brand-primary/5 transition-all cursor-pointer group"
                           >
                             <div>
-                              <p className="text-sm font-bold text-white group-hover:text-brand-primary transition-colors">
+                              <p className="text-sm font-bold text-brand-text group-hover:text-brand-primary transition-colors">
                                 {emp.artisticName || emp.name}
                               </p>
-                              <p className="text-[10px] text-gray-500 font-medium uppercase">{emp.level}</p>
+                              <p className="text-[10px] text-brand-muted font-medium uppercase">{emp.level}</p>
                             </div>
                             <div className="p-2 text-brand-primary group-hover:scale-110 transition-transform">
                               <UserPlus size={20} />
@@ -1191,7 +1191,7 @@ export default function CalendarView({
                           </div>
                         ))}
                         {availablesOthers.length === 0 && (
-                          <p className="text-xs text-gray-500 italic py-2 col-span-full">Nenhum outro recreador encontrado.</p>
+                          <p className="text-xs text-brand-muted italic py-2 col-span-full">Nenhum outro recreador encontrado.</p>
                         )}
                       </div>
                     </div>
@@ -1207,20 +1207,20 @@ export default function CalendarView({
           <div id="sidebar-panel" className="w-full lg:w-80 bg-brand-card border border-brand-border rounded-xl p-4 md:p-6 shadow-2xl h-fit space-y-4 animate-in fade-in duration-300">
             <div className="flex items-center justify-between gap-2 border-b border-brand-border/50 pb-3">
               <div>
-                <h3 className="text-sm font-black text-white flex items-center gap-2">
+                <h3 className="text-sm font-black text-brand-text flex items-center gap-2">
                   {sidebarTab === 'availabilities' ? (
                     <>
-                      <CheckCircle2 className="text-emerald-400 shrink-0" size={18} />
+                      <CheckCircle2 className="text-emerald-600 dark:text-emerald-400 shrink-0" size={18} />
                       Disponibilidades
                     </>
                   ) : (
                     <>
-                      <AlertCircle className="text-red-400 shrink-0 animate-pulse" size={18} />
+                      <AlertCircle className="text-red-600 dark:text-red-400 shrink-0 animate-pulse" size={18} />
                       Cancelamentos
                     </>
                   )}
                 </h3>
-                <p className="text-[10px] text-gray-400 mt-0.5">
+                <p className="text-[10px] text-brand-muted mt-0.5">
                   {sidebarTab === 'availabilities' 
                     ? `Ranking (${format(currentMonth, 'MMMM', { locale: ptBR })})` 
                     : 'Avisos da equipe'
@@ -1245,21 +1245,21 @@ export default function CalendarView({
                 {employeesWithAvailabilitiesCount.map(emp => (
                   <div key={emp.id} className="flex items-center justify-between pt-3 first:pt-0">
                     <div>
-                      <p className="text-xs font-bold text-white">{emp.artisticName || emp.name}</p>
-                      <p className="text-[10px] text-gray-500 font-medium uppercase">{emp.level}</p>
+                      <p className="text-xs font-bold text-brand-text">{emp.artisticName || emp.name}</p>
+                      <p className="text-[10px] text-brand-muted font-medium uppercase">{emp.level}</p>
                     </div>
                     <div className={cn(
                       "px-2.5 py-1 rounded-full text-xs font-black",
                       emp.availabilitiesCount > 0 
-                        ? "bg-emerald-500/10 text-emerald-400" 
-                        : "bg-gray-800 text-gray-500"
+                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" 
+                        : "bg-brand-bg text-brand-muted"
                     )}>
                       {emp.availabilitiesCount} {emp.availabilitiesCount === 1 ? 'dia' : 'dias'}
                     </div>
                   </div>
                 ))}
                 {employeesWithAvailabilitiesCount.length === 0 && (
-                  <p className="text-xs text-gray-500 text-center py-4 italic">Nenhum funcionário cadastrado.</p>
+                  <p className="text-xs text-brand-muted text-center py-4 italic">Nenhum funcionário cadastrado.</p>
                 )}
               </div>
             ) : (
@@ -1278,12 +1278,12 @@ export default function CalendarView({
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <p className="text-xs font-bold text-brand-text flex items-center gap-1.5">
                             {isUnread && <span className="w-2 h-2 bg-red-500 rounded-full shrink-0 animate-pulse"></span>}
                             {c.employeeName}
                           </p>
-                          <p className="text-[10px] text-gray-400 font-medium mt-0.5">
-                            Cancelou dia <span className="text-red-400 font-bold">{format(parseISO(c.date), 'dd/MM')}</span> ({c.type === 'party' ? 'Festa 🥳' : 'Comum'})
+                          <p className="text-[10px] text-brand-muted font-medium mt-0.5">
+                            Cancelou dia <span className="text-red-600 dark:text-red-400 font-bold">{format(parseISO(c.date), 'dd/MM')}</span> ({c.type === 'party' ? 'Festa 🥳' : 'Comum'})
                           </p>
                         </div>
                         
@@ -1292,7 +1292,7 @@ export default function CalendarView({
                             <button 
                               onClick={() => onMarkCancellationRead(c.id)}
                               title="Marcar como visto"
-                              className="p-1 hover:bg-white/5 text-gray-400 hover:text-emerald-400 rounded transition-colors"
+                              className="p-1 hover:bg-brand-primary/10 text-brand-muted hover:text-emerald-600 dark:hover:text-emerald-400 rounded transition-colors"
                             >
                               <Check size={14} />
                             </button>
@@ -1301,14 +1301,14 @@ export default function CalendarView({
                             <button 
                               onClick={() => onDismissCancellation(c.id)}
                               title="Excluir aviso"
-                              className="p-1 hover:bg-white/5 text-gray-400 hover:text-red-400 rounded transition-colors"
+                              className="p-1 hover:bg-brand-primary/10 text-brand-muted hover:text-red-600 dark:hover:text-red-400 rounded transition-colors"
                             >
                               <Trash2 size={14} />
                             </button>
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center justify-between text-[9px] text-gray-500 border-t border-brand-border/30 pt-1.5">
+                      <div className="flex items-center justify-between text-[9px] text-brand-muted border-t border-brand-border/30 pt-1.5">
                         <span>Horário:</span>
                         <span>{format(parseISO(c.cancelledAt), "dd/MM 'às' HH:mm", { locale: ptBR })}</span>
                       </div>
@@ -1316,7 +1316,7 @@ export default function CalendarView({
                   );
                 })}
                 {cancellations.length === 0 && (
-                  <p className="text-xs text-gray-500 text-center py-6 italic">Nenhum cancelamento registrado.</p>
+                  <p className="text-xs text-brand-muted text-center py-6 italic">Nenhum cancelamento registrado.</p>
                 )}
               </div>
             )}
@@ -1332,11 +1332,11 @@ export default function CalendarView({
               <div className="w-16 h-16 bg-brand-primary/20 text-brand-primary rounded-full flex items-center justify-center mx-auto mb-4">
                 <AlertTriangle size={32} />
               </div>
-              <h3 className="text-xl font-bold text-white">Replicar Escala?</h3>
-              <p className="text-gray-400 text-sm leading-relaxed">
+              <h3 className="text-xl font-bold text-brand-text">Replicar Escala?</h3>
+              <p className="text-brand-muted text-sm leading-relaxed">
                 Tem certeza que deseja replicar a escala do dia <span className="text-brand-primary font-bold">{format(draggedDay, "dd/MM")}</span> para o dia <span className="text-brand-primary font-bold">{format(replicationTarget, "dd/MM")}</span>?
                 <br />
-                <span className="text-xs text-red-400 mt-2 block">Isso substituirá qualquer escala existente no dia de destino.</span>
+                <span className="text-xs text-red-600 dark:text-red-400 mt-2 block">Isso substituirá qualquer escala existente no dia de destino.</span>
               </p>
             </div>
             <div className="p-4 bg-brand-bg/50 border-t border-brand-border flex gap-3">
@@ -1346,13 +1346,13 @@ export default function CalendarView({
                   setDraggedDay(null);
                   setReplicationTarget(null);
                 }}
-                className="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 rounded-xl transition-colors"
+                className="flex-1 bg-slate-700 hover:bg-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors text-sm"
               >
                 Cancelar
               </button>
               <button 
                 onClick={confirmReplication}
-                className="flex-1 bg-brand-primary hover:bg-brand-primary-hover text-brand-bg font-bold py-3 rounded-xl transition-colors"
+                className="flex-1 bg-brand-primary hover:bg-brand-primary-hover text-slate-900 font-extrabold py-3 rounded-xl transition-colors text-sm"
               >
                 Sim, Replicar
               </button>
@@ -1369,11 +1369,11 @@ export default function CalendarView({
               <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
                 <AlertTriangle size={32} />
               </div>
-              <h3 className="text-xl font-bold text-white">Desativar Dia CCSP?</h3>
-              <p className="text-gray-400 text-sm leading-relaxed">
+              <h3 className="text-xl font-bold text-brand-text">Desativar Dia CCSP?</h3>
+              <p className="text-brand-muted text-sm leading-relaxed">
                 Você tem certeza que deseja desativar o dia <span className="text-brand-primary font-bold">{format(deactivateTargetDay, "dd/MM")}</span> como disponível para atividades CCSP?
                 <br />
-                <span className="text-xs text-red-400/80 mt-2 block font-medium">Os funcionários não poderão marcar disponibilidade para atividades CCSP nesta data.</span>
+                <span className="text-xs text-red-600 dark:text-red-400 mt-2 block font-medium">Os funcionários não poderão marcar disponibilidade para atividades CCSP nesta data.</span>
               </p>
             </div>
             <div className="p-4 bg-brand-bg/50 border-t border-brand-border flex gap-3">
@@ -1382,13 +1382,13 @@ export default function CalendarView({
                   setIsDeactivateModalOpen(false);
                   setDeactivateTargetDay(null);
                 }}
-                className="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 rounded-xl transition-colors"
+                className="flex-1 bg-slate-700 hover:bg-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors text-sm"
               >
                 Voltar
               </button>
               <button 
                 onClick={confirmDeactivation}
-                className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl transition-colors"
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl transition-colors text-sm"
               >
                 Sim, Desativar
               </button>
@@ -1400,20 +1400,20 @@ export default function CalendarView({
       {/* Employee Availability Choice Modal (for days with both Common and Party modes) */}
       {isEmployeeChoiceModalOpen && employeeChoiceDate && myEmployee && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-brand-card border border-brand-border w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col p-6 space-y-6 animate-in zoom-in-95 duration-200 text-white">
+          <div className="bg-brand-card border border-brand-border w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col p-6 space-y-6 animate-in zoom-in-95 duration-200 text-brand-text">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-black capitalize">
+                <h3 className="text-lg font-black capitalize text-brand-text">
                   {format(employeeChoiceDate, "dd 'de' MMMM", { locale: ptBR })}
                 </h3>
-                <p className="text-xs text-gray-400 font-medium">Selecione suas disponibilidades para esta data</p>
+                <p className="text-xs text-brand-muted font-medium">Selecione suas disponibilidades para esta data</p>
               </div>
               <button 
                 onClick={() => {
                   setIsEmployeeChoiceModalOpen(false);
                   setEmployeeChoiceDate(null);
                 }} 
-                className="text-gray-400 hover:text-white hover:bg-white/5 p-1.5 rounded-lg transition-all"
+                className="text-brand-muted hover:text-brand-text hover:bg-brand-primary/10 p-1.5 rounded-lg transition-all"
               >
                 <X size={20} />
               </button>
@@ -1430,12 +1430,12 @@ export default function CalendarView({
                   <label className={cn(
                     "flex items-center justify-between p-4 rounded-xl border cursor-pointer select-none transition-all",
                     isCommonChecked 
-                      ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-400" 
-                      : "bg-brand-bg/40 border-brand-border text-gray-400 hover:border-brand-primary/30"
+                      ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-600 dark:text-emerald-400" 
+                      : "bg-brand-bg/40 border-brand-border text-brand-muted hover:border-brand-primary/30"
                   )}>
                     <div className="flex flex-col">
-                      <span className="font-bold text-sm text-white">Dia CCSP</span>
-                      <span className="text-xs text-gray-400">Trabalho padrão do dia a dia</span>
+                      <span className="font-bold text-sm text-brand-text">Dia CCSP</span>
+                      <span className="text-xs text-brand-muted">Trabalho padrão do dia a dia</span>
                     </div>
                     <input 
                       type="checkbox"
@@ -1468,15 +1468,15 @@ export default function CalendarView({
                   <label className={cn(
                     "flex items-center justify-between p-4 rounded-xl border cursor-pointer select-none transition-all",
                     isPartyChecked 
-                      ? "bg-purple-500/10 border-purple-500/50 text-purple-400" 
-                      : "bg-brand-bg/40 border-brand-border text-gray-400 hover:border-brand-primary/30"
+                      ? "bg-purple-500/10 border-purple-500/50 text-purple-600 dark:text-purple-300" 
+                      : "bg-brand-bg/40 border-brand-border text-brand-muted hover:border-brand-primary/30"
                   )}>
                     <div className="flex flex-col">
-                      <span className="font-bold text-sm text-white">Dia de Festa 🥳</span>
+                      <span className="font-bold text-sm text-brand-text">Dia de Festa 🥳</span>
                       {config.partyTime ? (
-                        <span className="text-xs text-purple-300 font-bold mt-1">Horário: {config.partyTime}</span>
+                        <span className="text-xs text-purple-600 dark:text-purple-300 font-bold mt-1">Horário: {config.partyTime}</span>
                       ) : (
-                        <span className="text-xs text-gray-400">Trabalhar em eventos e festas extras</span>
+                        <span className="text-xs text-brand-muted">Trabalhar em eventos e festas extras</span>
                       )}
                     </div>
                     <input 
@@ -1506,7 +1506,7 @@ export default function CalendarView({
                   setIsEmployeeChoiceModalOpen(false);
                   setEmployeeChoiceDate(null);
                 }}
-                className="bg-brand-primary hover:bg-brand-primary-hover text-brand-bg font-black py-2.5 px-8 rounded-xl transition-all shadow-lg text-sm"
+                className="bg-brand-primary hover:bg-brand-primary-hover text-slate-900 font-extrabold py-2.5 px-8 rounded-xl transition-all shadow-lg text-sm"
               >
                 SALVAR
               </button>
@@ -1539,12 +1539,12 @@ export default function CalendarView({
               <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
                 <AlertCircle size={32} />
               </div>
-              <h3 className="text-xl font-bold text-white">Cancelar Escala?</h3>
-              <div className="text-gray-300 text-sm leading-relaxed space-y-2">
+              <h3 className="text-xl font-bold text-brand-text">Cancelar Escala?</h3>
+              <div className="text-brand-muted text-sm leading-relaxed space-y-2">
                 <p>
                   Você está escalado para trabalhar no dia <span className="text-brand-primary font-bold">{format(cancelTargetDate, "dd/MM 'de' MMMM", { locale: ptBR })}</span>.
                 </p>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-brand-muted">
                   Deseja realmente solicitar o cancelamento da sua escala para esta data? Os administradores serão notificados imediatamente.
                 </p>
               </div>
@@ -1557,7 +1557,7 @@ export default function CalendarView({
                   setIsCancelModalOpen(false);
                   setCancelTargetDate(null);
                 }}
-                className="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-bold py-2.5 px-4 rounded-xl transition-all text-sm disabled:opacity-50"
+                className="flex-1 bg-slate-700 hover:bg-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold py-2.5 px-4 rounded-xl transition-all text-sm disabled:opacity-50"
               >
                 Voltar
               </button>
