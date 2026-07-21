@@ -10,6 +10,8 @@
   --color-brand-primary: #fbbf24;
   --color-brand-primary-hover: #f59e0b;
   --color-brand-border: var(--border);
+  --color-brand-text: var(--text-main);
+  --color-brand-muted: var(--text-muted);
 }
 
 :root {
@@ -34,15 +36,7 @@
 
 @layer base {
   body {
-    @apply bg-brand-bg text-[var(--text-main)] font-sans antialiased transition-colors duration-300;
-  }
-  
-  .text-gray-400 {
-    color: var(--text-muted);
-  }
-  
-  .text-white {
-    color: var(--text-main);
+    @apply bg-brand-bg text-brand-text font-sans antialiased transition-colors duration-300;
   }
 
   /* Global elegant thin scrollbars */
