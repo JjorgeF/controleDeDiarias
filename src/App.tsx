@@ -729,7 +729,7 @@ export default function App() {
                   />
                 </div>
                 <div className="w-full md:w-2/3 space-y-4">
-                  <h2 className="text-lg md:text-xl font-black text-white mb-2">Meu Calendário de Trabalho / Disponibilidade</h2>
+                  <h2 className="text-lg md:text-xl font-black text-brand-text mb-2">Meu Calendário de Trabalho / Disponibilidade</h2>
                   <CalendarView 
                     employees={[myEmployeeRecord]} // Pass the simulated employee as the single record
                     onUpdateDays={() => {}}
