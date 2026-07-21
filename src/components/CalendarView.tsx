@@ -522,18 +522,18 @@ export default function CalendarView({
       <div className={cn(
         "border rounded-xl p-4 flex items-center justify-between shadow-md transition-all duration-200 animate-in fade-in slide-in-from-top-2",
         isDeadlinePassed 
-          ? "bg-red-500/10 border-red-500/25 text-red-200" 
+          ? "bg-red-500/10 border-red-500/20 text-red-800 dark:text-red-200" 
           : deadlineDate 
-            ? "bg-yellow-500/10 border-yellow-500/25 text-yellow-200" 
-            : "bg-blue-500/10 border-blue-500/25 text-blue-200"
+            ? "bg-yellow-500/10 border-yellow-500/20 text-yellow-800 dark:text-yellow-200" 
+            : "bg-blue-500/10 border-blue-500/20 text-blue-800 dark:text-blue-200"
       )}>
         <div className="flex items-center gap-3">
           {isDeadlinePassed ? (
-            <Lock className="text-red-400 shrink-0 animate-bounce" size={20} />
+            <Lock className="text-red-600 dark:text-red-400 shrink-0 animate-bounce" size={20} />
           ) : deadlineDate ? (
-            <Unlock className="text-yellow-400 shrink-0" size={20} />
+            <Unlock className="text-yellow-600 dark:text-yellow-400 shrink-0" size={20} />
           ) : (
-            <Calendar className="text-blue-400 shrink-0" size={20} />
+            <Calendar className="text-blue-600 dark:text-blue-400 shrink-0" size={20} />
           )}
           <div>
             <p className="text-xs md:text-sm font-black">
@@ -546,13 +546,13 @@ export default function CalendarView({
               )}
             </p>
             {!isAdmin && !isDeadlinePassed && (
-              <p className="text-[10px] text-yellow-400/80 mt-0.5 font-bold">Toque nos dias do calendário para marcar/desmarcar os dias em que você pode trabalhar.</p>
+              <p className="text-[10px] text-yellow-700 dark:text-yellow-400/80 mt-0.5 font-bold">Toque nos dias do calendário para marcar/desmarcar os dias em que você pode trabalhar.</p>
             )}
             {isAdmin && (
-              <p className="text-[10px] text-emerald-400/80 mt-0.5 font-bold">⚡ Clique simples para ativar/desativar o dia de atividades CCSP. Clique duplo para gerenciar a equipe ou definir festa.</p>
+              <p className="text-[10px] text-emerald-700 dark:text-emerald-400/80 mt-0.5 font-bold">⚡ Clique simples para ativar/desativar o dia de atividades CCSP. Clique duplo para gerenciar a equipe ou definir festa.</p>
             )}
             {!isAdmin && isDeadlinePassed && (
-              <p className="text-[10px] text-red-400/80 mt-0.5 font-bold">As datas deste mês foram travadas. Caso precise alterar, entre em contato com um administrador.</p>
+              <p className="text-[10px] text-red-700 dark:text-red-400/80 mt-0.5 font-bold">As datas deste mês foram travadas. Caso precise alterar, entre em contato com um administrador.</p>
             )}
           </div>
         </div>
