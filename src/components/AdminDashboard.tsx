@@ -411,7 +411,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
         <div className="space-y-1.5">
           <div className="flex items-center gap-2">
             <ShieldCheck className="text-brand-primary" size={24} />
-            <h2 className="text-2xl font-black text-white tracking-wide font-playful">
+            <h2 className="text-2xl font-black text-brand-text tracking-wide font-playful">
               Painel de Administração e Auditoria
             </h2>
           </div>
@@ -423,14 +423,14 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
           <div className="flex items-center gap-1 bg-brand-bg border border-brand-border rounded-lg p-1 shrink-0">
             <button 
               onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-              className="p-1.5 hover:bg-white/5 rounded-md transition-colors text-gray-400 hover:text-white"
+              className="p-1.5 hover:bg-brand-primary/10 rounded-md transition-colors text-brand-muted hover:text-brand-text"
               title="Mês anterior"
             >
               <ChevronLeft size={18} />
             </button>
             <button 
               onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-              className="p-1.5 hover:bg-white/5 rounded-md transition-colors text-gray-400 hover:text-white"
+              className="p-1.5 hover:bg-brand-primary/10 rounded-md transition-colors text-brand-muted hover:text-brand-text"
               title="Próximo mês"
             >
               <ChevronRight size={18} />
@@ -438,7 +438,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
           </div>
           <div className="text-right pr-2">
             <span className="block text-[10px] uppercase tracking-wider font-extrabold text-gray-500">Mês de Auditoria</span>
-            <span className="text-sm font-black text-white capitalize">{format(currentMonth, 'MMMM yyyy', { locale: ptBR })}</span>
+            <span className="text-sm font-black text-brand-text capitalize">{format(currentMonth, 'MMMM yyyy', { locale: ptBR })}</span>
           </div>
         </div>
       </div>
@@ -454,7 +454,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
             </div>
           </div>
           <div className="mt-4">
-            <span className="text-3xl font-black text-white">{stats.totalEmployees}</span>
+            <span className="text-3xl font-black text-brand-text">{stats.totalEmployees}</span>
             <p className="text-[11px] text-gray-400 font-semibold mt-1">Colaboradores ativos cadastrados</p>
           </div>
         </div>
@@ -496,7 +496,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
             <div className="flex items-center gap-2.5">
               <Award className="text-brand-primary" size={20} />
               <div>
-                <h3 className="text-lg font-bold text-white uppercase tracking-wider font-playful">
+                <h3 className="text-lg font-bold text-brand-text uppercase tracking-wider font-playful">
                   Ranking de Dedicação
                 </h3>
                 <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider mt-0.5">
@@ -513,8 +513,8 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                   className={cn(
                     "px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider rounded-lg transition-all",
                     rankPeriod === 'monthly' 
-                      ? "bg-white/10 text-white border border-white/10 shadow-sm" 
-                      : "text-gray-400 hover:text-white"
+                      ? "bg-brand-primary/20 dark:bg-white/10 text-brand-primary dark:text-white border border-brand-primary/10 dark:border-white/10 shadow-sm" 
+                      : "text-brand-muted hover:text-brand-text"
                   )}
                 >
                   Mensal
@@ -524,8 +524,8 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                   className={cn(
                     "px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider rounded-lg transition-all",
                     rankPeriod === 'allTime' 
-                      ? "bg-white/10 text-white border border-white/10 shadow-sm" 
-                      : "text-gray-400 hover:text-white"
+                      ? "bg-brand-primary/20 dark:bg-white/10 text-brand-primary dark:text-white border border-brand-primary/10 dark:border-white/10 shadow-sm" 
+                      : "text-brand-muted hover:text-brand-text"
                   )}
                 >
                   Geral
@@ -540,7 +540,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                     "px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider rounded-lg transition-all",
                     rankMetric === 'confirmed' 
                       ? "bg-brand-primary text-brand-bg shadow-md" 
-                      : "text-gray-400 hover:text-white"
+                      : "text-brand-muted hover:text-brand-text"
                   )}
                 >
                   Dias Agendados
@@ -551,7 +551,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                     "px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider rounded-lg transition-all",
                     rankMetric === 'availabilities' 
                       ? "bg-purple-500 text-white shadow-md" 
-                      : "text-gray-400 hover:text-white"
+                      : "text-brand-muted hover:text-brand-text"
                   )}
                 >
                   Disponibilidades
@@ -562,7 +562,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                     "px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider rounded-lg transition-all",
                     rankMetric === 'cancellations' 
                       ? "bg-rose-500 text-white shadow-md" 
-                      : "text-gray-400 hover:text-white"
+                      : "text-brand-muted hover:text-brand-text"
                   )}
                 >
                   Desistências
@@ -699,7 +699,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
 
                           {/* Info above block */}
                           <div className="text-center w-full mb-3 px-1">
-                            <span className="block text-xs sm:text-sm font-black text-white truncate drop-shadow-sm group-hover:text-brand-primary transition-colors">
+                            <span className="block text-xs sm:text-sm font-black text-brand-text truncate drop-shadow-sm group-hover:text-brand-primary transition-colors">
                               {item.artisticName}
                             </span>
                             <span className="block text-[8px] sm:text-[9px] font-extrabold text-gray-500 uppercase tracking-widest mt-0.5">
@@ -786,7 +786,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                         <div className="flex-1 min-w-0 space-y-1.5">
                           <div className="flex justify-between items-baseline gap-2">
                             <div className="truncate">
-                              <span className="text-sm font-bold text-white">{item.artisticName}</span>
+                              <span className="text-sm font-bold text-brand-text">{item.artisticName}</span>
                               <span className="hidden sm:inline-block ml-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{item.level}</span>
                             </div>
                             <div className="shrink-0 text-right">
@@ -889,7 +889,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
           <div className="pb-5 border-b border-brand-border/60 mb-5 space-y-4">
             <div className="flex items-center gap-2.5">
               <History className="text-purple-400" size={20} />
-              <h3 className="text-lg font-bold text-white uppercase tracking-wider font-playful">
+              <h3 className="text-lg font-bold text-brand-text uppercase tracking-wider font-playful">
                 Últimos Acessos e Logins
               </h3>
             </div>
@@ -902,7 +902,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                 placeholder="Buscar logs por email ou nome..."
                 value={logSearchQuery}
                 onChange={(e) => setLogSearchQuery(e.target.value)}
-                className="w-full bg-brand-bg/80 border border-brand-border/80 rounded-xl py-1.5 pl-9 pr-4 text-xs focus:outline-none focus:border-brand-primary transition-colors text-white font-medium"
+                className="w-full bg-brand-bg/80 border border-brand-border/80 rounded-xl py-1.5 pl-9 pr-4 text-xs focus:outline-none focus:border-brand-primary transition-colors text-brand-text font-medium"
               />
             </div>
           </div>
@@ -919,24 +919,24 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
               return (
                 <div key={log.id} className="group flex gap-3.5 p-3 rounded-xl bg-brand-bg/30 border border-brand-border/40 hover:bg-brand-bg/60 transition-colors">
                   {/* Initials badge */}
-                  <div className="w-9 h-9 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 flex items-center justify-center font-black text-xs shrink-0 uppercase">
+                  <div className="w-9 h-9 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-600 dark:text-purple-300 flex items-center justify-center font-black text-xs shrink-0 uppercase">
                     {log.name.substring(0, 2)}
                   </div>
 
                   {/* details */}
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex justify-between items-baseline gap-2">
-                      <span className="text-xs font-bold text-white truncate">{log.name}</span>
+                      <span className="text-xs font-bold text-brand-text truncate">{log.name}</span>
                       <span className="text-[9px] font-black uppercase text-brand-primary tracking-wider bg-brand-primary/10 border border-brand-primary/20 px-1.5 py-0.5 rounded shrink-0">
                         Acesso OK
                       </span>
                     </div>
                     <p className="text-[11px] text-gray-400 truncate">{log.email}</p>
                     
-                    <div className="flex items-center gap-1.5 mt-2 pt-1.5 border-t border-brand-border/20 text-[10px] text-gray-500 font-semibold">
-                      <Clock size={11} className="text-purple-400" />
-                      <span className="text-purple-300" title={absolute}>{relative}</span>
-                      <span className="text-gray-600">•</span>
+                    <div className="flex items-center gap-1.5 mt-2 pt-1.5 border-t border-brand-border/20 text-[10px] text-brand-muted font-semibold">
+                      <Clock size={11} className="text-purple-500 dark:text-purple-400" />
+                      <span className="text-purple-600 dark:text-purple-300" title={absolute}>{relative}</span>
+                      <span className="text-brand-muted">•</span>
                       <span className="truncate max-w-[140px]" title={absolute}>{format(parseISO(log.timestamp), 'dd/MM/yy HH:mm')}</span>
                     </div>
                   </div>
