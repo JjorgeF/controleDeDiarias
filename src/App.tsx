@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 import { onAuthStateChanged, User, signInWithPopup } from 'firebase/auth';
 import { auth, db, googleProvider, isFirebaseConfigured, handleFirestoreError, OperationType } from './lib/firebase';
-import { Employee, ViewMode, WorkDay, CancellationLog, Promotion } from './types';
+import { Employee, ViewMode, WorkDay, CancellationLog, Promotion, AppNotification } from './types';
 import { recalculateEmployeeTimeline } from './utils/promotionUtils';
 import Header from './components/Header';
 import EmployeeCard from './components/EmployeeCard';
@@ -36,6 +36,7 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminCheckLoading, setAdminCheckLoading] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [employeesLoading, setEmployeesLoading] = useState(true);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('calendar');
   const [searchQuery, setSearchQuery] = useState('');
@@ -234,13 +235,23 @@ export default function App() {
   useEffect(() => {
     if (!user || !db || adminCheckLoading) {
       setEmployees([]);
+      setEmployeesLoading(false);
       return;
     }
 
-    // Se for admin, busca todos. Se não, busca apenas o dele pelo email.
+    setEmployeesLoading(true);
+
+    const userEmailRaw = (user.email || '').trim();
+    const userEmailLower = userEmailRaw.toLowerCase();
+    const emailOptions = Array.from(new Set([userEmailRaw, userEmailLower])).filter(Boolean);
+
+    // Se for admin, busca todos. Se não, busca pelos emails correspondentes (insensível a maiúsculas) ou por e-mail direto
     const q = isAdmin 
       ? query(collection(db, 'employees'))
-      : query(collection(db, 'employees'), where('email', '==', user.email || ''));
+      : query(
+          collection(db, 'employees'), 
+          where('email', 'in', emailOptions.length > 0 ? emailOptions : [''])
+        );
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       let emps = snapshot.docs.map(doc => ({
@@ -249,6 +260,7 @@ export default function App() {
       })) as Employee[];
       
       setEmployees(emps);
+      setEmployeesLoading(false);
 
       // Auto-vincular o UID do usuário autenticado se ele for funcionário e o campo userId estiver vazio
       if (!isAdmin && emps.length > 0 && user) {
@@ -264,6 +276,7 @@ export default function App() {
         }
       }
     }, (error) => {
+      setEmployeesLoading(false);
       handleFirestoreError(error, OperationType.LIST, 'employees');
     });
 
@@ -300,6 +313,130 @@ export default function App() {
   const unreadCancellations = useMemo(() => {
     return cancellations.filter(c => !c.viewedByAdmins);
   }, [cancellations]);
+
+  const [readNotificationIds, setReadNotificationIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('read_notifications') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  const [dismissedNotificationIds, setDismissedNotificationIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('dismissed_notifications') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('read_notifications', JSON.stringify(readNotificationIds));
+  }, [readNotificationIds]);
+
+  useEffect(() => {
+    localStorage.setItem('dismissed_notifications', JSON.stringify(dismissedNotificationIds));
+  }, [dismissedNotificationIds]);
+
+  const allNotifications = useMemo(() => {
+    const list: AppNotification[] = [];
+
+    // 1. Cancellation notifications (for admins)
+    if (isViewingAsAdmin) {
+      cancellations.forEach(c => {
+        const notifId = `cancellation_${c.id}`;
+        if (!dismissedNotificationIds.includes(notifId)) {
+          list.push({
+            id: notifId,
+            type: 'cancellation',
+            title: `Cancelamento: ${c.employeeName}`,
+            message: `Solicitou o cancelamento da escala do dia ${format(parseISO(c.date), 'dd/MM/yyyy')} (${c.type === 'party' ? 'Festa 🥳' : 'Diária CCSP'}).`,
+            date: c.cancelledAt,
+            isRead: c.viewedByAdmins || readNotificationIds.includes(notifId),
+            employeeId: c.employeeId,
+            targetDate: c.date
+          });
+        }
+      });
+    }
+
+    // 2. Deadline notifications
+    const currentMonthKey = format(currentMonth, 'yyyy-MM');
+    const currentDeadline = deadlines?.[currentMonthKey];
+    if (currentDeadline) {
+      const deadlineDate = new Date(currentDeadline);
+      const isExpired = new Date() > deadlineDate;
+      const deadlineNotifId = `deadline_${currentMonthKey}_${isExpired ? 'expired' : 'active'}`;
+
+      if (!dismissedNotificationIds.includes(deadlineNotifId)) {
+        list.push({
+          id: deadlineNotifId,
+          type: isExpired ? 'deadline_expired' : 'deadline_warning',
+          title: isExpired ? 'Prazo de Disponibilidades Encerrado' : 'Prazo de Disponibilidades Ativo',
+          message: isExpired
+            ? `O prazo para envio de disponibilidades de ${format(currentMonth, 'MMMM', { locale: ptBR })} encerrou em ${format(deadlineDate, "dd/MM/yyyy 'às' HH:mm")}.`
+            : `Defina suas disponibilidades de ${format(currentMonth, 'MMMM', { locale: ptBR })} até ${format(deadlineDate, "dd/MM/yyyy 'às' HH:mm")}.`,
+          date: new Date().toISOString(),
+          isRead: readNotificationIds.includes(deadlineNotifId)
+        });
+      }
+    }
+
+    return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [cancellations, deadlines, currentMonth, isViewingAsAdmin, readNotificationIds, dismissedNotificationIds]);
+
+  const unreadNotificationsCount = useMemo(() => {
+    return allNotifications.filter(n => !n.isRead).length;
+  }, [allNotifications]);
+
+  const handleMarkNotificationRead = async (notifId: string) => {
+    setReadNotificationIds(prev => Array.from(new Set([...prev, notifId])));
+    if (notifId.startsWith('cancellation_')) {
+      const cancellationId = notifId.replace('cancellation_', '');
+      await handleMarkCancellationRead(cancellationId);
+    }
+  };
+
+  const handleMarkAllNotificationsRead = async () => {
+    const unreadIds = allNotifications.filter(n => !n.isRead).map(n => n.id);
+    setReadNotificationIds(prev => Array.from(new Set([...prev, ...unreadIds])));
+
+    const unreadCancellationNotifs = allNotifications.filter(n => !n.isRead && n.type === 'cancellation');
+    for (const notif of unreadCancellationNotifs) {
+      const cancellationId = notif.id.replace('cancellation_', '');
+      await handleMarkCancellationRead(cancellationId);
+    }
+  };
+
+  const handleDismissNotification = async (notifId: string) => {
+    setDismissedNotificationIds(prev => Array.from(new Set([...prev, notifId])));
+    if (notifId.startsWith('cancellation_')) {
+      const cancellationId = notifId.replace('cancellation_', '');
+      await handleDismissCancellation(cancellationId);
+    }
+  };
+
+  // Native browser push notification trigger
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      const unreadCancellationsList = allNotifications.filter(n => !n.isRead && n.type === 'cancellation');
+      if (unreadCancellationsList.length > 0) {
+        const lastUnread = unreadCancellationsList[0];
+        const lastNotified = localStorage.getItem('last_notified_id');
+        if (lastNotified !== lastUnread.id) {
+          try {
+            new Notification(lastUnread.title, {
+              body: lastUnread.message,
+              icon: '/logo.svg'
+            });
+            localStorage.setItem('last_notified_id', lastUnread.id);
+          } catch (e) {
+            console.error('Erro ao emitir notificação nativa:', e);
+          }
+        }
+      }
+    }
+  }, [allNotifications]);
 
   const handleSaveEmployee = async (data: Partial<Employee>): Promise<{ success: boolean; error?: string }> => {
     if (!user || !db) return { success: false, error: "Usuário não autenticado." };
@@ -637,7 +774,7 @@ export default function App() {
     );
   }
 
-  if (loading || adminCheckLoading) {
+  if (loading || adminCheckLoading || (user && employeesLoading)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-brand-bg">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-brand-primary"></div>
@@ -703,6 +840,16 @@ export default function App() {
           toggleTheme={() => setIsDarkMode(!isDarkMode)}
           onExportExcel={() => {}}
           hideControls={true}
+          isAdmin={false}
+          notifications={allNotifications}
+          unreadNotificationsCount={unreadNotificationsCount}
+          onMarkNotificationRead={handleMarkNotificationRead}
+          onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+          onDismissNotification={handleDismissNotification}
+          onNavigateToCalendar={() => {
+            setSidebarTab('cancellations');
+            setViewMode('calendar');
+          }}
         />
 
         <main className="w-full mx-auto px-2 md:px-4 py-4 md:py-8 max-w-4xl">
@@ -743,8 +890,8 @@ export default function App() {
             </div>
           ) : (
             <div className="py-20 text-center">
-              <p className="text-gray-400 text-lg">Carregando seus dados ou você ainda não foi vinculado a um registro de funcionário.</p>
-              <p className="text-sm text-gray-500 mt-2">Entre em contato com o administrador e informe seu e-mail: {simulationActive ? '[Simulado Sem Registro]' : user.email}</p>
+              <p className="text-gray-400 text-lg">Você ainda não foi vinculado a um registro de funcionário.</p>
+              <p className="text-sm text-gray-500 mt-2">Entre em contato com o Cacheado e informe seu e-mail: {simulationActive ? '[Simulado Sem Registro]' : user.email}</p>
             </div>
           )}
         </main>
@@ -779,6 +926,18 @@ export default function App() {
         toggleTheme={() => setIsDarkMode(!isDarkMode)}
         onExportExcel={handleExportExcel}
         isAdmin={isViewingAsAdmin}
+        notifications={allNotifications}
+        unreadNotificationsCount={unreadNotificationsCount}
+        onMarkNotificationRead={handleMarkNotificationRead}
+        onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+        onDismissNotification={handleDismissNotification}
+        onNavigateToCalendar={() => {
+          setSidebarTab('cancellations');
+          setViewMode('calendar');
+          setTimeout(() => {
+            document.getElementById('sidebar-panel')?.scrollIntoView({ behavior: 'smooth' });
+          }, 100);
+        }}
       />
 
       <main className="w-full mx-auto px-2 md:px-4 py-4 md:py-8 max-w-7xl">
