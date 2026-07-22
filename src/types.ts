@@ -9,6 +9,7 @@ export interface WorkDay {
   isCancelled?: boolean;
   cancelledAt?: string;
   cancellationViewed?: boolean;
+  cancellationDismissed?: boolean;
   dailyRateAtTime?: number;
   partyRateAtTime?: number;
   extraHourRateAtTime?: number;
@@ -52,4 +53,28 @@ export interface CancellationLog {
   type: 'common' | 'party';
   cancelledAt: string; // ISO string
   viewedByAdmins: boolean;
+}
+
+export type NotificationType = 'cancellation' | 'deadline_warning' | 'deadline_expired' | 'info' | 'custom';
+
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  date: string;
+  isRead: boolean;
+  employeeId?: string;
+  targetDate?: string;
+}
+
+export interface CustomNotificationDoc {
+  id: string;
+  title: string;
+  message: string;
+  targetType: 'all' | 'specific';
+  targetEmployeeId?: string;
+  targetEmployeeName?: string;
+  createdAt: string;
+  createdBy: string;
 }
