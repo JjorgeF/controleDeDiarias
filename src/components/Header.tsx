@@ -11,11 +11,12 @@ import {
   FileDown,
   Smartphone,
   BarChart3,
-  Settings
+  Settings,
+  Send
 } from 'lucide-react';
 import { auth, googleProvider } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
-import { ViewMode, AppNotification } from '../types';
+import { ViewMode, AppNotification, CustomNotificationDoc } from '../types';
 import { cn } from '../lib/utils';
 import Logo from './Logo';
 import NotificationCenter from './NotificationCenter';
@@ -37,6 +38,9 @@ interface HeaderProps {
   onMarkAllNotificationsRead?: () => void;
   onDismissNotification?: (id: string) => void;
   onNavigateToCalendar?: () => void;
+  onOpenSendNotificationModal?: () => void;
+  customNotificationsDocs?: CustomNotificationDoc[];
+  onDeleteCustomNotification?: (id: string) => Promise<void>;
 }
 
 export default function Header({ 
@@ -54,7 +58,10 @@ export default function Header({
   onMarkNotificationRead,
   onMarkAllNotificationsRead,
   onDismissNotification,
-  onNavigateToCalendar
+  onNavigateToCalendar,
+  onOpenSendNotificationModal,
+  customNotificationsDocs = [],
+  onDeleteCustomNotification
 }: HeaderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isStandalone, setIsStandalone] = useState(false);
@@ -200,7 +207,10 @@ export default function Header({
             onMarkAllRead={() => onMarkAllNotificationsRead?.()}
             onDismiss={(id) => onDismissNotification?.(id)}
             onNavigateToCalendar={onNavigateToCalendar}
+            onOpenSendModal={onOpenSendNotificationModal}
             isAdmin={isAdmin}
+            customNotificationsDocs={customNotificationsDocs}
+            onDeleteCustomNotification={onDeleteCustomNotification}
           />
 
           <button 
@@ -250,6 +260,19 @@ export default function Header({
                   >
                     <LogIn size={16} />
                     <span>Entrar com Google</span>
+                  </button>
+                )}
+
+                {isAdmin && onOpenSendNotificationModal && (
+                  <button
+                    onClick={() => {
+                      setIsSettingsOpen(false);
+                      onOpenSendNotificationModal();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-brand-primary hover:text-white hover:bg-brand-primary/10 rounded-lg transition-colors text-left"
+                  >
+                    <Send size={16} className="text-brand-primary" />
+                    <span>Enviar Notificação</span>
                   </button>
                 )}
 
