@@ -12,6 +12,15 @@ interface EmployeeModalProps {
 
 const LEVELS: EmployeeLevel[] = ['Trainee', 'Aprendiz', 'Coordenador(a)', 'Recreador(a)', 'Recreador(a) Experiente', 'Motorista'];
 
+const LEVEL_RATES: Record<EmployeeLevel, { daily: number; party: number }> = {
+  'Trainee': { daily: 70, party: 70 },
+  'Aprendiz': { daily: 150, party: 120 },
+  'Recreador(a)': { daily: 180, party: 150 },
+  'Recreador(a) Experiente': { daily: 210, party: 180 },
+  'Coordenador(a)': { daily: 230, party: 210 },
+  'Motorista': { daily: 0, party: 0 }
+};
+
 export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, employee }: EmployeeModalProps) {
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -19,8 +28,8 @@ export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, emplo
     name: '',
     artisticName: '',
     level: 'Trainee',
-    dailyRate: 0,
-    partyRate: 0,
+    dailyRate: 70,
+    partyRate: 70,
     extraHourRate: 0,
     workDays: [],
     email: '',
@@ -45,8 +54,8 @@ export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, emplo
         name: '',
         artisticName: '',
         level: 'Trainee',
-        dailyRate: 0,
-        partyRate: 0,
+        dailyRate: 70,
+        partyRate: 70,
         extraHourRate: 0,
         workDays: [],
         email: '',
@@ -123,7 +132,16 @@ export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, emplo
             <label className="block text-sm font-medium text-gray-400 mb-1">Nível</label>
             <select
               value={formData.level}
-              onChange={(e) => setFormData({ ...formData, level: e.target.value as EmployeeLevel })}
+              onChange={(e) => {
+                const selectedLevel = e.target.value as EmployeeLevel;
+                const rates = LEVEL_RATES[selectedLevel] || { daily: 0, party: 0 };
+                setFormData({ 
+                  ...formData, 
+                  level: selectedLevel,
+                  dailyRate: rates.daily,
+                  partyRate: rates.party
+                });
+              }}
               className="w-full bg-brand-bg border border-brand-border rounded-lg py-2 px-4 text-white focus:outline-none focus:border-brand-primary appearance-none"
             >
               {LEVELS.map((level) => (
@@ -137,21 +155,26 @@ export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, emplo
               <label className="block text-sm font-medium text-gray-400 mb-1">Valor da Diária CCSP (R$)</label>
               <input
                 type="number"
+                readOnly
                 value={formData.dailyRate}
-                onChange={(e) => setFormData({ ...formData, dailyRate: Number(e.target.value) })}
-                className="w-full bg-brand-bg border border-brand-border rounded-lg py-2 px-4 text-white focus:outline-none focus:border-brand-primary"
+                className="w-full bg-brand-bg/60 border border-brand-border/60 rounded-lg py-2 px-4 text-gray-400 focus:outline-none cursor-not-allowed font-semibold"
+                title="Valor fixo definido pelo nível selecionado"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-1">Diária de Festa (R$)</label>
               <input
                 type="number"
+                readOnly
                 value={formData.partyRate}
-                onChange={(e) => setFormData({ ...formData, partyRate: Number(e.target.value) })}
-                className="w-full bg-brand-bg border border-brand-border rounded-lg py-2 px-4 text-white focus:outline-none focus:border-brand-primary"
+                className="w-full bg-brand-bg/60 border border-brand-border/60 rounded-lg py-2 px-4 text-gray-400 focus:outline-none cursor-not-allowed font-semibold"
+                title="Valor fixo definido pelo nível selecionado"
               />
             </div>
           </div>
+          <p className="text-[10px] text-brand-muted font-bold -mt-2">
+            * Os valores de diária e festa são fixos de acordo com o nível selecionado.
+          </p>
 
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-1">Valor da Hora Extra (R$)</label>
