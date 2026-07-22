@@ -14,7 +14,8 @@ import {
 } from 'firebase/firestore';
 import { onAuthStateChanged, User, signInWithPopup } from 'firebase/auth';
 import { auth, db, googleProvider, isFirebaseConfigured, handleFirestoreError, OperationType } from './lib/firebase';
-import { Employee, ViewMode, WorkDay, CancellationLog } from './types';
+import { Employee, ViewMode, WorkDay, CancellationLog, Promotion } from './types';
+import { recalculateEmployeeTimeline } from './utils/promotionUtils';
 import Header from './components/Header';
 import EmployeeCard from './components/EmployeeCard';
 import EmployeeList from './components/EmployeeList';
@@ -333,10 +334,12 @@ export default function App() {
         const partyRateChanged = sanitizedData.partyRate !== undefined && sanitizedData.partyRate !== selectedEmployee.partyRate;
         const extraHourRateChanged = sanitizedData.extraHourRate !== undefined && sanitizedData.extraHourRate !== selectedEmployee.extraHourRate;
 
+        let currentPromotions: Promotion[] = sanitizedData.promotions || selectedEmployee.promotions || [];
+
         if (levelChanged || dailyRateChanged || partyRateChanged || extraHourRateChanged) {
           const effectiveDate = sanitizedData.promotionEffectiveDate || format(new Date(), 'yyyy-MM-dd');
           
-          const newPromotion = {
+          const newPromotion: Promotion = {
             id: Math.random().toString(36).substring(2, 9),
             date: effectiveDate,
             previousLevel: selectedEmployee.level,
@@ -347,33 +350,20 @@ export default function App() {
             newPartyRate: sanitizedData.partyRate !== undefined ? sanitizedData.partyRate : selectedEmployee.partyRate,
           };
 
-          const currentPromotions = selectedEmployee.promotions || [];
-          sanitizedData.promotions = [...currentPromotions, newPromotion];
-
-          // Retroactive adjustment: Update all workDays that are on or after the effective date
-          if (selectedEmployee.workDays && selectedEmployee.workDays.length > 0) {
-            const updatedWorkDays = selectedEmployee.workDays.map(day => {
-              if (day.date >= effectiveDate) {
-                return {
-                  ...day,
-                  dailyRateAtTime: sanitizedData.dailyRate !== undefined ? sanitizedData.dailyRate : selectedEmployee.dailyRate,
-                  partyRateAtTime: sanitizedData.partyRate !== undefined ? sanitizedData.partyRate : selectedEmployee.partyRate,
-                  extraHourRateAtTime: sanitizedData.extraHourRate !== undefined ? sanitizedData.extraHourRate : selectedEmployee.extraHourRate,
-                  levelAtTime: sanitizedData.level || selectedEmployee.level
-                };
-              } else {
-                return {
-                  ...day,
-                  dailyRateAtTime: day.dailyRateAtTime !== undefined ? day.dailyRateAtTime : selectedEmployee.dailyRate,
-                  partyRateAtTime: day.partyRateAtTime !== undefined ? day.partyRateAtTime : selectedEmployee.partyRate,
-                  extraHourRateAtTime: day.extraHourRateAtTime !== undefined ? day.extraHourRateAtTime : selectedEmployee.extraHourRate,
-                  levelAtTime: day.levelAtTime || selectedEmployee.level
-                };
-              }
-            });
-            sanitizedData.workDays = updatedWorkDays;
-          }
+          currentPromotions = [...currentPromotions, newPromotion];
         }
+
+        // Recalculate full timeline to ensure level, rates, and workDays are completely consistent
+        const recalculated = recalculateEmployeeTimeline(
+          { ...selectedEmployee, ...sanitizedData },
+          currentPromotions
+        );
+
+        sanitizedData.promotions = recalculated.promotions;
+        sanitizedData.level = recalculated.level;
+        sanitizedData.dailyRate = recalculated.dailyRate;
+        sanitizedData.partyRate = recalculated.partyRate;
+        sanitizedData.workDays = recalculated.workDays;
 
         delete sanitizedData.promotionEffectiveDate;
         await updateDoc(empRef, sanitizedData);
