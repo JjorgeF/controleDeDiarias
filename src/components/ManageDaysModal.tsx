@@ -128,8 +128,8 @@ export default function ManageDaysModal({ isOpen, onClose, employee, onUpdateDay
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-brand-card border border-brand-border w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b border-brand-border">
+      <div className="bg-brand-card border border-brand-border w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-brand-border shrink-0">
           <div>
             <h2 className="text-xl font-bold text-white">Gerenciar Dias de Trabalho</h2>
             <p className="text-sm text-gray-400">Para: <span className="text-white font-medium">{employee.artisticName || employee.name}</span></p>
@@ -139,7 +139,7 @@ export default function ManageDaysModal({ isOpen, onClose, employee, onUpdateDay
           </button>
         </div>
 
-        <div className="p-6 flex flex-col md:flex-row gap-8">
+        <div className="p-6 flex flex-col md:flex-row gap-8 overflow-y-auto flex-1">
           <div className="flex-1">
             <div className="flex items-center justify-between mb-4">
               <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1 hover:text-brand-primary transition-colors">
@@ -244,7 +244,7 @@ export default function ManageDaysModal({ isOpen, onClose, employee, onUpdateDay
           </div>
         </div>
 
-        <div className="p-6 border-t border-brand-border flex gap-3">
+        <div className="p-6 border-t border-brand-border flex gap-3 shrink-0">
           <button
             onClick={onClose}
             className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition-colors"
