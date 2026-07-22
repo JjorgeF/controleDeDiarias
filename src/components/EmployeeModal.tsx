@@ -69,8 +69,8 @@ export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, emplo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-brand-card border border-brand-border w-full max-w-md rounded-xl shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b border-brand-border">
+      <div className="bg-brand-card border border-brand-border w-full max-w-md rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-brand-border shrink-0">
           <h2 className="text-xl font-bold text-white">
             {employee ? 'Editar Funcionário' : 'Adicionar Funcionário'}
           </h2>
@@ -79,7 +79,7 @@ export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, emplo
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
           {error && (
             <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
               <AlertCircle className="text-red-500 shrink-0" size={18} />
@@ -166,7 +166,7 @@ export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, emplo
           {employee && (
             <div className="bg-yellow-500/[0.03] border border-yellow-500/20 rounded-xl p-3.5 space-y-2">
               <label className="block text-xs font-bold text-yellow-500 uppercase tracking-wider">
-                Vigência da Promoção / Novas Taxas 📅
+                Vigência da Promoção 📅
               </label>
               <input
                 type="date"
