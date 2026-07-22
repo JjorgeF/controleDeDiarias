@@ -1,6 +1,7 @@
 import React from 'react';
-import { X, AlertCircle } from 'lucide-react';
+import { X, AlertCircle, Trash2, ArrowRight, Calendar } from 'lucide-react';
 import { Employee, EmployeeLevel } from '../types';
+import { recalculateEmployeeTimeline, LEVEL_RATES } from '../utils/promotionUtils';
 
 interface EmployeeModalProps {
   isOpen: boolean;
@@ -11,15 +12,6 @@ interface EmployeeModalProps {
 }
 
 const LEVELS: EmployeeLevel[] = ['Trainee', 'Aprendiz', 'Coordenador(a)', 'Recreador(a)', 'Recreador(a) Experiente', 'Motorista'];
-
-const LEVEL_RATES: Record<EmployeeLevel, { daily: number; party: number }> = {
-  'Trainee': { daily: 70, party: 70 },
-  'Aprendiz': { daily: 150, party: 120 },
-  'Recreador(a)': { daily: 180, party: 150 },
-  'Recreador(a) Experiente': { daily: 210, party: 180 },
-  'Coordenador(a)': { daily: 230, party: 210 },
-  'Motorista': { daily: 0, party: 0 }
-};
 
 export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, employee }: EmployeeModalProps) {
   const [isDeleting, setIsDeleting] = React.useState(false);
@@ -64,6 +56,36 @@ export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, emplo
   }, [employee, isOpen]);
 
   if (!isOpen) return null;
+
+  const handleDeletePromotion = (promoId: string) => {
+    const currentPromos = formData.promotions || [];
+    const updated = currentPromos.filter(p => p.id !== promoId);
+    const recalculated = recalculateEmployeeTimeline(formData, updated);
+
+    setFormData(prev => ({
+      ...prev,
+      promotions: recalculated.promotions,
+      level: recalculated.level,
+      dailyRate: recalculated.dailyRate,
+      partyRate: recalculated.partyRate,
+      workDays: recalculated.workDays
+    }));
+  };
+
+  const handleUpdatePromotionDate = (promoId: string, newDate: string) => {
+    const currentPromos = formData.promotions || [];
+    const updated = currentPromos.map(p => p.id === promoId ? { ...p, date: newDate } : p);
+    const recalculated = recalculateEmployeeTimeline(formData, updated);
+
+    setFormData(prev => ({
+      ...prev,
+      promotions: recalculated.promotions,
+      level: recalculated.level,
+      dailyRate: recalculated.dailyRate,
+      partyRate: recalculated.partyRate,
+      workDays: recalculated.workDays
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,19 +209,68 @@ export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, emplo
           </div>
 
           {employee && (
-            <div className="bg-yellow-500/[0.03] border border-yellow-500/20 rounded-xl p-3.5 space-y-2">
-              <label className="block text-xs font-bold text-yellow-500 uppercase tracking-wider">
-                Vigência da Promoção 📅
-              </label>
-              <input
-                type="date"
-                value={formData.promotionEffectiveDate || ''}
-                onChange={(e) => setFormData({ ...formData, promotionEffectiveDate: e.target.value })}
-                className="w-full bg-brand-bg border border-yellow-500/30 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-yellow-500 text-sm font-semibold"
-              />
-              <p className="text-[10px] text-gray-400 leading-normal">
-                Indique a partir de qual data o novo nível e valores passam a vigorar. O sistema atualizará de forma retroativa ou futura todos os dias de trabalho agendados desse funcionário que ocorram a partir dessa data.
-              </p>
+            <div className="space-y-3 pt-2">
+              {/* If level changed in dropdown from current employee level */}
+              {formData.level !== employee.level && (
+                <div className="bg-yellow-500/[0.05] border border-yellow-500/30 rounded-xl p-3.5 space-y-2">
+                  <label className="block text-xs font-bold text-yellow-500 uppercase tracking-wider">
+                    Vigência da Promoção ({formData.level}) 📅
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.promotionEffectiveDate || ''}
+                    onChange={(e) => setFormData({ ...formData, promotionEffectiveDate: e.target.value })}
+                    className="w-full bg-brand-bg border border-yellow-500/30 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-yellow-500 text-sm font-semibold"
+                  />
+                  <p className="text-[10px] text-gray-400 leading-normal">
+                    Indique a partir de qual data o novo nível ({formData.level}) passa a vigorar. O sistema atualizará os dias agendados a partir dessa data.
+                  </p>
+                </div>
+              )}
+
+              {/* Promotion history list */}
+              {formData.promotions && formData.promotions.length > 0 && (
+                <div className="bg-brand-bg/50 border border-brand-border/60 rounded-xl p-3.5 space-y-2.5">
+                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Calendar size={14} className="text-brand-primary" />
+                    Histórico de Promoções ({formData.promotions.length})
+                  </label>
+                  <p className="text-[11px] text-gray-400 leading-normal">
+                    Altere a data de vigência de uma promoção ou clique na lixeira para excluí-la/revertê-la.
+                  </p>
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {formData.promotions.map((promo) => (
+                      <div
+                        key={promo.id}
+                        className="bg-brand-card border border-brand-border rounded-lg p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                      >
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <span className="font-medium text-gray-400">{promo.previousLevel}</span>
+                          <ArrowRight size={12} className="text-yellow-500 shrink-0" />
+                          <span className="font-bold text-yellow-400">{promo.newLevel}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="date"
+                            value={promo.date}
+                            onChange={(e) => handleUpdatePromotionDate(promo.id, e.target.value)}
+                            className="bg-brand-bg border border-brand-border rounded py-1 px-2 text-xs text-white focus:outline-none focus:border-brand-primary font-mono"
+                            title="Alterar data de vigência desta promoção"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePromotion(promo.id)}
+                            title="Excluir/Cancelar esta promoção"
+                            className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors shrink-0"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
