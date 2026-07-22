@@ -1,28 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Plus, 
   LayoutGrid, 
   List, 
   Calendar as CalendarIcon, 
   Search, 
   LogOut, 
+  LogIn,
   Sun, 
   Moon,
-  ChevronDown,
   FileDown,
   Smartphone,
-  BarChart3
+  BarChart3,
+  Settings
 } from 'lucide-react';
 import { auth, googleProvider } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
-import { ViewMode } from '../types';
+import { ViewMode, AppNotification } from '../types';
 import { cn } from '../lib/utils';
 import Logo from './Logo';
+import NotificationCenter from './NotificationCenter';
 
 interface HeaderProps {
   viewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
-  onAddEmployee: () => void;
+  onAddEmployee?: () => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   isDarkMode: boolean;
@@ -30,22 +31,49 @@ interface HeaderProps {
   onExportExcel: () => void;
   hideControls?: boolean;
   isAdmin?: boolean;
+  notifications?: AppNotification[];
+  unreadNotificationsCount?: number;
+  onMarkNotificationRead?: (id: string) => void;
+  onMarkAllNotificationsRead?: () => void;
+  onDismissNotification?: (id: string) => void;
+  onNavigateToCalendar?: () => void;
 }
 
 export default function Header({ 
   viewMode, 
   setViewMode, 
-  onAddEmployee,
   searchQuery,
   setSearchQuery,
   isDarkMode,
   toggleTheme,
   onExportExcel,
   hideControls = false,
-  isAdmin = false
+  isAdmin = false,
+  notifications = [],
+  unreadNotificationsCount = 0,
+  onMarkNotificationRead,
+  onMarkAllNotificationsRead,
+  onDismissNotification,
+  onNavigateToCalendar
 }: HeaderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
+        setIsSettingsOpen(false);
+      }
+    }
+    if (isSettingsOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isSettingsOpen]);
 
   useEffect(() => {
     const checkStandalone = 
@@ -164,72 +192,110 @@ export default function Header({
           </div>
         )}
 
-        <div className="flex items-center gap-1.5 md:gap-3">
-          {!hideControls && (
-            <>
-              <button 
-                onClick={onAddEmployee}
-                className="flex items-center gap-2 bg-brand-primary hover:bg-brand-primary-hover text-brand-bg font-bold py-2 px-2 md:px-4 rounded-md transition-colors text-sm"
-              >
-                <Plus size={18} />
-                <span className="hidden lg:inline">Adicionar Funcionário</span>
-              </button>
-
-              <button 
-                onClick={onExportExcel}
-                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-2 md:px-4 rounded-md transition-colors text-sm"
-                title="Exportar Mês para Excel"
-              >
-                <FileDown size={18} />
-                <span className="hidden lg:inline">Exportar Excel</span>
-              </button>
-            </>
-          )}
-
-          {!isStandalone && (
-            <button 
-              onClick={() => {
-                window.dispatchEvent(new CustomEvent('show-pwa-prompt'));
-              }}
-              className="flex items-center gap-1.5 bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary border border-brand-primary/20 font-bold py-1.5 px-2 md:px-3 rounded-md transition-all text-xs cursor-pointer"
-              title="Instalar Aplicativo (PWA)"
-            >
-              <Smartphone size={14} className="animate-bounce-subtle" />
-              <span>Instalar App</span>
-            </button>
-          )}
+        <div className="flex items-center gap-1 md:gap-2">
+          <NotificationCenter
+            notifications={notifications}
+            unreadCount={unreadNotificationsCount}
+            onMarkRead={(id) => onMarkNotificationRead?.(id)}
+            onMarkAllRead={() => onMarkAllNotificationsRead?.()}
+            onDismiss={(id) => onDismissNotification?.(id)}
+            onNavigateToCalendar={onNavigateToCalendar}
+            isAdmin={isAdmin}
+          />
 
           <button 
             onClick={toggleTheme}
-            className="p-2 text-gray-400 hover:text-brand-primary transition-colors"
+            className="p-2 text-gray-400 hover:text-brand-primary transition-colors rounded-lg hover:bg-brand-card"
+            title={isDarkMode ? "Modo Claro" : "Modo Escuro"}
           >
             {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
           </button>
 
-          {user ? (
-            <div className="flex items-center gap-1.5 md:gap-2">
-              <img 
-                src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`} 
-                alt={user.displayName || ""} 
-                className="w-7 h-7 md:w-8 md:h-8 rounded-full border border-brand-border"
-              />
-              <button 
-                onClick={handleLogout}
-                className="bg-brand-card hover:bg-red-500/10 text-gray-300 hover:text-red-500 p-1.5 md:px-3 md:py-1.5 rounded-md text-sm font-medium transition-colors border border-brand-border flex items-center gap-2"
-                title="Sair"
-              >
-                <LogOut size={16} className="md:hidden" />
-                <span className="hidden md:inline">Sair</span>
-              </button>
-            </div>
-          ) : (
-            <button 
-              onClick={handleLogin}
-              className="bg-brand-card hover:bg-brand-primary/10 text-brand-primary px-2 md:px-4 py-1.5 md:py-2 rounded-md text-sm font-bold transition-colors border border-brand-border"
+          {/* Settings Menu Dropdown */}
+          <div className="relative" ref={settingsRef}>
+            <button
+              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+              className="p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-brand-card focus:outline-none flex items-center justify-center"
+              title="Configurações e Conta"
+              aria-label="Configurações e Conta"
             >
-              Entrar
+              <Settings size={20} className={cn("transition-transform duration-300", isSettingsOpen && "rotate-45 text-brand-primary")} />
             </button>
-          )}
+
+            {isSettingsOpen && (
+              <div className="absolute right-0 mt-2 w-64 bg-brand-card border border-brand-border rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 p-2 space-y-1">
+                {user ? (
+                  <div className="p-2.5 mb-1 bg-brand-bg/50 border border-brand-border/60 rounded-lg flex items-center gap-2.5">
+                    <img 
+                      src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`} 
+                      alt={user.displayName || ""} 
+                      className="w-9 h-9 rounded-full border border-brand-border shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-white truncate">
+                        {user.displayName || 'Usuário'}
+                      </p>
+                      <p className="text-[10px] text-gray-400 truncate">
+                        {user.email || ''}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setIsSettingsOpen(false);
+                      handleLogin();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-brand-primary hover:bg-brand-primary/10 rounded-lg transition-colors text-left"
+                  >
+                    <LogIn size={16} />
+                    <span>Entrar com Google</span>
+                  </button>
+                )}
+
+                {!hideControls && (
+                  <button
+                    onClick={() => {
+                      setIsSettingsOpen(false);
+                      onExportExcel();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-200 hover:text-white hover:bg-emerald-500/10 hover:text-emerald-400 rounded-lg transition-colors text-left"
+                  >
+                    <FileDown size={16} className="text-emerald-500" />
+                    <span>Exportar Dados (Excel)</span>
+                  </button>
+                )}
+
+                {!isStandalone && (
+                  <button
+                    onClick={() => {
+                      setIsSettingsOpen(false);
+                      window.dispatchEvent(new CustomEvent('show-pwa-prompt'));
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-200 hover:text-white hover:bg-brand-primary/10 hover:text-brand-primary rounded-lg transition-colors text-left"
+                  >
+                    <Smartphone size={16} className="text-brand-primary" />
+                    <span>Instalar App (PWA)</span>
+                  </button>
+                )}
+
+                {user && (
+                  <div className="border-t border-brand-border/60 pt-1 mt-1">
+                    <button
+                      onClick={() => {
+                        setIsSettingsOpen(false);
+                        handleLogout();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors text-left"
+                    >
+                      <LogOut size={16} />
+                      <span>Sair do App</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
       
