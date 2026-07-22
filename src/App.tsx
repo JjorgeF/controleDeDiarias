@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 import { onAuthStateChanged, User, signInWithPopup } from 'firebase/auth';
 import { auth, db, googleProvider, isFirebaseConfigured, handleFirestoreError, OperationType } from './lib/firebase';
-import { Employee, ViewMode, WorkDay, CancellationLog, Promotion, AppNotification } from './types';
+import { Employee, ViewMode, WorkDay, CancellationLog, Promotion, AppNotification, CustomNotificationDoc } from './types';
 import { recalculateEmployeeTimeline } from './utils/promotionUtils';
 import Header from './components/Header';
 import EmployeeCard from './components/EmployeeCard';
@@ -23,12 +23,13 @@ import CalendarView from './components/CalendarView';
 import AdminDashboard from './components/AdminDashboard';
 import EmployeeModal from './components/EmployeeModal';
 import ManageDaysModal from './components/ManageDaysModal';
+import SendNotificationModal from './components/SendNotificationModal';
 import SimulationBanner from './components/SimulationBanner';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import Logo from './components/Logo';
 import { LogIn, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { format, isSameMonth, parseISO, eachDayOfInterval, startOfMonth, endOfMonth } from 'date-fns';
+import { format, isSameMonth, parseISO, eachDayOfInterval, startOfMonth, endOfMonth, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export default function App() {
@@ -294,7 +295,7 @@ export default function App() {
     const list: CancellationLog[] = [];
     employees.forEach(emp => {
       (emp.workDays || []).forEach(wd => {
-        if (wd.isCancelled) {
+        if (wd.isCancelled && !wd.cancellationDismissed) {
           list.push({
             id: `${emp.id}_${wd.date}`,
             employeeId: emp.id,
@@ -314,9 +315,57 @@ export default function App() {
     return cancellations.filter(c => !c.viewedByAdmins);
   }, [cancellations]);
 
+  const [customNotificationsDocs, setCustomNotificationsDocs] = useState<CustomNotificationDoc[]>([]);
+  const [isSendNotificationModalOpen, setIsSendNotificationModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (!db || !user) {
+      setCustomNotificationsDocs([]);
+      return;
+    }
+
+    const unsub = onSnapshot(doc(db, 'settings', 'custom_notifications'), async (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        const allItems: CustomNotificationDoc[] = data?.items || [];
+        
+        // Mantém apenas notificações criadas no dia de hoje (limpeza automática no final do dia)
+        const todayItems = allItems.filter(item => {
+          try {
+            return isToday(parseISO(item.createdAt));
+          } catch {
+            return true;
+          }
+        });
+
+        setCustomNotificationsDocs(todayItems);
+
+        // Se existirem notificações antigas de dias anteriores, limpa silenciosamente no Firestore em segundo plano
+        if (isViewingAsAdmin && allItems.length !== todayItems.length) {
+          try {
+            await setDoc(doc(db, 'settings', 'custom_notifications'), { items: todayItems }, { merge: true });
+          } catch (e) {
+            console.warn('Aviso ao purgar notificações antigas do Firestore:', e);
+          }
+        }
+      } else {
+        setCustomNotificationsDocs([]);
+      }
+    }, (err) => {
+      console.warn('Aviso ao escutar notificações personalizadas:', err);
+      setCustomNotificationsDocs([]);
+    });
+
+    return () => unsub();
+  }, [db, user, isViewingAsAdmin]);
+
+  const activeUserKey = isViewingAsAdmin
+    ? 'admin'
+    : (simulationActive ? `emp_${simulatedEmployeeId}` : (user?.email || user?.uid || 'user'));
+
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>(() => {
     try {
-      return JSON.parse(localStorage.getItem('read_notifications') || '[]');
+      return JSON.parse(localStorage.getItem(`read_notifications_${activeUserKey}`) || '[]');
     } catch {
       return [];
     }
@@ -324,19 +373,35 @@ export default function App() {
 
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<string[]>(() => {
     try {
-      return JSON.parse(localStorage.getItem('dismissed_notifications') || '[]');
+      return JSON.parse(localStorage.getItem(`dismissed_notifications_${activeUserKey}`) || '[]');
     } catch {
       return [];
     }
   });
 
   useEffect(() => {
-    localStorage.setItem('read_notifications', JSON.stringify(readNotificationIds));
-  }, [readNotificationIds]);
+    try {
+      const read = JSON.parse(localStorage.getItem(`read_notifications_${activeUserKey}`) || '[]');
+      setReadNotificationIds(read);
+
+      const dism = JSON.parse(localStorage.getItem(`dismissed_notifications_${activeUserKey}`) || '[]');
+      setDismissedNotificationIds(dism);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [activeUserKey]);
 
   useEffect(() => {
-    localStorage.setItem('dismissed_notifications', JSON.stringify(dismissedNotificationIds));
-  }, [dismissedNotificationIds]);
+    try {
+      localStorage.setItem(`read_notifications_${activeUserKey}`, JSON.stringify(readNotificationIds));
+    } catch {}
+  }, [readNotificationIds, activeUserKey]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`dismissed_notifications_${activeUserKey}`, JSON.stringify(dismissedNotificationIds));
+    } catch {}
+  }, [dismissedNotificationIds, activeUserKey]);
 
   const allNotifications = useMemo(() => {
     const list: AppNotification[] = [];
@@ -382,12 +447,87 @@ export default function App() {
       }
     }
 
+    // 3. Custom broadcast or targeted notifications
+    const myRecord = simulationActive
+      ? employees.find(e => e.id === simulatedEmployeeId)
+      : employees[0];
+
+    customNotificationsDocs.forEach(cNotif => {
+      const notifId = `custom_${cNotif.id}`;
+      if (dismissedNotificationIds.includes(notifId)) return;
+
+      const isTargetedToMe = !isViewingAsAdmin && (
+        cNotif.targetType === 'all' || 
+        (myRecord && cNotif.targetEmployeeId === myRecord.id)
+      );
+
+      if (isViewingAsAdmin || isTargetedToMe) {
+        let displayTitle = cNotif.title;
+        if (isViewingAsAdmin && cNotif.targetType === 'specific' && cNotif.targetEmployeeName) {
+          displayTitle = `${cNotif.title} (Para: ${cNotif.targetEmployeeName})`;
+        }
+
+        list.push({
+          id: notifId,
+          type: 'custom',
+          title: displayTitle,
+          message: cNotif.message,
+          date: cNotif.createdAt,
+          isRead: isViewingAsAdmin ? true : readNotificationIds.includes(notifId),
+          employeeId: cNotif.targetEmployeeId
+        });
+      }
+    });
+
     return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [cancellations, deadlines, currentMonth, isViewingAsAdmin, readNotificationIds, dismissedNotificationIds]);
+  }, [cancellations, deadlines, currentMonth, isViewingAsAdmin, readNotificationIds, dismissedNotificationIds, customNotificationsDocs, employees, simulationActive, simulatedEmployeeId]);
 
   const unreadNotificationsCount = useMemo(() => {
     return allNotifications.filter(n => !n.isRead).length;
   }, [allNotifications]);
+
+  const handleSendCustomNotification = async (data: {
+    title: string;
+    message: string;
+    targetType: 'all' | 'specific';
+    targetEmployeeId?: string;
+    targetEmployeeName?: string;
+  }) => {
+    if (!user || !db || !isViewingAsAdmin) {
+      return { success: false, error: 'Apenas administradores podem enviar notificações.' };
+    }
+
+    try {
+      const newNotif: CustomNotificationDoc = {
+        id: Date.now().toString() + '_' + Math.random().toString(36).substring(2, 7),
+        title: data.title,
+        message: data.message,
+        targetType: data.targetType,
+        ...(data.targetType === 'specific' && data.targetEmployeeId ? { targetEmployeeId: data.targetEmployeeId } : {}),
+        ...(data.targetType === 'specific' && data.targetEmployeeName ? { targetEmployeeName: data.targetEmployeeName } : {}),
+        createdAt: new Date().toISOString(),
+        createdBy: user.email || 'Admin'
+      };
+
+      const docRef = doc(db, 'settings', 'custom_notifications');
+      const docSnap = await getDoc(docRef);
+      let items: CustomNotificationDoc[] = [];
+      if (docSnap.exists()) {
+        items = docSnap.data().items || [];
+      }
+      // Adiciona no início e limita aos 25 mais recentes para otimizar custo e armazenamento no Firestore
+      items.unshift(newNotif);
+      if (items.length > 25) {
+        items = items.slice(0, 25);
+      }
+
+      await setDoc(docRef, { items }, { merge: true });
+      return { success: true };
+    } catch (err: any) {
+      console.error('Erro ao enviar notificação personalizada:', err);
+      return { success: false, error: err.message || 'Erro ao salvar notificação.' };
+    }
+  };
 
   const handleMarkNotificationRead = async (notifId: string) => {
     setReadNotificationIds(prev => Array.from(new Set([...prev, notifId])));
@@ -410,9 +550,20 @@ export default function App() {
 
   const handleDismissNotification = async (notifId: string) => {
     setDismissedNotificationIds(prev => Array.from(new Set([...prev, notifId])));
-    if (notifId.startsWith('cancellation_')) {
-      const cancellationId = notifId.replace('cancellation_', '');
-      await handleDismissCancellation(cancellationId);
+  };
+
+  const handleDeleteCustomNotification = async (customNotifId: string) => {
+    if (!db) return;
+    try {
+      const docRef = doc(db, 'settings', 'custom_notifications');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const items: CustomNotificationDoc[] = docSnap.data().items || [];
+        const updated = items.filter(i => i.id !== customNotifId);
+        await setDoc(docRef, { items: updated }, { merge: true });
+      }
+    } catch (err) {
+      console.error('Erro ao excluir notificação do histórico:', err);
     }
   };
 
@@ -728,7 +879,12 @@ export default function App() {
         const empSnap = await getDoc(empRef);
         if (empSnap.exists()) {
           const empData = empSnap.data() as Employee;
-          const updatedWorkDays = (empData.workDays || []).filter(d => d.date !== dateStr);
+          const updatedWorkDays = (empData.workDays || []).map(d => {
+            if (d.date === dateStr) {
+              return { ...d, cancellationDismissed: true };
+            }
+            return d;
+          });
           await updateDoc(empRef, { workDays: updatedWorkDays });
         }
       }
@@ -846,6 +1002,9 @@ export default function App() {
           onMarkNotificationRead={handleMarkNotificationRead}
           onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
           onDismissNotification={handleDismissNotification}
+          onOpenSendNotificationModal={() => setIsSendNotificationModalOpen(true)}
+          customNotificationsDocs={customNotificationsDocs}
+          onDeleteCustomNotification={handleDeleteCustomNotification}
           onNavigateToCalendar={() => {
             setSidebarTab('cancellations');
             setViewMode('calendar');
@@ -895,6 +1054,12 @@ export default function App() {
             </div>
           )}
         </main>
+        <SendNotificationModal
+          isOpen={isSendNotificationModalOpen}
+          onClose={() => setIsSendNotificationModalOpen(false)}
+          onSend={handleSendCustomNotification}
+          employees={employees}
+        />
         <PWAInstallPrompt />
       </div>
     );
@@ -931,6 +1096,9 @@ export default function App() {
         onMarkNotificationRead={handleMarkNotificationRead}
         onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
         onDismissNotification={handleDismissNotification}
+        onOpenSendNotificationModal={() => setIsSendNotificationModalOpen(true)}
+        customNotificationsDocs={customNotificationsDocs}
+        onDeleteCustomNotification={handleDeleteCustomNotification}
         onNavigateToCalendar={() => {
           setSidebarTab('cancellations');
           setViewMode('calendar');
@@ -1054,6 +1222,13 @@ export default function App() {
           onUpdateDays={handleUpdateDays}
         />
       )}
+
+      <SendNotificationModal
+        isOpen={isSendNotificationModalOpen}
+        onClose={() => setIsSendNotificationModalOpen(false)}
+        onSend={handleSendCustomNotification}
+        employees={employees}
+      />
       
       <PWAInstallPrompt />
     </div>
