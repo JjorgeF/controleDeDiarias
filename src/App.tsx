@@ -567,23 +567,42 @@ export default function App() {
     }
   };
 
-  // Native browser push notification trigger
+  // Native browser & mobile device notification trigger
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-      const unreadCancellationsList = allNotifications.filter(n => !n.isRead && n.type === 'cancellation');
-      if (unreadCancellationsList.length > 0) {
-        const lastUnread = unreadCancellationsList[0];
+      const unreadList = allNotifications.filter(n => !n.isRead);
+      if (unreadList.length > 0) {
+        const lastUnread = unreadList[0];
         const lastNotified = localStorage.getItem('last_notified_id');
         if (lastNotified !== lastUnread.id) {
-          try {
-            new Notification(lastUnread.title, {
-              body: lastUnread.message,
-              icon: '/logo.svg'
-            });
-            localStorage.setItem('last_notified_id', lastUnread.id);
-          } catch (e) {
-            console.error('Erro ao emitir notificação nativa:', e);
-          }
+          const emitDeviceNotification = async () => {
+            try {
+              // Prefer Service Worker showNotification for mobile notification bar support
+              if ('serviceWorker' in navigator) {
+                const reg = await navigator.serviceWorker.ready;
+                if (reg && reg.showNotification) {
+                  await reg.showNotification(lastUnread.title, {
+                    body: lastUnread.message,
+                    icon: '/logo.svg',
+                    badge: '/logo.svg',
+                    vibrate: [200, 100, 200],
+                    tag: lastUnread.id,
+                  } as NotificationOptions & { vibrate?: number[] });
+                  localStorage.setItem('last_notified_id', lastUnread.id);
+                  return;
+                }
+              }
+              // Fallback to standard Notification API
+              new Notification(lastUnread.title, {
+                body: lastUnread.message,
+                icon: '/logo.svg'
+              });
+              localStorage.setItem('last_notified_id', lastUnread.id);
+            } catch (e) {
+              console.error('Erro ao emitir notificação nativa:', e);
+            }
+          };
+          emitDeviceNotification();
         }
       }
     }
