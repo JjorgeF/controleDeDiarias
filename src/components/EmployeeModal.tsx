@@ -1,7 +1,8 @@
-import React from 'react';
-import { X, AlertCircle, Trash2, ArrowRight, Calendar, Sparkles } from 'lucide-react';
+import React, { useRef } from 'react';
+import { X, AlertCircle, Trash2, ArrowRight, Calendar, Sparkles, Camera, User } from 'lucide-react';
 import { Employee, EmployeeLevel } from '../types';
 import { recalculateEmployeeTimeline, LEVEL_RATES } from '../utils/promotionUtils';
+import { compressProfileImage } from '../utils/imageCompressor';
 
 interface EmployeeModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ const LEVELS: EmployeeLevel[] = ['Trainee', 'Aprendiz', 'Coordenador(a)', 'Recre
 export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, employee }: EmployeeModalProps) {
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = React.useState<Partial<Employee>>({
     name: '',
     artisticName: '',
@@ -117,6 +119,44 @@ export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, emplo
               <p className="text-red-500 text-sm font-medium">{error}</p>
             </div>
           )}
+
+          {/* Photo Picker */}
+          <div className="flex flex-col items-center justify-center mb-2">
+            <div 
+              className="relative group cursor-pointer"
+              onClick={() => fileInputRef.current?.click()}
+              title="Clique para escolher/alterar a foto do perfil"
+            >
+              <div className="w-20 h-20 rounded-full bg-brand-bg border-2 border-brand-primary/40 overflow-hidden flex items-center justify-center text-brand-primary text-xl font-bold shadow-md group-hover:border-brand-primary transition-all">
+                {formData.photoUrl ? (
+                  <img src={formData.photoUrl} alt="Foto do perfil" className="w-full h-full object-cover" />
+                ) : (
+                  <span>{(formData.artisticName || formData.name || 'R').substring(0, 2).toUpperCase()}</span>
+                )}
+              </div>
+              <div className="absolute bottom-0 right-0 bg-brand-primary text-brand-bg p-1.5 rounded-full shadow-md group-hover:scale-110 transition-transform">
+                <Camera size={14} />
+              </div>
+            </div>
+            <input 
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  const compressed = await compressProfileImage(file, 350, 0.8);
+                  setFormData(prev => ({ ...prev, photoUrl: compressed }));
+                } catch (err) {
+                  console.error('Erro ao comprimir foto:', err);
+                  setError('Erro ao processar a foto. Tente outra imagem.');
+                }
+              }}
+            />
+            <p className="text-[11px] text-gray-400 mt-1.5">Clique na foto para alterar ou adicionar</p>
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-1">Nome</label>
