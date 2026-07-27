@@ -1411,16 +1411,13 @@ export default function CalendarView({
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                       {availablesMarked.map(emp => {
                         const config = getDayConfig(selectedDayStr);
-                        const isDispCommon = emp.availabilities?.includes(selectedDayStr) || emp.availabilities?.includes(`${selectedDayStr}_common`);
-                        const isDispParty = emp.availabilities?.includes(`${selectedDayStr}_party`);
+                        const isDispCommon = config.isCommon !== false && 
+                          (emp.availabilities?.includes(selectedDayStr) || emp.availabilities?.includes(`${selectedDayStr}_common`));
+                        const isDispParty = !!config.isParty && 
+                          (emp.availabilities?.includes(`${selectedDayStr}_party`) || emp.availabilities?.some(a => a.startsWith(`${selectedDayStr}_party`)));
 
-                        let showCcspBtn = config.isCommon !== false && isDispCommon;
-                        let showPartyBtn = !!config.isParty && isDispParty;
-
-                        if (!showCcspBtn && !showPartyBtn) {
-                          if (config.isCommon !== false) showCcspBtn = true;
-                          if (!!config.isParty) showPartyBtn = true;
-                        }
+                        const showCcspBtn = isDispCommon;
+                        const showPartyBtn = isDispParty;
 
                         return (
                           <motion.div 
@@ -1442,7 +1439,19 @@ export default function CalendarView({
                               </div>
                               <div className="min-w-0 flex-1">
                                 <p className="text-xs font-bold text-brand-text truncate">{emp.artisticName || emp.name}</p>
-                                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase truncate">{emp.level}</p>
+                                <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase truncate">{emp.level}</span>
+                                  {isDispCommon && (
+                                    <span className="text-[9px] font-extrabold bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded flex items-center gap-0.5">
+                                      ✓ CCSP
+                                    </span>
+                                  )}
+                                  {isDispParty && (
+                                    <span className="text-[9px] font-extrabold bg-purple-500/20 text-purple-600 dark:text-purple-300 border border-purple-500/30 px-1.5 py-0.2 rounded flex items-center gap-0.5">
+                                      ✓ Festa
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                             
@@ -1453,6 +1462,7 @@ export default function CalendarView({
                                   whileTap={{ scale: 0.95 }}
                                   onClick={() => toggleWorkDayType(emp, selectedDay!, 'common')}
                                   className="text-[10px] font-black bg-brand-primary/10 hover:bg-brand-primary text-brand-primary hover:text-brand-bg px-2.5 py-1 rounded-lg border border-brand-primary/30 hover:border-transparent transition-colors flex items-center gap-1 uppercase"
+                                  title="Escalar para CCSP (Optado pelo recreador)"
                                 >
                                   <UserPlus size={12} />
                                   CCSP
@@ -1464,6 +1474,7 @@ export default function CalendarView({
                                   whileTap={{ scale: 0.95 }}
                                   onClick={() => toggleWorkDayType(emp, selectedDay!, 'party')}
                                   className="text-[10px] font-black bg-purple-500/10 hover:bg-purple-500 text-purple-600 dark:text-purple-300 hover:text-white px-2.5 py-1 rounded-lg border border-purple-500/30 hover:border-transparent transition-colors flex items-center gap-1 uppercase"
+                                  title="Escalar para Festa (Optado pelo recreador)"
                                 >
                                   <UserPlus size={12} />
                                   Festa
