@@ -563,50 +563,99 @@ export default function DayManagementModal({
                       Disponíveis para este dia ({availableMarked.length})
                     </h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {availableMarked.map(emp => (
-                        <div 
-                          key={emp.id} 
-                          className="flex items-center justify-between bg-emerald-950/20 border border-emerald-500/30 p-2.5 rounded-xl gap-2 transition-all hover:border-emerald-500/50"
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                            <div className="w-7 h-7 rounded-full bg-emerald-500/20 shrink-0 overflow-hidden flex items-center justify-center text-[10px] font-bold text-emerald-400 border border-emerald-500/30 shadow-sm">
-                              {emp.photoUrl ? (
-                                <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
+                      {availableMarked.map(emp => {
+                        const isDispCommon = (dayConfig.isCommon !== false) && 
+                          (emp.availabilities?.includes(selectedDayStr) || emp.availabilities?.includes(`${selectedDayStr}_common`));
+
+                        const isDispPartyGeneral = emp.availabilities?.includes(`${selectedDayStr}_party`);
+
+                        const hasSpecificPartyAvail = (partyId: string) => {
+                          return isDispPartyGeneral || emp.availabilities?.includes(`${selectedDayStr}_party_${partyId}`);
+                        };
+
+                        const hasAnyPartyAvail = isDispPartyGeneral || emp.availabilities?.some(a => a.startsWith(`${selectedDayStr}_party`));
+
+                        const activePartyButtons = normalizedParties.filter(party => hasSpecificPartyAvail(party.id));
+
+                        return (
+                          <div 
+                            key={emp.id} 
+                            className="flex items-center justify-between bg-emerald-950/20 border border-emerald-500/30 p-2.5 rounded-xl gap-2 transition-all hover:border-emerald-500/50"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              <div className="w-7 h-7 rounded-full bg-emerald-500/20 shrink-0 overflow-hidden flex items-center justify-center text-[10px] font-bold text-emerald-400 border border-emerald-500/30 shadow-sm">
+                                {emp.photoUrl ? (
+                                  <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  <span>{(emp.artisticName || emp.name).substring(0, 2).toUpperCase()}</span>
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-bold text-white truncate">{emp.artisticName || emp.name}</p>
+                                <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                                  <span className="text-[10px] text-emerald-400 font-bold uppercase truncate">{emp.level}</span>
+                                  {isDispCommon && (
+                                    <span className="text-[9px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded flex items-center gap-0.5">
+                                      ✓ CCSP
+                                    </span>
+                                  )}
+                                  {normalizedParties.length > 0 ? (
+                                    activePartyButtons.map(p => (
+                                      <span key={p.id} className="text-[9px] font-extrabold bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.2 rounded flex items-center gap-0.5 truncate max-w-[120px]" title={`Disponível para ${p.name}`}>
+                                        ✓ {p.name}
+                                      </span>
+                                    ))
+                                  ) : (
+                                    hasAnyPartyAvail && (
+                                      <span className="text-[9px] font-extrabold bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.2 rounded flex items-center gap-0.5">
+                                        ✓ Festa
+                                      </span>
+                                    )
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex flex-wrap items-center gap-1 shrink-0">
+                              {isDispCommon && (
+                                <button 
+                                  onClick={() => assignEmployee(emp, 'common')}
+                                  className="text-[10px] font-black bg-brand-primary/10 hover:bg-brand-primary text-brand-primary hover:text-brand-bg px-2 py-1 rounded-lg border border-brand-primary/30 transition-all flex items-center gap-1 uppercase"
+                                  title="Escalar para CCSP (Optado pelo recreador)"
+                                >
+                                  <UserPlus size={12} />
+                                  CCSP
+                                </button>
+                              )}
+
+                              {normalizedParties.length > 0 ? (
+                                activePartyButtons.map(party => (
+                                  <button 
+                                    key={party.id}
+                                    onClick={() => assignEmployee(emp, 'party', party)}
+                                    className="text-[10px] font-black bg-purple-500/10 hover:bg-purple-500 text-purple-300 hover:text-white px-2 py-1 rounded-lg border border-purple-500/30 transition-all flex items-center gap-1 uppercase max-w-[130px] truncate"
+                                    title={`Escalar para ${party.name} (Optado pelo recreador)`}
+                                  >
+                                    <UserPlus size={12} />
+                                    <span className="truncate">{party.name}</span>
+                                  </button>
+                                ))
                               ) : (
-                                <span>{(emp.artisticName || emp.name).substring(0, 2).toUpperCase()}</span>
+                                hasAnyPartyAvail && dayConfig.isParty && (
+                                  <button 
+                                    onClick={() => assignEmployee(emp, 'party', { id: 'default_party', name: 'Festa' })}
+                                    className="text-[10px] font-black bg-purple-500/10 hover:bg-purple-500 text-purple-300 hover:text-white px-2 py-1 rounded-lg border border-purple-500/30 transition-all flex items-center gap-1 uppercase"
+                                    title="Escalar para Festa (Optado pelo recreador)"
+                                  >
+                                    <UserPlus size={12} />
+                                    Festa
+                                  </button>
+                                )
                               )}
                             </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-bold text-white truncate">{emp.artisticName || emp.name}</p>
-                              <p className="text-[10px] text-emerald-400 font-bold uppercase truncate">{emp.level}</p>
-                            </div>
                           </div>
-                          
-                          <div className="flex flex-wrap items-center gap-1 shrink-0">
-                            {dayConfig.isCommon !== false && (
-                              <button 
-                                onClick={() => assignEmployee(emp, 'common')}
-                                className="text-[10px] font-black bg-brand-primary/10 hover:bg-brand-primary text-brand-primary hover:text-brand-bg px-2 py-1 rounded-lg border border-brand-primary/30 transition-all flex items-center gap-1 uppercase"
-                              >
-                                <UserPlus size={12} />
-                                CCSP
-                              </button>
-                            )}
-
-                            {normalizedParties.map(party => (
-                              <button 
-                                key={party.id}
-                                onClick={() => assignEmployee(emp, 'party', party)}
-                                className="text-[10px] font-black bg-purple-500/10 hover:bg-purple-500 text-purple-300 hover:text-white px-2 py-1 rounded-lg border border-purple-500/30 transition-all flex items-center gap-1 uppercase max-w-[130px] truncate"
-                                title={`Escalar para ${party.name}`}
-                              >
-                                <UserPlus size={12} />
-                                <span className="truncate">{party.name}</span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
 
                       {availableMarked.length === 0 && (
                         <p className="text-xs text-gray-500 italic py-2 col-span-full">Ninguém sinalizou disponibilidade para este dia.</p>
