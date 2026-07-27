@@ -1096,8 +1096,8 @@ export default function App() {
                   onClick={() => setEmployeeActiveTab('schedule')}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all ${
                     employeeActiveTab === 'schedule'
-                      ? 'bg-brand-primary text-brand-bg shadow-md'
-                      : 'bg-brand-card hover:bg-brand-primary/10 text-gray-400 hover:text-brand-text border border-brand-border'
+                      ? 'bg-brand-primary text-slate-900 shadow-md'
+                      : 'bg-brand-card hover:bg-brand-primary/10 text-gray-700 dark:text-gray-300 hover:text-brand-text border border-brand-border'
                   }`}
                 >
                   <Calendar size={18} />
@@ -1107,8 +1107,8 @@ export default function App() {
                   onClick={() => setEmployeeActiveTab('story')}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all ${
                     employeeActiveTab === 'story'
-                      ? 'bg-brand-primary text-brand-bg shadow-md'
-                      : 'bg-brand-card hover:bg-brand-primary/10 text-gray-400 hover:text-brand-text border border-brand-border'
+                      ? 'bg-brand-primary text-slate-900 shadow-md'
+                      : 'bg-brand-card hover:bg-brand-primary/10 text-gray-700 dark:text-gray-300 hover:text-brand-text border border-brand-border'
                   }`}
                 >
                   <Award size={18} />
