@@ -74,3 +74,18 @@
     background: var(--scrollbar-thumb-hover) !important;
   }
 }
+
+@keyframes borderGlowSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-card-beam {
+  animation: borderGlowSpin 5s linear infinite;
+}
+
+

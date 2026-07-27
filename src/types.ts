@@ -2,9 +2,24 @@ export type EmployeeLevel = 'Trainee' | 'Aprendiz' | 'Coordenador(a)' | 'Recread
 
 export type DayType = 'common' | 'party';
 
+export interface PartyConfig {
+  id: string;
+  name: string;
+  time?: string;
+}
+
+export interface DayConfig {
+  isCommon: boolean;
+  isParty?: boolean;
+  partyTime?: string;
+  parties?: PartyConfig[];
+}
+
 export interface WorkDay {
   date: string; // ISO string YYYY-MM-DD
   type: DayType;
+  partyId?: string;
+  partyName?: string;
   extraHours?: number;
   isCancelled?: boolean;
   cancelledAt?: string;
@@ -41,6 +56,8 @@ export interface Employee {
   email?: string; // Access email for the employee
   promotions?: Promotion[];
   promotionEffectiveDate?: string;
+  startDate?: string; // YYYY-MM-DD date when employee joined
+  photoUrl?: string; // Base64 compressed profile photo or URL
 }
 
 export type ViewMode = 'grid' | 'list' | 'calendar' | 'dashboard';

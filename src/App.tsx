@@ -12,9 +12,9 @@ import {
   getDocs,
   setDoc
 } from 'firebase/firestore';
-import { onAuthStateChanged, User, signInWithPopup } from 'firebase/auth';
+import { onAuthStateChanged, User, signInWithPopup, getRedirectResult } from 'firebase/auth';
 import { auth, db, googleProvider, isFirebaseConfigured, handleFirestoreError, OperationType } from './lib/firebase';
-import { Employee, ViewMode, WorkDay, CancellationLog, Promotion, AppNotification, CustomNotificationDoc } from './types';
+import { Employee, ViewMode, WorkDay, CancellationLog, Promotion, AppNotification, CustomNotificationDoc, DayConfig } from './types';
 import { recalculateEmployeeTimeline } from './utils/promotionUtils';
 import Header from './components/Header';
 import EmployeeCard from './components/EmployeeCard';
@@ -25,9 +25,11 @@ import EmployeeModal from './components/EmployeeModal';
 import ManageDaysModal from './components/ManageDaysModal';
 import SendNotificationModal from './components/SendNotificationModal';
 import SimulationBanner from './components/SimulationBanner';
+import EmployeeStoryView from './components/EmployeeStoryView';
+import InAppBrowserGuide, { isInAppBrowser } from './components/InAppBrowserGuide';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import Logo from './components/Logo';
-import { LogIn, AlertTriangle } from 'lucide-react';
+import { LogIn, AlertTriangle, Calendar, Award, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format, isSameMonth, parseISO, eachDayOfInterval, startOfMonth, endOfMonth, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -44,7 +46,7 @@ export default function App() {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [deadlines, setDeadlines] = useState<Record<string, string>>({}); // Key: "yyyy-MM", Value: "yyyy-MM-ddTHH:mm"
-  const [dayConfigs, setDayConfigs] = useState<Record<string, { isCommon: boolean; isParty: boolean; partyTime?: string }>>({});
+  const [dayConfigs, setDayConfigs] = useState<Record<string, DayConfig>>({});
   const [sidebarTab, setSidebarTab] = useState<'availabilities' | 'cancellations'>('availabilities');
   
   // Estado para simulação de papéis (Role simulation)
@@ -56,10 +58,21 @@ export default function App() {
 
   const isViewingAsAdmin = isAdmin && (!isSimulationEnabled || !simulationActive);
 
-  // Modals state
+  // Modals & Navigation state
+  const [employeeActiveTab, setEmployeeActiveTab] = useState<'schedule' | 'story'>('schedule');
+  const [selectedStoryEmployee, setSelectedStoryEmployee] = useState<Employee | null>(null);
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
   const [isManageDaysModalOpen, setIsManageDaysModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | undefined>(undefined);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (auth) {
+      getRedirectResult(auth).catch((err) => {
+        console.warn("Segurança de redirecionamento do Firebase Auth capturada:", err);
+      });
+    }
+  }, []);
 
   useEffect(() => {
     if (!db || !user) return;
@@ -79,7 +92,7 @@ export default function App() {
     if (!db || !user) return;
     const unsub = onSnapshot(doc(db, 'settings', 'dayConfigs'), (snapshot) => {
       if (snapshot.exists()) {
-        setDayConfigs(snapshot.data() as Record<string, { isCommon: boolean; isParty: boolean; partyTime?: string }>);
+        setDayConfigs(snapshot.data() as Record<string, DayConfig>);
       } else {
         setDayConfigs({});
       }
@@ -259,6 +272,12 @@ export default function App() {
         id: doc.id,
         ...doc.data()
       })) as Employee[];
+
+      emps.sort((a, b) => {
+        const nameA = a.artisticName || a.name || '';
+        const nameB = b.artisticName || b.name || '';
+        return nameA.localeCompare(nameB, 'pt-BR', { sensitivity: 'base' });
+      });
       
       setEmployees(emps);
       setEmployeesLoading(false);
@@ -285,10 +304,16 @@ export default function App() {
   }, [user, isAdmin, adminCheckLoading, db]);
 
   const filteredEmployees = useMemo(() => {
-    return employees.filter(emp => 
-      emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      emp.artisticName.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    return employees
+      .filter(emp => 
+        emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        emp.artisticName.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+      .sort((a, b) => {
+        const nameA = a.artisticName || a.name || '';
+        const nameB = b.artisticName || b.name || '';
+        return nameA.localeCompare(nameB, 'pt-BR', { sensitivity: 'base' });
+      });
   }, [employees, searchQuery]);
 
   const cancellations = useMemo(() => {
@@ -567,6 +592,22 @@ export default function App() {
     }
   };
 
+  const handleUpdatePhoto = async (employeeId: string, photoUrl: string) => {
+    if (!db) return;
+    try {
+      const empRef = doc(db, 'employees', employeeId);
+      await updateDoc(empRef, { photoUrl });
+
+      setEmployees(prev => prev.map(emp => emp.id === employeeId ? { ...emp, photoUrl } : emp));
+      if (selectedStoryEmployee?.id === employeeId) {
+        setSelectedStoryEmployee(prev => prev ? { ...prev, photoUrl } : null);
+      }
+    } catch (error: any) {
+      console.error("Erro ao atualizar foto de perfil:", error);
+      handleFirestoreError(error, OperationType.UPDATE, 'employees');
+    }
+  };
+
   // Native browser & mobile device notification trigger
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
@@ -819,7 +860,7 @@ export default function App() {
     }
   };
 
-  const handleUpdateDayConfig = async (dateStr: string, config: { isCommon: boolean; isParty: boolean; partyTime?: string }) => {
+  const handleUpdateDayConfig = async (dateStr: string, config: DayConfig) => {
     if (!db) return;
     try {
       const docRef = doc(db, 'settings', 'dayConfigs');
@@ -914,6 +955,7 @@ export default function App() {
 
   const handleLogin = async () => {
     if (!auth) return;
+    setAuthError(null);
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (error: any) {
@@ -927,6 +969,11 @@ export default function App() {
         console.log("Login cancelado pelo usuário ou janela fechada.");
       } else {
         console.error("Login error:", error);
+        if (isInAppBrowser()) {
+          setAuthError("O login do Google foi bloqueado pelo navegador do WhatsApp/Instagram. Por favor, copie o link acima e abra direto no Safari ou Chrome.");
+        } else {
+          setAuthError("Não foi possível conectar com o Google (" + (error.message || "Erro de conexão") + "). Tente abrir no Chrome ou Safari.");
+        }
       }
     }
   };
@@ -960,24 +1007,34 @@ export default function App() {
   if (!user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-brand-bg p-4">
-        <div className="bg-brand-card border border-brand-border p-8 rounded-2xl shadow-2xl max-w-md w-full text-center flex flex-col items-center">
+        <div className="bg-brand-card border border-brand-border p-6 md:p-8 rounded-2xl shadow-2xl max-w-md w-full text-center flex flex-col items-center">
           <div className="mb-6 flex justify-center">
             <Logo size={96} />
           </div>
           <h1 className="text-2xl md:text-4xl font-black text-brand-primary mb-2">
             Liga Positiva{isSimulationEnabled ? ' Dev2' : ''}
           </h1>
-          <p className="text-gray-400 mb-8">Administração de Recreadores</p>
+          <p className="text-gray-400 mb-6">Administração de Recreadores</p>
           
+          {/* Guia de Navegador In-App (WhatsApp/Instagram) */}
+          <InAppBrowserGuide />
+
+          {authError && (
+            <div className="w-full my-3 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-300 text-left flex items-start gap-2">
+              <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
+              <span>{authError}</span>
+            </div>
+          )}
+
           <button 
             onClick={handleLogin}
-            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-900 font-bold py-4 px-6 rounded-xl transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-900 font-bold py-4 px-6 rounded-xl transition-all transform hover:scale-[1.02] active:scale-[0.98] mt-2 shadow-lg"
           >
             <LogIn size={20} />
             Entrar com Google
           </button>
           
-          <p className="mt-2 text-xs text-gray-500">Todo e qualquer problema contate o administrador (Cacheado)</p>
+          <p className="mt-4 text-xs text-gray-500">Todo e qualquer problema contate o administrador (Cacheado)</p>
           <p className="mt-1 text-xs text-gray-500">
             Ao entrar, você concorda com nossos termos de serviço.
           </p>
@@ -1032,39 +1089,79 @@ export default function App() {
 
         <main className="w-full mx-auto px-2 md:px-4 py-4 md:py-8 max-w-4xl">
           {myEmployeeRecord ? (
-            <div className="space-y-6 md:space-y-8">
-              <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start">
-                <div className="w-full md:w-1/3">
-                  <EmployeeCard 
-                    employee={myEmployeeRecord}
-                    onEdit={() => {}}
-                    onManageDays={() => {}}
-                    currentMonth={currentMonth}
-                    isReadOnly={true}
-                  />
-                </div>
-                <div className="w-full md:w-2/3 space-y-4">
-                  <h2 className="text-lg md:text-xl font-black text-brand-text mb-2">Meu Calendário de Trabalho / Disponibilidade</h2>
-                  <CalendarView 
-                    employees={[myEmployeeRecord]} // Pass the simulated employee as the single record
-                    onUpdateDays={() => {}}
-                    currentMonth={currentMonth}
-                    setCurrentMonth={setCurrentMonth}
-                    isReadOnly={false}
-                    isAdmin={false}
-                    deadlines={deadlines}
-                    onUpdateAvailabilities={handleUpdateAvailabilities}
-                    dayConfigs={dayConfigs}
-                    onUpdateDayConfig={handleUpdateDayConfig}
-                    onCancelWorkDay={handleCancelWorkDay}
-                    cancellations={cancellations}
-                    onDismissCancellation={handleDismissCancellation}
-                    onMarkCancellationRead={handleMarkCancellationRead}
-                    sidebarTab={sidebarTab}
-                    onSidebarTabChange={setSidebarTab}
-                  />
-                </div>
+            <div className="space-y-6">
+              {/* Navegação de Abas da Interface do Funcionário */}
+              <div className="flex items-center gap-2 border-b border-brand-border pb-3">
+                <button
+                  onClick={() => setEmployeeActiveTab('schedule')}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all ${
+                    employeeActiveTab === 'schedule'
+                      ? 'bg-brand-primary text-brand-bg shadow-md'
+                      : 'bg-brand-card hover:bg-brand-primary/10 text-gray-400 hover:text-brand-text border border-brand-border'
+                  }`}
+                >
+                  <Calendar size={18} />
+                  Meu Calendário & Disponibilidade
+                </button>
+                <button
+                  onClick={() => setEmployeeActiveTab('story')}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all ${
+                    employeeActiveTab === 'story'
+                      ? 'bg-brand-primary text-brand-bg shadow-md'
+                      : 'bg-brand-card hover:bg-brand-primary/10 text-gray-400 hover:text-brand-text border border-brand-border'
+                  }`}
+                >
+                  <Award size={18} />
+                  Minha História
+                </button>
               </div>
+
+              {employeeActiveTab === 'schedule' ? (
+                <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start">
+                  <div className="w-full md:w-1/3">
+                    <EmployeeCard 
+                      employee={myEmployeeRecord}
+                      onEdit={() => {}}
+                      onManageDays={() => {}}
+                      onViewStory={() => setEmployeeActiveTab('story')}
+                      currentMonth={currentMonth}
+                      isReadOnly={true}
+                    />
+                  </div>
+                  <div className="w-full md:w-2/3 space-y-4">
+                    <h2 className="text-lg md:text-xl font-black text-brand-text mb-2">Meu Calendário de Trabalho / Disponibilidade</h2>
+                    <CalendarView 
+                      employees={[myEmployeeRecord]} // Pass the simulated employee as the single record
+                      onUpdateDays={() => {}}
+                      currentMonth={currentMonth}
+                      setCurrentMonth={setCurrentMonth}
+                      isReadOnly={false}
+                      isAdmin={false}
+                      deadlines={deadlines}
+                      onUpdateAvailabilities={handleUpdateAvailabilities}
+                      dayConfigs={dayConfigs}
+                      onUpdateDayConfig={handleUpdateDayConfig}
+                      onCancelWorkDay={handleCancelWorkDay}
+                      cancellations={cancellations}
+                      onDismissCancellation={handleDismissCancellation}
+                      onMarkCancellationRead={handleMarkCancellationRead}
+                      sidebarTab={sidebarTab}
+                      onSidebarTabChange={setSidebarTab}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <EmployeeStoryView 
+                  employee={myEmployeeRecord}
+                  isAdmin={isAdmin}
+                  onEditEmployee={() => {
+                    setSelectedEmployee(myEmployeeRecord);
+                    setIsEmployeeModalOpen(true);
+                  }}
+                  onUpdatePhoto={(photoUrl) => handleUpdatePhoto(myEmployeeRecord.id, photoUrl)}
+                  canEditPhoto={true}
+                />
+              )}
             </div>
           ) : (
             <div className="py-20 text-center">
@@ -1168,6 +1265,7 @@ export default function App() {
                   setSelectedEmployee(e);
                   setIsManageDaysModalOpen(true);
                 }}
+                onViewStory={(e) => setSelectedStoryEmployee(e)}
                 currentMonth={currentMonth}
               />
             ))}
@@ -1190,6 +1288,7 @@ export default function App() {
               setSelectedEmployee(e);
               setIsManageDaysModalOpen(true);
             }}
+            onViewStory={(e) => setSelectedStoryEmployee(e)}
             currentMonth={currentMonth}
             setCurrentMonth={setCurrentMonth}
           />
@@ -1240,6 +1339,33 @@ export default function App() {
           employee={selectedEmployee}
           onUpdateDays={handleUpdateDays}
         />
+      )}
+
+      {/* Modal de História do Funcionário */}
+      {selectedStoryEmployee && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md overflow-y-auto">
+          <div className="bg-brand-card border border-brand-border w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden my-8 p-6 relative max-h-[90vh] overflow-y-auto">
+            <button 
+              onClick={() => setSelectedStoryEmployee(null)}
+              className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white bg-black/40 rounded-full z-20 hover:bg-black/60 transition-colors"
+              title="Fechar"
+            >
+              <X size={20} />
+            </button>
+            <EmployeeStoryView 
+              employee={selectedStoryEmployee} 
+              isAdmin={isViewingAsAdmin}
+              onEditEmployee={() => {
+                const emp = selectedStoryEmployee;
+                setSelectedStoryEmployee(null);
+                setSelectedEmployee(emp);
+                setIsEmployeeModalOpen(true);
+              }}
+              onUpdatePhoto={(photoUrl) => handleUpdatePhoto(selectedStoryEmployee.id, photoUrl)}
+              canEditPhoto={true}
+            />
+          </div>
+        </div>
       )}
 
       <SendNotificationModal
