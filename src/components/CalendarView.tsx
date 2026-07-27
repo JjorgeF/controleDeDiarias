@@ -554,11 +554,12 @@ export default function CalendarView({
         let newAvailabilities: string[];
         
         if (config.isParty) {
-          const hasParty = currentAvailabilities.includes(`${dayStr}_party`);
+          const hasParty = currentAvailabilities.some(d => d.startsWith(`${dayStr}_party`));
           if (hasParty) {
-            newAvailabilities = currentAvailabilities.filter(d => d !== `${dayStr}_party`);
+            newAvailabilities = currentAvailabilities.filter(d => !d.startsWith(`${dayStr}_party`));
           } else {
-            newAvailabilities = [...currentAvailabilities, `${dayStr}_party`];
+            const clean = currentAvailabilities.filter(d => !d.startsWith(`${dayStr}_party`));
+            newAvailabilities = [...clean, `${dayStr}_party`];
           }
         } else {
           // Common day (default)
@@ -566,10 +567,13 @@ export default function CalendarView({
           if (hasCommon) {
             newAvailabilities = currentAvailabilities.filter(d => d !== dayStr && d !== `${dayStr}_common`);
           } else {
-            newAvailabilities = [...currentAvailabilities, `${dayStr}_common`];
+            const clean = currentAvailabilities.filter(d => d !== dayStr && d !== `${dayStr}_common`);
+            newAvailabilities = [...clean, `${dayStr}_common`];
           }
         }
         
+        newAvailabilities = Array.from(new Set(newAvailabilities));
+
         if (onUpdateAvailabilities) {
           onUpdateAvailabilities(myEmployee.id, newAvailabilities);
         }
@@ -579,19 +583,19 @@ export default function CalendarView({
 
   const employeesWithAvailabilitiesCount = React.useMemo(() => {
     return employees.map(emp => {
-      const count = emp.availabilities?.filter(dateStr => {
-        if (!dateStr.startsWith(currentMonthKey)) return false;
-        if (dateStr.startsWith('login_')) return false;
-        
-        const datePart = dateStr.includes('_') ? dateStr.split('_')[0] : dateStr;
-        const config = getDayConfig(datePart);
-        const isPartyAvail = dateStr.endsWith('_party');
-        if (isPartyAvail) {
-          return config.isParty;
-        } else {
-          return config.isCommon;
-        }
-      }).length || 0;
+      let count = 0;
+      const monthAvailStrings = emp.availabilities?.filter(str => str.startsWith(currentMonthKey) && !str.startsWith('login_')) || [];
+      const uniqueDates = Array.from(new Set(monthAvailStrings.map(s => s.split('_')[0])));
+
+      uniqueDates.forEach(dateStr => {
+        const config = getDayConfig(dateStr);
+        const hasCommon = monthAvailStrings.some(s => s === dateStr || s === `${dateStr}_common`);
+        const hasParty = monthAvailStrings.some(s => s.startsWith(`${dateStr}_party`));
+
+        if (hasCommon && config.isCommon) count++;
+        if (hasParty && config.isParty) count++;
+      });
+
       return { ...emp, availabilitiesCount: count };
     }).sort((a, b) => b.availabilitiesCount - a.availabilitiesCount);
   }, [employees, currentMonthKey, dayConfigs]);
@@ -1811,7 +1815,8 @@ export default function CalendarView({
                       onChange={(e) => {
                         let newAvail: string[];
                         if (e.target.checked) {
-                          newAvail = [...currentAvailabilities, `${dateStr}_common`];
+                          const clean = currentAvailabilities.filter(d => d !== dateStr && d !== `${dateStr}_common`);
+                          newAvail = Array.from(new Set([...clean, `${dateStr}_common`]));
                         } else {
                           newAvail = currentAvailabilities.filter(d => d !== dateStr && d !== `${dateStr}_common`);
                         }
@@ -1864,9 +1869,10 @@ export default function CalendarView({
                             onChange={(e) => {
                               let newAvail: string[];
                               if (e.target.checked) {
-                                newAvail = [...currentAvailabilities, partyKey, `${dateStr}_party`];
+                                const clean = currentAvailabilities.filter(d => d !== partyKey && d !== `${dateStr}_party` && !d.startsWith(`${dateStr}_party_`));
+                                newAvail = Array.from(new Set([...clean, `${dateStr}_party`]));
                               } else {
-                                newAvail = currentAvailabilities.filter(d => d !== partyKey && d !== `${dateStr}_party`);
+                                newAvail = currentAvailabilities.filter(d => d !== partyKey && d !== `${dateStr}_party` && !d.startsWith(`${dateStr}_party_`));
                               }
                               if (onUpdateAvailabilities) {
                                 onUpdateAvailabilities(myEmployee.id, newAvail);
