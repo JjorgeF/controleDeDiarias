@@ -1293,49 +1293,58 @@ export default function CalendarView({
                           className="bg-brand-primary/5 border border-brand-primary/20 px-3 py-2.5 rounded-xl transition-colors hover:border-brand-primary/40 group"
                         >
                           <div className="flex items-center justify-between gap-2">
-                            <div className="cursor-pointer min-w-0 flex-1" onClick={() => setExpandedEmployeeId(isExpanded ? null : emp.id)}>
-                              <div className="flex items-center gap-2">
-                                <p className="text-xs font-bold text-brand-text truncate group-hover:text-brand-primary transition-colors">{emp.artisticName || emp.name}</p>
-                                <span className="text-[10px] text-brand-primary font-black uppercase shrink-0">{emp.level}</span>
+                            <div className="cursor-pointer min-w-0 flex-1 flex items-center gap-2.5" onClick={() => setExpandedEmployeeId(isExpanded ? null : emp.id)}>
+                              <div className="w-8 h-8 rounded-full bg-brand-primary/20 shrink-0 overflow-hidden flex items-center justify-center text-xs font-bold text-brand-primary border border-brand-primary/30 shadow-sm">
+                                {emp.photoUrl ? (
+                                  <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  <span>{(emp.artisticName || emp.name).substring(0, 2).toUpperCase()}</span>
+                                )}
                               </div>
-                              
-                              <div className="flex items-center gap-1 mt-1">
-                                {config.isCommon !== false && (
-                                  <motion.button
-                                    whileHover={{ scale: 1.05 }}
-                                    whileTap={{ scale: 0.95 }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleWorkDayType(emp, selectedDay!, 'common');
-                                    }}
-                                    className={cn(
-                                      "text-[9px] font-black px-2 py-0.5 rounded transition-all uppercase flex items-center gap-1",
-                                      hasCommon 
-                                        ? "bg-brand-primary text-brand-bg shadow-sm" 
-                                        : "bg-brand-bg text-gray-400 border border-brand-border hover:border-brand-primary/40"
-                                    )}
-                                  >
-                                    CCSP
-                                  </motion.button>
-                                )}
-                                {!!config.isParty && (
-                                  <motion.button
-                                    whileHover={{ scale: 1.05 }}
-                                    whileTap={{ scale: 0.95 }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleWorkDayType(emp, selectedDay!, 'party');
-                                    }}
-                                    className={cn(
-                                      "text-[9px] font-black px-2 py-0.5 rounded transition-all uppercase flex items-center gap-1",
-                                      hasParty 
-                                        ? "bg-purple-500 text-white shadow-sm" 
-                                        : "bg-brand-bg text-gray-400 border border-brand-border hover:border-purple-500/40"
-                                    )}
-                                  >
-                                    Festa
-                                  </motion.button>
-                                )}
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <p className="text-xs font-bold text-brand-text truncate group-hover:text-brand-primary transition-colors">{emp.artisticName || emp.name}</p>
+                                  <span className="text-[10px] text-brand-primary font-black uppercase shrink-0">{emp.level}</span>
+                                </div>
+                                
+                                <div className="flex items-center gap-1 mt-1">
+                                  {config.isCommon !== false && (
+                                    <motion.button
+                                      whileHover={{ scale: 1.05 }}
+                                      whileTap={{ scale: 0.95 }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleWorkDayType(emp, selectedDay!, 'common');
+                                      }}
+                                      className={cn(
+                                        "text-[9px] font-black px-2 py-0.5 rounded transition-all uppercase flex items-center gap-1",
+                                        hasCommon 
+                                          ? "bg-brand-primary text-brand-bg shadow-sm" 
+                                          : "bg-brand-bg text-gray-400 border border-brand-border hover:border-brand-primary/40"
+                                      )}
+                                    >
+                                      CCSP
+                                    </motion.button>
+                                  )}
+                                  {!!config.isParty && (
+                                    <motion.button
+                                      whileHover={{ scale: 1.05 }}
+                                      whileTap={{ scale: 0.95 }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleWorkDayType(emp, selectedDay!, 'party');
+                                      }}
+                                      className={cn(
+                                        "text-[9px] font-black px-2 py-0.5 rounded transition-all uppercase flex items-center gap-1",
+                                        hasParty 
+                                          ? "bg-purple-500 text-white shadow-sm" 
+                                          : "bg-brand-bg text-gray-400 border border-brand-border hover:border-purple-500/40"
+                                      )}
+                                    >
+                                      Festa
+                                    </motion.button>
+                                  )}
+                                </div>
                               </div>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
@@ -1423,9 +1432,18 @@ export default function CalendarView({
                             transition={{ duration: 0.18, ease: "easeInOut" }}
                             className="flex items-center justify-between bg-emerald-500/[0.02] border border-emerald-500/20 hover:border-emerald-500/40 hover:bg-emerald-500/[0.05] px-3 py-2 rounded-xl transition-colors gap-2"
                           >
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-bold text-brand-text truncate">{emp.artisticName || emp.name}</p>
-                              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase truncate">{emp.level}</p>
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              <div className="w-7 h-7 rounded-full bg-emerald-500/20 shrink-0 overflow-hidden flex items-center justify-center text-[10px] font-bold text-emerald-400 border border-emerald-500/30 shadow-sm">
+                                {emp.photoUrl ? (
+                                  <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  <span>{(emp.artisticName || emp.name).substring(0, 2).toUpperCase()}</span>
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-bold text-brand-text truncate">{emp.artisticName || emp.name}</p>
+                                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase truncate">{emp.level}</p>
+                              </div>
                             </div>
                             
                             <div className="flex items-center gap-1.5 shrink-0">
@@ -1483,9 +1501,18 @@ export default function CalendarView({
                               transition={{ duration: 0.18, ease: "easeInOut" }}
                               className="flex items-center justify-between bg-brand-bg/40 border border-brand-border px-3 py-2 rounded-xl hover:border-brand-primary/30 hover:bg-brand-primary/5 transition-colors gap-2"
                             >
-                              <div className="min-w-0 flex-1">
-                                <p className="text-xs font-bold text-brand-text truncate">{emp.artisticName || emp.name}</p>
-                                <p className="text-[10px] text-brand-muted font-bold uppercase truncate">{emp.level}</p>
+                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                <div className="w-7 h-7 rounded-full bg-brand-bg shrink-0 overflow-hidden flex items-center justify-center text-[10px] font-bold text-gray-400 border border-brand-border shadow-sm">
+                                  {emp.photoUrl ? (
+                                    <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <span>{(emp.artisticName || emp.name).substring(0, 2).toUpperCase()}</span>
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-bold text-brand-text truncate">{emp.artisticName || emp.name}</p>
+                                  <p className="text-[10px] text-brand-muted font-bold uppercase truncate">{emp.level}</p>
+                                </div>
                               </div>
                               
                               <div className="flex items-center gap-1.5 shrink-0">
