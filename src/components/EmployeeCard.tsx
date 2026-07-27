@@ -1,5 +1,5 @@
 import React from 'react';
-import { Edit2, Calendar, Sparkles } from 'lucide-react';
+import { Edit2, Calendar, Sparkles, Award } from 'lucide-react';
 import { Employee } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
 import { format, startOfMonth, endOfMonth, isSameMonth, parseISO } from 'date-fns';
@@ -56,6 +56,7 @@ interface EmployeeCardProps {
   employee: Employee;
   onEdit: (employee: Employee) => void;
   onManageDays: (employee: Employee) => void;
+  onViewStory?: (employee: Employee) => void;
   currentMonth: Date;
   isReadOnly?: boolean;
 }
@@ -64,6 +65,7 @@ const EmployeeCard: React.FC<EmployeeCardProps> = ({
   employee, 
   onEdit, 
   onManageDays, 
+  onViewStory,
   currentMonth,
   isReadOnly = false
 }) => {
@@ -98,41 +100,68 @@ const EmployeeCard: React.FC<EmployeeCardProps> = ({
   });
 
   return (
-    <div className="bg-brand-card border border-brand-border rounded-xl overflow-hidden flex flex-col h-full transition-all hover:border-brand-primary/30 group">
-      <div className="p-5 flex-1">
+    <div className="relative group rounded-xl p-[1px] overflow-hidden transition-all duration-300 h-full">
+      {/* Animated Glowing Light Beam Border */}
+      <div 
+        className="absolute -top-[50%] -left-[50%] w-[200%] h-[200%] animate-card-beam opacity-30 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none z-0"
+        style={{
+          background: 'conic-gradient(from 0deg, transparent 0deg, transparent 270deg, #fbbf24 310deg, #f59e0b 340deg, transparent 360deg)',
+        }}
+      />
+      {/* Soft Ambient Background Aura Glow */}
+      <div 
+        className="absolute -top-[50%] -left-[50%] w-[200%] h-[200%] animate-card-beam opacity-20 blur-lg group-hover:opacity-40 transition-opacity duration-500 pointer-events-none z-0"
+        style={{
+          background: 'conic-gradient(from 0deg, transparent 0deg, transparent 270deg, #fbbf24 310deg, #f59e0b 340deg, transparent 360deg)',
+        }}
+      />
+
+      {/* Main Card Container */}
+      <div className="relative z-10 bg-brand-card border border-brand-border/80 rounded-[11px] overflow-hidden flex flex-col h-full transition-colors group-hover:border-brand-primary/30">
+        <div className="p-5 flex-1">
         <div className="flex justify-between items-start mb-4">
-          <div>
-            <span className="text-[10px] font-bold text-brand-primary uppercase tracking-widest mb-1 block">
-              {employee.artisticName || 'SEM NOME ARTÍSTICO'}
-            </span>
-            <h3 className="text-xl font-bold text-brand-text group-hover:text-brand-primary transition-colors">
-              {employee.name}
-            </h3>
-            <div className="flex items-center gap-2 mt-1">
-              <p className="text-xs text-brand-muted">{employee.level}</p>
-              {monthPromotion && (
-                <div className="relative inline-block">
-                  <span 
-                    onMouseEnter={triggerCelebration}
-                    onClick={triggerCelebration}
-                    className="bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 text-[9px] font-black px-1.5 py-0.5 rounded border border-yellow-500/20 uppercase tracking-wider flex items-center gap-0.5 cursor-pointer select-none transition-all duration-200"
-                  >
-                    Promovido(a) ✨
-                  </span>
-                  <ConfettiCelebration triggerKey={burstKey} />
-                </div>
-              )}
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-brand-primary to-emerald-400 p-0.5 shrink-0 shadow-md">
+              <div className="w-full h-full bg-brand-card rounded-[10px] flex items-center justify-center font-extrabold text-sm text-brand-primary uppercase overflow-hidden">
+                {employee.photoUrl ? (
+                  <img src={employee.photoUrl} alt={employee.name} className="w-full h-full object-cover rounded-[10px]" />
+                ) : (
+                  <span>{employee.artisticName?.substring(0, 2) || employee.name?.substring(0, 2)}</span>
+                )}
+              </div>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-brand-primary uppercase tracking-widest mb-0.5 block">
+                {employee.artisticName || 'SEM NOME ARTÍSTICO'}
+              </span>
+              <h3 className="text-lg font-bold text-brand-text group-hover:text-brand-primary transition-colors leading-tight">
+                {employee.name}
+              </h3>
+              <div className="flex items-center gap-2 mt-0.5">
+                <p className="text-xs text-brand-muted">{employee.level}</p>
+                {monthPromotion && (
+                  <div className="relative inline-block">
+                    <span 
+                      onMouseEnter={triggerCelebration}
+                      onClick={triggerCelebration}
+                      className="bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 text-[9px] font-black px-1.5 py-0.5 rounded border border-yellow-500/20 uppercase tracking-wider flex items-center gap-0.5 cursor-pointer select-none transition-all duration-200"
+                    >
+                      Promovido(a) ✨
+                    </span>
+                    <ConfettiCelebration triggerKey={burstKey} />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           {!isReadOnly && (
-            <div className="flex gap-2">
-              <button 
-                onClick={() => onEdit(employee)}
-                className="p-2 text-brand-muted hover:text-brand-text hover:bg-brand-border/40 rounded-lg transition-all"
-              >
-                <Edit2 size={18} />
-              </button>
-            </div>
+            <button 
+              onClick={() => onEdit(employee)}
+              className="p-2 text-brand-muted hover:text-brand-text hover:bg-brand-border/40 rounded-lg transition-all"
+              title="Editar funcionário"
+            >
+              <Edit2 size={18} />
+            </button>
           )}
         </div>
 
@@ -204,17 +233,28 @@ const EmployeeCard: React.FC<EmployeeCardProps> = ({
         </div>
       </div>
 
-      {!isReadOnly && (
-        <div className="p-3 bg-brand-bg/30 border-t border-brand-border flex gap-2">
+      <div className="p-3 bg-brand-bg/30 border-t border-brand-border flex gap-2">
+        {onViewStory && (
+          <button 
+            onClick={() => onViewStory(employee)}
+            className="flex-1 flex items-center justify-center gap-1.5 bg-brand-primary/10 hover:bg-brand-primary text-brand-primary hover:text-brand-bg border border-brand-primary/30 hover:border-transparent text-xs font-extrabold py-2 px-3 rounded-lg transition-colors"
+            title="Ver história e conquistas"
+          >
+            <Award size={14} />
+            História
+          </button>
+        )}
+        {!isReadOnly && (
           <button 
             onClick={() => onManageDays(employee)}
-            className="w-full flex items-center justify-center gap-2 bg-brand-primary hover:bg-brand-primary-hover text-brand-bg text-xs font-bold py-2.5 rounded-lg transition-colors"
+            className={`${onViewStory ? 'flex-1' : 'w-full'} flex items-center justify-center gap-2 bg-brand-primary hover:bg-brand-primary-hover text-brand-bg text-xs font-bold py-2 px-3 rounded-lg transition-colors`}
           >
             <Calendar size={14} />
             Adicionar Dia
           </button>
-        </div>
-      )}
+        )}
+      </div>
+      </div>
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, AlertCircle, Trash2, ArrowRight, Calendar } from 'lucide-react';
+import { X, AlertCircle, Trash2, ArrowRight, Calendar, Sparkles } from 'lucide-react';
 import { Employee, EmployeeLevel } from '../types';
 import { recalculateEmployeeTimeline, LEVEL_RATES } from '../utils/promotionUtils';
 
@@ -206,6 +206,19 @@ export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, emplo
               onChange={(e) => setFormData({ ...formData, extraHourRate: Number(e.target.value) })}
               className="w-full bg-brand-bg border border-brand-border rounded-lg py-2 px-4 text-white focus:outline-none focus:border-brand-primary"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-1">Data de Entrada na Liga 📅</label>
+            <input
+              type="date"
+              value={formData.startDate || ''}
+              onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+              className="w-full bg-brand-bg border border-brand-border rounded-lg py-2 px-4 text-white focus:outline-none focus:border-brand-primary"
+            />
+            <p className="text-[10px] text-gray-500 mt-1">
+              Caso não informada, será usada a data do primeiro trabalho registrado.
+            </p>
           </div>
 
           {employee && (

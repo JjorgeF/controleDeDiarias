@@ -342,22 +342,28 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
       };
     });
 
-    // Sort based on the selected metric and period
+    const compareAlpha = (a: any, b: any) => {
+      const nameA = a.artisticName || a.name || '';
+      const nameB = b.artisticName || b.name || '';
+      return nameA.localeCompare(nameB, 'pt-BR', { sensitivity: 'base' });
+    };
+
+    // Sort based on the selected metric and period with alphabetical tie-breaking
     if (rankPeriod === 'monthly') {
       if (rankMetric === 'confirmed') {
-        return [...data].sort((a, b) => b.confirmedThisMonth - a.confirmedThisMonth || b.totalConfirmedAllTime - a.totalConfirmedAllTime);
+        return [...data].sort((a, b) => b.confirmedThisMonth - a.confirmedThisMonth || b.totalConfirmedAllTime - a.totalConfirmedAllTime || compareAlpha(a, b));
       } else if (rankMetric === 'availabilities') {
-        return [...data].sort((a, b) => b.availabilitiesThisMonth - a.availabilitiesThisMonth || b.totalAvailabilitiesAllTime - a.totalAvailabilitiesAllTime);
+        return [...data].sort((a, b) => b.availabilitiesThisMonth - a.availabilitiesThisMonth || b.totalAvailabilitiesAllTime - a.totalAvailabilitiesAllTime || compareAlpha(a, b));
       } else {
-        return [...data].sort((a, b) => b.cancellationsThisMonth - a.cancellationsThisMonth || b.totalCancellationsAllTime - a.totalCancellationsAllTime);
+        return [...data].sort((a, b) => b.cancellationsThisMonth - a.cancellationsThisMonth || b.totalCancellationsAllTime - a.totalCancellationsAllTime || compareAlpha(a, b));
       }
     } else {
       if (rankMetric === 'confirmed') {
-        return [...data].sort((a, b) => b.totalConfirmedAllTime - a.totalConfirmedAllTime || b.confirmedThisMonth - a.confirmedThisMonth);
+        return [...data].sort((a, b) => b.totalConfirmedAllTime - a.totalConfirmedAllTime || b.confirmedThisMonth - a.confirmedThisMonth || compareAlpha(a, b));
       } else if (rankMetric === 'availabilities') {
-        return [...data].sort((a, b) => b.totalAvailabilitiesAllTime - a.totalAvailabilitiesAllTime || b.availabilitiesThisMonth - a.availabilitiesThisMonth);
+        return [...data].sort((a, b) => b.totalAvailabilitiesAllTime - a.totalAvailabilitiesAllTime || b.availabilitiesThisMonth - a.availabilitiesThisMonth || compareAlpha(a, b));
       } else {
-        return [...data].sort((a, b) => b.totalCancellationsAllTime - a.totalCancellationsAllTime || b.cancellationsThisMonth - a.cancellationsThisMonth);
+        return [...data].sort((a, b) => b.totalCancellationsAllTime - a.totalCancellationsAllTime || b.cancellationsThisMonth - a.cancellationsThisMonth || compareAlpha(a, b));
       }
     }
   }, [employees, currentMonthKey, rankMetric, rankPeriod, dayConfigs]);

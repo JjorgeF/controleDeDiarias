@@ -14,8 +14,35 @@ import {
   parseISO
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, Users, Search, UserPlus, UserMinus, Clock, Copy, ClipboardPaste, AlertTriangle, Maximize2, Lock, Unlock, Save, Calendar, CheckCircle2, AlertCircle, X, Check, Trash2 } from 'lucide-react';
-import { Employee, WorkDay, DayType, CancellationLog } from '../types';
+import { 
+  ChevronLeft, 
+  ChevronRight, 
+  Users, 
+  Search, 
+  UserPlus, 
+  UserMinus, 
+  Clock, 
+  Copy, 
+  ClipboardPaste, 
+  AlertTriangle, 
+  Maximize2, 
+  Lock, 
+  Unlock, 
+  Save, 
+  Calendar, 
+  CheckCircle2, 
+  AlertCircle, 
+  X, 
+  Check, 
+  Trash2,
+  Coins,
+  Sparkles,
+  TrendingUp,
+  Plus,
+  Minus
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Employee, WorkDay, DayType, CancellationLog, DayConfig, PartyConfig } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
 import DayManagementModal from './DayManagementModal';
 
@@ -29,8 +56,8 @@ interface CalendarViewProps {
   deadlines?: Record<string, string>;
   onUpdateDeadline?: (monthKey: string, deadlineIso: string) => void;
   onUpdateAvailabilities?: (employeeId: string, availabilities: string[]) => void;
-  dayConfigs?: Record<string, { isCommon: boolean; isParty: boolean; partyTime?: string }>;
-  onUpdateDayConfig?: (dateStr: string, config: { isCommon: boolean; isParty: boolean; partyTime?: string }) => void;
+  dayConfigs?: Record<string, DayConfig>;
+  onUpdateDayConfig?: (dateStr: string, config: DayConfig) => void;
   onCancelWorkDay?: (employeeId: string, dateStr: string, type: 'common' | 'party', employeeName: string) => Promise<void>;
   cancellations?: CancellationLog[];
   onDismissCancellation?: (cancellationId: string) => void;
@@ -58,13 +85,19 @@ export default function CalendarView({
   sidebarTab = 'availabilities',
   onSidebarTabChange
 }: CalendarViewProps) {
-  const getDayConfig = (dateStr: string) => {
+  const getDayConfig = (dateStr: string): DayConfig & { parties: PartyConfig[] } => {
     const config = dayConfigs?.[dateStr];
+    let parties: PartyConfig[] = config?.parties ? [...config.parties] : [];
+
     if (config) {
+      if (config.isParty && parties.length === 0) {
+        parties = [{ id: 'default_party', name: 'Festa', time: config.partyTime || '' }];
+      }
       return {
         isCommon: !!config.isCommon,
-        isParty: !!config.isParty,
-        partyTime: config.partyTime || '',
+        isParty: parties.length > 0 || !!config.isParty,
+        partyTime: config.partyTime || (parties[0]?.time || ''),
+        parties
       };
     }
 
@@ -72,30 +105,52 @@ export default function CalendarView({
     const hasCommonWorkers = employees.some(emp => 
       emp.workDays?.some(d => d.date === dateStr && d.type === 'common' && !d.isCancelled)
     );
-    const hasPartyWorkers = employees.some(emp => 
-      emp.workDays?.some(d => d.date === dateStr && d.type === 'party' && !d.isCancelled)
+    const partyWorkDays = employees.flatMap(emp => 
+      (emp.workDays || []).filter(d => d.date === dateStr && d.type === 'party' && !d.isCancelled)
     );
     
-    // Also check if anyone has availabilities from the past system
     const hasPastAvailabilities = employees.some(emp => 
       emp.availabilities?.some(av => av === dateStr || av === `${dateStr}_common`)
     );
     const hasPastPartyAvailabilities = employees.some(emp => 
-      emp.availabilities?.some(av => av === `${dateStr}_party`)
+      emp.availabilities?.some(av => av.startsWith(`${dateStr}_party`))
     );
 
-    if (hasCommonWorkers || hasPartyWorkers || hasPastAvailabilities || hasPastPartyAvailabilities) {
-      return {
-        isCommon: hasCommonWorkers || hasPastAvailabilities || (!hasPartyWorkers && !hasPastPartyAvailabilities),
-        isParty: hasPartyWorkers || hasPastPartyAvailabilities,
-        partyTime: '',
-      };
+    if (partyWorkDays.length > 0) {
+      const uniquePartyNames = Array.from(new Set(partyWorkDays.map(d => d.partyName || 'Festa')));
+      parties = uniquePartyNames.map((name, i) => ({
+        id: `inferred_p_${i}`,
+        name,
+        time: ''
+      }));
+    } else if (hasPastPartyAvailabilities) {
+      parties = [{ id: 'default_party', name: 'Festa', time: '' }];
     }
 
-    return { isCommon: false, isParty: false, partyTime: '' };
+    const isParty = parties.length > 0;
+    const isCommon = hasCommonWorkers || hasPastAvailabilities || (!isParty && (hasCommonWorkers || hasPastAvailabilities));
+
+    return {
+      isCommon: !!isCommon,
+      isParty,
+      partyTime: parties[0]?.time || '',
+      parties
+    };
   };
 
   const [selectedDay, setSelectedDay] = React.useState<Date | null>(new Date());
+  const [direction, setDirection] = React.useState<number>(0);
+
+  const handlePrevMonth = () => {
+    setDirection(-1);
+    setCurrentMonth(prev => subMonths(prev, 1));
+  };
+
+  const handleNextMonth = () => {
+    setDirection(1);
+    setCurrentMonth(addMonths(currentMonth, 1));
+  };
+
   const clickTimeoutRef = React.useRef<any>(null);
   const clickDayStrRef = React.useRef<string | null>(null);
 
@@ -119,6 +174,8 @@ export default function CalendarView({
   const [isCancelModalOpen, setIsCancelModalOpen] = React.useState(false);
   const [cancelTargetDate, setCancelTargetDate] = React.useState<Date | null>(null);
   const [isCancellingLoading, setIsCancellingLoading] = React.useState(false);
+
+
 
   // Deadline Admin State
   const [deadlineInputDate, setDeadlineInputDate] = React.useState('');
@@ -159,9 +216,15 @@ export default function CalendarView({
 
   const selectedDayStr = selectedDay ? format(selectedDay, 'yyyy-MM-dd') : '';
   
-  const employeesWorking = employees.filter(emp => 
-    emp.workDays.some(d => d.date === selectedDayStr && !d.isCancelled)
-  );
+  const employeesWorking = React.useMemo(() => {
+    return employees
+      .filter(emp => emp.workDays.some(d => d.date === selectedDayStr && !d.isCancelled))
+      .sort((a, b) => {
+        const nameA = a.artisticName || a.name || '';
+        const nameB = b.artisticName || b.name || '';
+        return nameA.localeCompare(nameB, 'pt-BR', { sensitivity: 'base' });
+      });
+  }, [employees, selectedDayStr]);
 
   const { availablesMarked, availablesOthers } = React.useMemo(() => {
     const config = getDayConfig(selectedDayStr);
@@ -189,9 +252,66 @@ export default function CalendarView({
         others.push(emp);
       }
     });
+
+    const sortByName = (a: Employee, b: Employee) => {
+      const nameA = a.artisticName || a.name || '';
+      const nameB = b.artisticName || b.name || '';
+      return nameA.localeCompare(nameB, 'pt-BR', { sensitivity: 'base' });
+    };
     
-    return { availablesMarked: marked, availablesOthers: others };
+    return { 
+      availablesMarked: marked.sort(sortByName), 
+      availablesOthers: others.sort(sortByName) 
+    };
   }, [employees, selectedDayStr, searchQuery, dayConfigs]);
+
+  const toggleWorkDayType = (employee: Employee, date: Date, type: 'common' | 'party', party?: PartyConfig) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const currentWork = employee.workDays.find(d => d.date === dateStr && !d.isCancelled);
+
+    if (type === 'common') {
+      if (currentWork && currentWork.type === 'common') {
+        const newDays = employee.workDays.filter(d => d.date !== dateStr);
+        onUpdateDays(employee.id, newDays);
+        return;
+      }
+      const filtered = employee.workDays.filter(d => d.date !== dateStr);
+      const newDays: WorkDay[] = [...filtered, { 
+        date: dateStr, 
+        type: 'common', 
+        extraHours: 0,
+        dailyRateAtTime: employee.dailyRate,
+        partyRateAtTime: employee.partyRate,
+        extraHourRateAtTime: employee.extraHourRate,
+        levelAtTime: employee.level
+      }];
+      onUpdateDays(employee.id, newDays);
+    } else if (type === 'party') {
+      const selectedParty = party || (getDayConfig(dateStr).parties?.[0] || { id: 'default_party', name: 'Festa' });
+      const isThisParty = currentWork && currentWork.type === 'party' && 
+        (currentWork.partyId === selectedParty.id || (!currentWork.partyId && selectedParty.id === 'default_party') || currentWork.partyName === selectedParty.name);
+
+      if (isThisParty) {
+        const newDays = employee.workDays.filter(d => d.date !== dateStr);
+        onUpdateDays(employee.id, newDays);
+        return;
+      }
+
+      const filtered = employee.workDays.filter(d => d.date !== dateStr);
+      const newDays: WorkDay[] = [...filtered, { 
+        date: dateStr, 
+        type: 'party', 
+        partyId: selectedParty.id,
+        partyName: selectedParty.name,
+        extraHours: 0,
+        dailyRateAtTime: employee.dailyRate,
+        partyRateAtTime: employee.partyRate,
+        extraHourRateAtTime: employee.extraHourRate,
+        levelAtTime: employee.level
+      }];
+      onUpdateDays(employee.id, newDays);
+    }
+  };
 
   const toggleWorkDay = (employee: Employee, date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
@@ -500,6 +620,8 @@ export default function CalendarView({
     }, 0);
   }, [myEmployee, scheduledDaysThisMonth]);
 
+
+
   const handleSaveDeadline = () => {
     if (onUpdateDeadline && deadlineInputDate && deadlineInputTime) {
       onUpdateDeadline(currentMonthKey, `${deadlineInputDate}T${deadlineInputTime}`);
@@ -607,19 +729,33 @@ export default function CalendarView({
             {/* Calendar Header */}
             <div className="flex items-center justify-between p-3 md:p-6 border-b border-brand-border bg-brand-bg/30">
               <div className="flex items-center gap-3 md:gap-4">
-                <h2 className="text-base md:text-xl font-black text-brand-text capitalize">
-                  {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
-                </h2>
+                <div className="overflow-hidden py-0.5 min-w-[140px] md:min-w-[180px]">
+                  <AnimatePresence mode="wait" custom={direction} initial={false}>
+                    <motion.h2
+                      key={format(currentMonth, 'yyyy-MM')}
+                      custom={direction}
+                      initial={{ opacity: 0, x: direction > 0 ? 25 : -25 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: direction > 0 ? -25 : 25 }}
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                      className="text-base md:text-xl font-black text-brand-text capitalize"
+                    >
+                      {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
+                    </motion.h2>
+                  </AnimatePresence>
+                </div>
                 <div className="flex items-center bg-brand-bg border border-brand-border rounded-lg p-0.5 md:p-1">
                   <button 
-                    onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-                    className="p-1 md:p-1.5 hover:bg-brand-primary/10 rounded-md transition-colors text-brand-muted hover:text-brand-text"
+                    onClick={handlePrevMonth}
+                    className="p-1 md:p-1.5 hover:bg-brand-primary/10 rounded-md transition-all text-brand-muted hover:text-brand-text active:scale-90"
+                    title="Mês anterior"
                   >
                     <ChevronLeft size={18} className="md:w-5 md:h-5" />
                   </button>
                   <button 
-                    onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-                    className="p-1 md:p-1.5 hover:bg-brand-primary/10 rounded-md transition-colors text-brand-muted hover:text-brand-text"
+                    onClick={handleNextMonth}
+                    className="p-1 md:p-1.5 hover:bg-brand-primary/10 rounded-md transition-all text-brand-muted hover:text-brand-text active:scale-90"
+                    title="Próximo mês"
                   >
                     <ChevronRight size={18} className="md:w-5 md:h-5" />
                   </button>
@@ -645,7 +781,7 @@ export default function CalendarView({
               </div>
             </div>
 
-            <div className="overflow-x-auto lg:overflow-x-visible">
+            <div className="overflow-hidden">
               <div className="grid grid-cols-7 border-b border-brand-border bg-brand-bg/50 min-w-[320px] md:min-w-[700px]">
                 {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day) => (
                   <div key={day} className="p-1 md:p-3 text-center text-[8px] md:text-xs font-black text-gray-500 uppercase tracking-tighter md:tracking-widest">
@@ -654,8 +790,32 @@ export default function CalendarView({
                 ))}
               </div>
               
-              <div className="grid grid-cols-7 auto-rows-fr min-w-[320px] md:min-w-[700px]">
-                {calendarDays.map((day, idx) => {
+              <AnimatePresence mode="wait" custom={direction} initial={false}>
+                <motion.div
+                  key={format(currentMonth, 'yyyy-MM')}
+                  custom={direction}
+                  initial={{ 
+                    opacity: 0, 
+                    x: direction > 0 ? 50 : -50,
+                    scale: 0.98
+                  }}
+                  animate={{ 
+                    opacity: 1, 
+                    x: 0,
+                    scale: 1
+                  }}
+                  exit={{ 
+                    opacity: 0, 
+                    x: direction > 0 ? -50 : 50,
+                    scale: 0.98
+                  }}
+                  transition={{ 
+                    duration: 0.22,
+                    ease: [0.25, 0.1, 0.25, 1.0]
+                  }}
+                  className="grid grid-cols-7 auto-rows-fr min-w-[320px] md:min-w-[700px]"
+                >
+                  {calendarDays.map((day, idx) => {
                   const dayStr = format(day, 'yyyy-MM-dd');
                   const config = getDayConfig(dayStr);
                   
@@ -687,17 +847,25 @@ export default function CalendarView({
                   const isCurrentMonth = isSameMonth(day, monthStart);
                   const isSelected = selectedDay && isSameDay(day, selectedDay);
                   const isTodayDate = isToday(day);
+                  const isOpenForAvailability = isCurrentMonth && (config.isCommon || config.isParty);
+                  const showBeam = isCurrentMonth && (isOpenForAvailability || (!isAdmin && (isMyAvailable || isMyScheduled)));
+                  const isYellowBeam = !isAdmin && isMyScheduled;
+                  const beamGradient = isYellowBeam
+                    ? 'conic-gradient(from 0deg, transparent 0deg, transparent 260deg, #fbbf24 300deg, #f59e0b 340deg, transparent 360deg)'
+                    : 'conic-gradient(from 0deg, transparent 0deg, transparent 260deg, #34d399 300deg, #10b981 340deg, transparent 360deg)';
 
                   return (
-                    <div
+                    <motion.div
                       key={day.toString()}
+                      whileHover={isCurrentMonth ? { scale: 1.018, zIndex: 10, transition: { duration: 0.15 } } : undefined}
+                      whileTap={isCurrentMonth ? { scale: 0.98 } : undefined}
                       draggable={isAdmin && !isReadOnly && isCurrentMonth}
                       onDragStart={(e) => handleDragStart(e, day)}
                       onDragOver={handleDragOver}
                       onDrop={(e) => handleDrop(e, day)}
                       onClick={() => handleDayClick(day)}
                       className={cn(
-                        "min-h-[60px] md:min-h-[110px] p-1 md:p-3 border-b border-r border-brand-border transition-all relative group",
+                        "min-h-[60px] md:min-h-[110px] p-1 md:p-3 border-b border-r border-brand-border transition-colors relative group overflow-hidden",
                         !isCurrentMonth && "bg-brand-bg/20 opacity-30 pointer-events-none",
                         isCurrentMonth && (
                           isAdmin 
@@ -705,28 +873,56 @@ export default function CalendarView({
                             : isDeadlinePassed 
                               ? "cursor-not-allowed opacity-80" 
                               : (config.isCommon || config.isParty)
-                                ? "hover:bg-emerald-500/5 cursor-pointer"
+                                ? "hover:opacity-90 cursor-pointer"
                                 : "cursor-not-allowed opacity-30"
                         ),
-                        isAdmin && isSelected && !isReadOnly && "bg-brand-primary/10 ring-1 ring-brand-primary ring-inset z-10",
-                        isAdmin && !isSelected && config.isCommon && "bg-emerald-500/[0.03]",
-                        isAdmin && !isSelected && config.isParty && "bg-purple-500/[0.03]",
-                        !isAdmin && isMyAvailable && "bg-emerald-500/5",
-                        !isAdmin && isMyScheduled && "bg-brand-primary/10 ring-1 ring-brand-primary/50 ring-inset z-10",
+                        // Status styling for admin
+                        isAdmin && isSelected && !isReadOnly && "bg-brand-primary/10 ring-2 ring-brand-primary border-brand-primary z-10",
+                        isAdmin && !isSelected && config.isCommon && "bg-emerald-500/[0.03] border-emerald-500/20",
+                        isAdmin && !isSelected && config.isParty && "bg-purple-500/[0.03] border-purple-500/20",
                         idx % 7 === 6 && "border-r-0"
                       )}
                     >
-                      {/* Party indicator badge */}
-                      {config.isParty && (
-                        <span 
-                          className="absolute top-1 right-1 text-[7px] md:text-[9px] bg-purple-500/10 dark:bg-purple-500/25 text-purple-700 dark:text-purple-300 px-1 py-0.5 rounded font-black uppercase tracking-wider scale-90 md:scale-100 z-10 max-w-[80%] truncate"
-                          title={config.partyTime ? `Horário da Festa: ${config.partyTime}` : 'Festa'}
-                        >
-                          🎉 Festa{config.partyTime ? ` (${config.partyTime})` : ''}
-                        </span>
+                      {/* Animated Moving Border with Solid Opaque Inner Mask */}
+                      {showBeam && (
+                        <>
+                          {/* Rotating Conic Gradient Beam behind the mask */}
+                          <div 
+                            className="absolute -top-[100%] -left-[100%] w-[300%] h-[300%] animate-card-beam opacity-90 pointer-events-none z-0"
+                            style={{
+                              background: beamGradient,
+                            }}
+                          />
+                          {/* Solid Opaque Inner Mask covering cell interior, leaving 1.5px border */}
+                          <div 
+                            className={cn(
+                              "absolute inset-[1.5px] pointer-events-none z-0 transition-colors",
+                              !isAdmin && isMyScheduled 
+                                ? "bg-amber-100 dark:bg-amber-950" 
+                                : !isAdmin && isMyAvailable 
+                                  ? "bg-emerald-100 dark:bg-emerald-950" 
+                                  : "bg-brand-card"
+                            )} 
+                          />
+                        </>
                       )}
 
-                      <div className="flex flex-col items-center justify-between h-full gap-1">
+                      {/* Party indicator badges */}
+                      {config.isParty && (
+                        <div className="absolute top-1 right-1 flex flex-col items-end gap-0.5 z-10 max-w-[85%] pointer-events-none">
+                          {(config.parties && config.parties.length > 0 ? config.parties : [{ id: 'def', name: 'Festa', time: config.partyTime }]).map((p, pIdx) => (
+                            <span 
+                              key={p.id || pIdx}
+                              className="text-[7px] md:text-[9px] bg-purple-500/10 dark:bg-purple-500/25 text-purple-700 dark:text-purple-300 px-1 py-0.5 rounded font-black uppercase tracking-wider scale-90 md:scale-100 truncate max-w-full"
+                              title={p.time ? `${p.name}: ${p.time}` : p.name}
+                            >
+                              🎉 {p.name}{p.time ? ` (${p.time})` : ''}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="relative z-10 flex flex-col items-center justify-between h-full gap-1">
                         <span className={cn(
                           "text-xs md:text-sm font-black w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full transition-colors",
                           isTodayDate ? "bg-brand-primary text-slate-900 font-extrabold shadow-sm" : "text-brand-muted group-hover:text-brand-text",
@@ -826,10 +1022,11 @@ export default function CalendarView({
                           </div>
                         )}
                       </div>
-                    </div>
+                    </motion.div>
                   );
                 })}
-              </div>
+                </motion.div>
+              </AnimatePresence>
             </div>
           </div>
 
@@ -1077,40 +1274,100 @@ export default function CalendarView({
                     <span className="w-2 h-2 bg-brand-primary rounded-full"></span>
                     Escalados ({employeesWorking.length})
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                     {employeesWorking.map(emp => {
                       const dayData = emp.workDays.find(d => d.date === selectedDayStr);
+                      const hasCommon = emp.workDays.some(d => d.date === selectedDayStr && d.type === 'common' && !d.isCancelled);
+                      const hasParty = emp.workDays.some(d => d.date === selectedDayStr && d.type === 'party' && !d.isCancelled);
                       const isExpanded = expandedEmployeeId === emp.id;
+                      const config = getDayConfig(selectedDayStr);
                       
                       return (
-                        <div key={emp.id} className="bg-brand-primary/5 border border-brand-primary/20 p-4 rounded-xl space-y-4 transition-all hover:border-brand-primary/40">
-                          <div className="flex items-center justify-between">
-                            <div className="cursor-pointer flex-1" onClick={() => setExpandedEmployeeId(isExpanded ? null : emp.id)}>
-                              <p className="text-sm font-bold text-brand-text">{emp.artisticName || emp.name}</p>
-                              <p className="text-[10px] text-brand-primary font-bold uppercase">{emp.level}</p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button 
-                                onClick={() => setExpandedEmployeeId(isExpanded ? null : emp.id)}
-                                className={cn(
-                                  "p-2 rounded-lg transition-colors",
-                                  isExpanded ? "text-brand-primary bg-brand-primary/20" : "text-brand-muted hover:text-brand-primary hover:bg-brand-primary/10"
+                        <motion.div 
+                          key={emp.id} 
+                          layout
+                          initial={{ opacity: 0, scale: 0.92 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.92 }}
+                          transition={{ duration: 0.18, ease: "easeInOut" }}
+                          className="bg-brand-primary/5 border border-brand-primary/20 px-3 py-2.5 rounded-xl transition-colors hover:border-brand-primary/40 group"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="cursor-pointer min-w-0 flex-1" onClick={() => setExpandedEmployeeId(isExpanded ? null : emp.id)}>
+                              <div className="flex items-center gap-2">
+                                <p className="text-xs font-bold text-brand-text truncate group-hover:text-brand-primary transition-colors">{emp.artisticName || emp.name}</p>
+                                <span className="text-[10px] text-brand-primary font-black uppercase shrink-0">{emp.level}</span>
+                              </div>
+                              
+                              <div className="flex items-center gap-1 mt-1">
+                                {config.isCommon !== false && (
+                                  <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleWorkDayType(emp, selectedDay!, 'common');
+                                    }}
+                                    className={cn(
+                                      "text-[9px] font-black px-2 py-0.5 rounded transition-all uppercase flex items-center gap-1",
+                                      hasCommon 
+                                        ? "bg-brand-primary text-brand-bg shadow-sm" 
+                                        : "bg-brand-bg text-gray-400 border border-brand-border hover:border-brand-primary/40"
+                                    )}
+                                  >
+                                    CCSP
+                                  </motion.button>
                                 )}
+                                {!!config.isParty && (
+                                  <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleWorkDayType(emp, selectedDay!, 'party');
+                                    }}
+                                    className={cn(
+                                      "text-[9px] font-black px-2 py-0.5 rounded transition-all uppercase flex items-center gap-1",
+                                      hasParty 
+                                        ? "bg-purple-500 text-white shadow-sm" 
+                                        : "bg-brand-bg text-gray-400 border border-brand-border hover:border-purple-500/40"
+                                    )}
+                                  >
+                                    Festa
+                                  </motion.button>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {hasCommon && (
+                                <motion.button 
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={() => setExpandedEmployeeId(isExpanded ? null : emp.id)}
+                                  className={cn(
+                                    "p-1.5 rounded-lg transition-colors",
+                                    isExpanded ? "text-brand-primary bg-brand-primary/20" : "text-brand-muted hover:text-brand-primary hover:bg-brand-primary/10"
+                                  )}
+                                  title="Horas Extras"
+                                >
+                                  <Clock size={16} />
+                                </motion.button>
+                              )}
+                              <motion.button 
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={() => toggleWorkDay(emp, selectedDay!)}
+                                className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                                title="Remover escala completa"
                               >
-                                <Clock size={18} />
-                              </button>
-                              <button 
-                                onClick={() => toggleWorkDay(emp, selectedDay)}
-                                className="p-2 text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                              >
-                                <UserMinus size={20} />
-                              </button>
+                                <UserMinus size={18} />
+                              </motion.button>
                             </div>
                           </div>
                           
-                          {isExpanded && (
-                            <div className="flex items-center gap-4 pt-4 border-t border-brand-primary/10 animate-in fade-in slide-in-from-top-2">
-                              <label className="text-xs font-bold text-brand-muted uppercase">Horas Extras:</label>
+                          {isExpanded && hasCommon && (
+                            <div className="flex items-center gap-3 pt-2.5 mt-2 border-t border-brand-primary/10 animate-in fade-in slide-in-from-top-2">
+                              <label className="text-[10px] font-black text-brand-muted uppercase">Horas Extras (CCSP):</label>
                               <input 
                                 type="number"
                                 min="0"
@@ -1119,15 +1376,15 @@ export default function CalendarView({
                                 value={dayData?.extraHours || ''}
                                 onChange={(e) => updateExtraHours(emp, Number(e.target.value))}
                                 placeholder="0"
-                                className="w-24 bg-brand-bg border border-brand-primary/20 rounded-lg py-1.5 px-3 text-sm focus:outline-none focus:border-brand-primary text-brand-text"
+                                className="w-20 bg-brand-bg border border-brand-primary/20 rounded-lg py-1 px-2.5 text-xs focus:outline-none focus:border-brand-primary text-brand-text"
                               />
                             </div>
                           )}
-                        </div>
+                        </motion.div>
                       );
                     })}
                     {employeesWorking.length === 0 && (
-                      <div className="col-span-full text-center py-8 border-2 border-dashed border-brand-border rounded-xl">
+                      <div className="col-span-full text-center py-6 border-2 border-dashed border-brand-border rounded-xl">
                         <p className="text-sm text-brand-muted italic">Ninguém escalado para este dia.</p>
                       </div>
                     )}
@@ -1142,24 +1399,62 @@ export default function CalendarView({
                       <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
                       Disponibilidades Sinalizadas ({availablesMarked.length})
                     </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {availablesMarked.map(emp => (
-                        <div 
-                          key={emp.id} 
-                          onClick={() => toggleWorkDay(emp, selectedDay)}
-                          className="flex items-center justify-between bg-emerald-500/[0.02] border border-emerald-500/20 hover:border-emerald-500/40 hover:bg-emerald-500/[0.05] p-3 rounded-xl transition-all cursor-pointer group"
-                        >
-                          <div>
-                            <p className="text-sm font-bold text-brand-text group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                              {emp.artisticName || emp.name}
-                            </p>
-                            <p className="text-[10px] text-brand-muted font-medium uppercase">{emp.level}</p>
-                          </div>
-                          <div className="p-2 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform">
-                            <UserPlus size={20} />
-                          </div>
-                        </div>
-                      ))}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {availablesMarked.map(emp => {
+                        const config = getDayConfig(selectedDayStr);
+                        const isDispCommon = emp.availabilities?.includes(selectedDayStr) || emp.availabilities?.includes(`${selectedDayStr}_common`);
+                        const isDispParty = emp.availabilities?.includes(`${selectedDayStr}_party`);
+
+                        let showCcspBtn = config.isCommon !== false && isDispCommon;
+                        let showPartyBtn = !!config.isParty && isDispParty;
+
+                        if (!showCcspBtn && !showPartyBtn) {
+                          if (config.isCommon !== false) showCcspBtn = true;
+                          if (!!config.isParty) showPartyBtn = true;
+                        }
+
+                        return (
+                          <motion.div 
+                            key={emp.id} 
+                            layout
+                            initial={{ opacity: 0, scale: 0.92 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.92 }}
+                            transition={{ duration: 0.18, ease: "easeInOut" }}
+                            className="flex items-center justify-between bg-emerald-500/[0.02] border border-emerald-500/20 hover:border-emerald-500/40 hover:bg-emerald-500/[0.05] px-3 py-2 rounded-xl transition-colors gap-2"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold text-brand-text truncate">{emp.artisticName || emp.name}</p>
+                              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase truncate">{emp.level}</p>
+                            </div>
+                            
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {showCcspBtn && (
+                                <motion.button 
+                                  whileHover={{ scale: 1.05 }}
+                                  whileTap={{ scale: 0.95 }}
+                                  onClick={() => toggleWorkDayType(emp, selectedDay!, 'common')}
+                                  className="text-[10px] font-black bg-brand-primary/10 hover:bg-brand-primary text-brand-primary hover:text-brand-bg px-2.5 py-1 rounded-lg border border-brand-primary/30 hover:border-transparent transition-colors flex items-center gap-1 uppercase"
+                                >
+                                  <UserPlus size={12} />
+                                  CCSP
+                                </motion.button>
+                              )}
+                              {showPartyBtn && (
+                                <motion.button 
+                                  whileHover={{ scale: 1.05 }}
+                                  whileTap={{ scale: 0.95 }}
+                                  onClick={() => toggleWorkDayType(emp, selectedDay!, 'party')}
+                                  className="text-[10px] font-black bg-purple-500/10 hover:bg-purple-500 text-purple-600 dark:text-purple-300 hover:text-white px-2.5 py-1 rounded-lg border border-purple-500/30 hover:border-transparent transition-colors flex items-center gap-1 uppercase"
+                                >
+                                  <UserPlus size={12} />
+                                  Festa
+                                </motion.button>
+                              )}
+                            </div>
+                          </motion.div>
+                        );
+                      })}
                       {availablesMarked.length === 0 && (
                         <p className="text-xs text-gray-500 italic py-2 col-span-full">Nenhuma sinalização de disponibilidade para este dia.</p>
                       )}
@@ -1172,24 +1467,54 @@ export default function CalendarView({
                       <h4 className="text-[10px] font-bold text-brand-muted uppercase tracking-widest mb-3">
                         Outros Recreadores ({availablesOthers.length})
                       </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {availablesOthers.map(emp => (
-                          <div 
-                            key={emp.id} 
-                            onClick={() => toggleWorkDay(emp, selectedDay)}
-                            className="flex items-center justify-between bg-brand-bg/40 border border-brand-border p-3 rounded-xl hover:border-brand-primary/30 hover:bg-brand-primary/5 transition-all cursor-pointer group"
-                          >
-                            <div>
-                              <p className="text-sm font-bold text-brand-text group-hover:text-brand-primary transition-colors">
-                                {emp.artisticName || emp.name}
-                              </p>
-                              <p className="text-[10px] text-brand-muted font-medium uppercase">{emp.level}</p>
-                            </div>
-                            <div className="p-2 text-brand-primary group-hover:scale-110 transition-transform">
-                              <UserPlus size={20} />
-                            </div>
-                          </div>
-                        ))}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {availablesOthers.map(emp => {
+                          const config = getDayConfig(selectedDayStr);
+                          const showCcspBtn = config.isCommon !== false;
+                          const showPartyBtn = !!config.isParty;
+
+                          return (
+                            <motion.div 
+                              key={emp.id} 
+                              layout
+                              initial={{ opacity: 0, scale: 0.92 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.92 }}
+                              transition={{ duration: 0.18, ease: "easeInOut" }}
+                              className="flex items-center justify-between bg-brand-bg/40 border border-brand-border px-3 py-2 rounded-xl hover:border-brand-primary/30 hover:bg-brand-primary/5 transition-colors gap-2"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-bold text-brand-text truncate">{emp.artisticName || emp.name}</p>
+                                <p className="text-[10px] text-brand-muted font-bold uppercase truncate">{emp.level}</p>
+                              </div>
+                              
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {showCcspBtn && (
+                                  <motion.button 
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => toggleWorkDayType(emp, selectedDay!, 'common')}
+                                    className="text-[10px] font-black bg-brand-bg border border-brand-border hover:bg-brand-primary/10 hover:border-brand-primary hover:text-brand-primary text-gray-400 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 uppercase"
+                                  >
+                                    <UserPlus size={12} />
+                                    CCSP
+                                  </motion.button>
+                                )}
+                                {showPartyBtn && (
+                                  <motion.button 
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => toggleWorkDayType(emp, selectedDay!, 'party')}
+                                    className="text-[10px] font-black bg-brand-bg border border-brand-border hover:bg-purple-500/10 hover:border-purple-500 hover:text-purple-400 text-gray-400 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 uppercase"
+                                  >
+                                    <UserPlus size={12} />
+                                    Festa
+                                  </motion.button>
+                                )}
+                              </div>
+                            </motion.div>
+                          );
+                        })}
                         {availablesOthers.length === 0 && (
                           <p className="text-xs text-brand-muted italic py-2 col-span-full">Nenhum outro recreador encontrado.</p>
                         )}
@@ -1457,45 +1782,59 @@ export default function CalendarView({
                 );
               })()}
 
-              {/* Party Option */}
+              {/* Party Option(s) */}
               {(() => {
                 const dateStr = format(employeeChoiceDate, 'yyyy-MM-dd');
                 const currentAvailabilities = myEmployee.availabilities || [];
-                const isPartyChecked = currentAvailabilities.includes(`${dateStr}_party`);
                 const config = getDayConfig(dateStr);
+                const parties = config.parties && config.parties.length > 0 
+                  ? config.parties 
+                  : (config.isParty ? [{ id: 'default_party', name: 'Festa', time: config.partyTime }] : []);
                 
                 return (
-                  <label className={cn(
-                    "flex items-center justify-between p-4 rounded-xl border cursor-pointer select-none transition-all",
-                    isPartyChecked 
-                      ? "bg-purple-500/10 border-purple-500/50 text-purple-600 dark:text-purple-300" 
-                      : "bg-brand-bg/40 border-brand-border text-brand-muted hover:border-brand-primary/30"
-                  )}>
-                    <div className="flex flex-col">
-                      <span className="font-bold text-sm text-brand-text">Dia de Festa 🥳</span>
-                      {config.partyTime ? (
-                        <span className="text-xs text-purple-600 dark:text-purple-300 font-bold mt-1">Horário: {config.partyTime}</span>
-                      ) : (
-                        <span className="text-xs text-brand-muted">Trabalhar em eventos e festas extras</span>
-                      )}
-                    </div>
-                    <input 
-                      type="checkbox"
-                      checked={isPartyChecked}
-                      onChange={(e) => {
-                        let newAvail: string[];
-                        if (e.target.checked) {
-                          newAvail = [...currentAvailabilities, `${dateStr}_party`];
-                        } else {
-                          newAvail = currentAvailabilities.filter(d => d !== `${dateStr}_party`);
-                        }
-                        if (onUpdateAvailabilities) {
-                          onUpdateAvailabilities(myEmployee.id, newAvail);
-                        }
-                      }}
-                      className="rounded border-brand-border text-purple-500 bg-brand-bg focus:ring-purple-500 w-5 h-5 cursor-pointer"
-                    />
-                  </label>
+                  <>
+                    {parties.map((party) => {
+                      const partyKey = `${dateStr}_party_${party.id}`;
+                      const isPartyChecked = currentAvailabilities.includes(partyKey) || currentAvailabilities.includes(`${dateStr}_party`);
+
+                      return (
+                        <label key={party.id} className={cn(
+                          "flex items-center justify-between p-4 rounded-xl border cursor-pointer select-none transition-all",
+                          isPartyChecked 
+                            ? "bg-purple-500/10 border-purple-500/50 text-purple-600 dark:text-purple-300" 
+                            : "bg-brand-bg/40 border-brand-border text-brand-muted hover:border-brand-primary/30"
+                        )}>
+                          <div className="flex flex-col">
+                            <span className="font-bold text-sm text-brand-text flex items-center gap-1.5">
+                              <span>🎉</span>
+                              <span>{party.name}</span>
+                            </span>
+                            {party.time ? (
+                              <span className="text-xs text-purple-600 dark:text-purple-300 font-bold mt-1">Horário: {party.time}</span>
+                            ) : (
+                              <span className="text-xs text-brand-muted">Trabalhar em eventos e festas extras</span>
+                            )}
+                          </div>
+                          <input 
+                            type="checkbox"
+                            checked={isPartyChecked}
+                            onChange={(e) => {
+                              let newAvail: string[];
+                              if (e.target.checked) {
+                                newAvail = [...currentAvailabilities, partyKey, `${dateStr}_party`];
+                              } else {
+                                newAvail = currentAvailabilities.filter(d => d !== partyKey && d !== `${dateStr}_party`);
+                              }
+                              if (onUpdateAvailabilities) {
+                                onUpdateAvailabilities(myEmployee.id, newAvail);
+                              }
+                            }}
+                            className="rounded border-brand-border text-purple-500 bg-brand-bg focus:ring-purple-500 w-5 h-5 cursor-pointer"
+                          />
+                        </label>
+                      );
+                    })}
+                  </>
                 );
               })()}
             </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Edit2, Calendar, FileDown } from 'lucide-react';
+import { Edit2, Calendar, FileDown, Award } from 'lucide-react';
 import { Employee } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
 import { format, isSameMonth, parseISO } from 'date-fns';
@@ -73,6 +73,7 @@ interface EmployeeListProps {
   employees: Employee[];
   onEdit: (employee: Employee) => void;
   onManageDays: (employee: Employee) => void;
+  onViewStory?: (employee: Employee) => void;
   currentMonth: Date;
   setCurrentMonth: React.Dispatch<React.SetStateAction<Date>>;
 }
@@ -81,12 +82,20 @@ export default function EmployeeList({
   employees, 
   onEdit, 
   onManageDays,
+  onViewStory,
   currentMonth,
   setCurrentMonth
 }: EmployeeListProps) {
+  const sortedEmployees = React.useMemo(() => {
+    return [...employees].sort((a, b) => {
+      const nameA = a.artisticName || a.name || '';
+      const nameB = b.artisticName || b.name || '';
+      return nameA.localeCompare(nameB, 'pt-BR', { sensitivity: 'base' });
+    });
+  }, [employees]);
 
   return (
-    <div className="bg-brand-card border border-brand-border rounded-xl overflow-hidden">
+    <div className="bg-brand-card border border-brand-border rounded-xl overflow-hidden shadow-lg">
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
@@ -107,8 +116,8 @@ export default function EmployeeList({
               <th className="p-4 text-xs font-bold text-brand-muted uppercase tracking-wider text-right">Ações</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-brand-border">
-            {employees.map((emp) => {
+          <tbody className="divide-y divide-brand-border relative">
+            {sortedEmployees.map((emp) => {
               const monthWorkDays = (emp.workDays || []).filter(day => {
                 if (day.isCancelled) return false;
                 const date = parseISO(day.date);
@@ -134,11 +143,28 @@ export default function EmployeeList({
               });
 
               return (
-                <tr key={emp.id} className="hover:bg-brand-bg/60 transition-colors group">
+                <motion.tr 
+                  key={emp.id} 
+                  layout
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.22, ease: "easeInOut" }}
+                  className="hover:bg-brand-bg/60 transition-colors group"
+                >
                   <td className="p-4">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-bold text-brand-text group-hover:text-brand-primary transition-colors">{emp.name}</span>
-                      <span className="text-[10px] text-brand-primary font-medium">{emp.artisticName}</span>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-brand-primary/10 border border-brand-primary/30 flex items-center justify-center text-xs font-bold text-brand-primary shrink-0 overflow-hidden">
+                        {emp.photoUrl ? (
+                          <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span>{emp.artisticName?.substring(0, 2) || emp.name?.substring(0, 2)}</span>
+                        )}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold text-brand-text group-hover:text-brand-primary transition-colors">{emp.name}</span>
+                        <span className="text-[10px] text-brand-primary font-medium">{emp.artisticName}</span>
+                      </div>
                     </div>
                   </td>
                   <td className="p-4">
@@ -169,6 +195,16 @@ export default function EmployeeList({
                   </td>
                   <td className="p-4 text-right">
                     <div className="flex items-center justify-end gap-1">
+                      {onViewStory && (
+                        <button 
+                          onClick={() => onViewStory(emp)}
+                          className="flex items-center gap-1.5 bg-brand-primary/10 hover:bg-brand-primary text-brand-primary hover:text-brand-bg text-[10px] font-bold py-1.5 px-2.5 rounded transition-colors border border-brand-primary/30"
+                          title="Ver história e conquistas"
+                        >
+                          <Award size={12} />
+                          <span className="hidden sm:inline">História</span>
+                        </button>
+                      )}
                       <button 
                         onClick={() => onManageDays(emp)}
                         className="flex items-center gap-2 bg-brand-primary hover:bg-brand-primary-hover text-brand-bg text-[10px] font-bold py-1.5 px-3 rounded transition-colors"
@@ -179,15 +215,13 @@ export default function EmployeeList({
                       <button 
                         onClick={() => onEdit(emp)}
                         className="p-2 text-brand-muted hover:text-brand-text hover:bg-brand-border/40 rounded transition-all"
+                        title="Editar funcionário"
                       >
                         <Edit2 size={16} />
                       </button>
-                      <button className="p-2 text-brand-muted hover:text-brand-text hover:bg-brand-border/40 rounded transition-all">
-                        <FileDown size={16} />
-                      </button>
                     </div>
                   </td>
-                </tr>
+                </motion.tr>
               );
             })}
           </tbody>
