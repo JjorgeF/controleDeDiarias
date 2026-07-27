@@ -329,6 +329,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
         id: emp.id,
         name: emp.name,
         artisticName: emp.artisticName || emp.name,
+        photoUrl: emp.photoUrl,
         level: emp.level,
         confirmedThisMonth,
         availabilitiesThisMonth,
@@ -687,11 +688,15 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                           {/* Avatar Circle */}
                           <div className="relative mb-3">
                             <div className={cn(
-                              "rounded-full bg-brand-bg/90 border border-brand-border/60 flex items-center justify-center font-extrabold uppercase select-none transition-all duration-300",
+                              "rounded-full bg-brand-bg/90 border border-brand-border/60 flex items-center justify-center font-extrabold uppercase select-none transition-all duration-300 overflow-hidden",
                               config.avatarSize,
                               config.avatarRing
                             )}>
-                              {item.artisticName.substring(0, 2)}
+                              {item.photoUrl ? (
+                                <img src={item.photoUrl} alt={item.artisticName} className="w-full h-full object-cover" />
+                              ) : (
+                                <span>{item.artisticName.substring(0, 2)}</span>
+                              )}
                             </div>
                             
                             {/* Ranking Badge Overlay */}
@@ -783,9 +788,13 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                           {rankPosition}
                         </div>
 
-                        {/* Avatar Initials */}
-                        <div className="w-10 h-10 rounded-full bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center font-extrabold text-sm text-brand-primary uppercase shrink-0">
-                          {item.artisticName.substring(0, 2)}
+                        {/* Avatar Image / Initials */}
+                        <div className="w-10 h-10 rounded-full bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center font-extrabold text-sm text-brand-primary uppercase shrink-0 overflow-hidden shadow-sm">
+                          {item.photoUrl ? (
+                            <img src={item.photoUrl} alt={item.artisticName} className="w-full h-full object-cover" />
+                          ) : (
+                            <span>{item.artisticName.substring(0, 2)}</span>
+                          )}
                         </div>
 
                         {/* Name and Bar details */}
