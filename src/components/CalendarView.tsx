@@ -884,8 +884,9 @@ export default function CalendarView({
                         isAdmin && isSelected && !isReadOnly && "bg-brand-primary/10 ring-2 ring-brand-primary border-brand-primary z-10",
                         isAdmin && !isSelected && config.isCommon && "bg-emerald-500/[0.03] border-emerald-500/20",
                         isAdmin && !isSelected && config.isParty && "bg-purple-500/[0.03] border-purple-500/20",
-                        // Status styling for recreador when scheduled (fixed border and background, no animation)
-                        !isAdmin && isMyScheduled && "bg-amber-100/90 dark:bg-[#f2d861]/15 border-2 border-[#f2d861] shadow-sm z-10",
+                        // Status styling for recreador when scheduled
+                        !isAdmin && isMyScheduled && "bg-amber-100 dark:bg-[#f2d861]/25 border-2 border-amber-400 dark:border-[#f2d861] shadow-sm z-10",
+                        !isAdmin && !isMyScheduled && isMyAvailable && "border-2 border-emerald-500/60 dark:border-emerald-400/60 z-10",
                         idx % 7 === 6 && "border-r-0"
                       )}
                     >
@@ -903,9 +904,11 @@ export default function CalendarView({
                           <div 
                             className={cn(
                               "absolute inset-[1.5px] pointer-events-none z-0 transition-colors",
-                              !isAdmin && isMyAvailable 
-                                ? "bg-emerald-100/80 dark:bg-emerald-950" 
-                                : "bg-brand-card"
+                              !isAdmin && isMyScheduled
+                                ? "bg-amber-100/90 dark:bg-[#f2d861]/20"
+                                : !isAdmin && isMyAvailable 
+                                  ? "bg-emerald-100 dark:bg-emerald-900/40" 
+                                  : "bg-brand-card"
                             )} 
                           />
                         </>
@@ -1001,13 +1004,13 @@ export default function CalendarView({
                           <div className="flex flex-col gap-1 items-center w-full mt-1">
                             {/* Common scheduling */}
                             {config.isCommon && isMyScheduledCommon && (
-                              <div className="bg-brand-primary text-slate-900 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 w-full max-w-[54px] lg:max-w-none truncate shadow-xs">
+                              <div className="bg-[#f2d861] text-slate-950 dark:bg-[#f2d861] dark:text-slate-950 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 w-full max-w-[54px] lg:max-w-none truncate shadow-sm">
                                 <span className="hidden lg:inline">Escalado</span>
                                 <span className="lg:hidden">Esc.</span>
                               </div>
                             )}
                             {config.isCommon && isMyAvailableCommon && !isMyScheduledCommon && (
-                              <div className="bg-emerald-600 text-white dark:bg-emerald-500/20 dark:text-emerald-400 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 flex items-center justify-center gap-0.5 w-full max-w-[54px] lg:max-w-none truncate shadow-xs">
+                              <div className="bg-emerald-600 text-white dark:bg-emerald-500 dark:text-slate-950 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 flex items-center justify-center gap-0.5 w-full max-w-[54px] lg:max-w-none truncate shadow-sm">
                                 <CheckCircle2 size={8} className="shrink-0" />
                                 <span className="hidden lg:inline">Disponível</span>
                                 <span className="lg:hidden">Disp.</span>
@@ -1016,13 +1019,13 @@ export default function CalendarView({
                             
                             {/* Party scheduling */}
                             {config.isParty && isMyScheduledParty && (
-                              <div className="bg-purple-600 text-white dark:bg-purple-500/30 dark:text-purple-300 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 w-full max-w-[54px] lg:max-w-none truncate shadow-xs">
+                              <div className="bg-purple-600 text-white dark:bg-purple-500 dark:text-slate-950 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 w-full max-w-[54px] lg:max-w-none truncate shadow-sm">
                                 <span className="hidden lg:inline">Escalado Festa</span>
                                 <span className="lg:hidden">Esc. F.</span>
                               </div>
                             )}
                             {config.isParty && isMyAvailableParty && !isMyScheduledParty && (
-                              <div className="bg-pink-600 text-white dark:bg-pink-500/20 dark:text-pink-300 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 flex items-center justify-center gap-0.5 w-full max-w-[54px] lg:max-w-none truncate shadow-xs">
+                              <div className="bg-pink-600 text-white dark:bg-pink-500 dark:text-slate-950 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 flex items-center justify-center gap-0.5 w-full max-w-[54px] lg:max-w-none truncate shadow-sm">
                                 <CheckCircle2 size={8} className="shrink-0" />
                                 <span className="hidden lg:inline">Disp. Festa</span>
                                 <span className="lg:hidden">Disp. F.</span>
