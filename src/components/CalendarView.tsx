@@ -644,16 +644,16 @@ export default function CalendarView({
       <div className={cn(
         "border rounded-xl p-4 flex items-center justify-between shadow-md transition-all duration-200 animate-in fade-in slide-in-from-top-2",
         isDeadlinePassed 
-          ? "bg-red-500/10 border-red-500/20 text-red-800 dark:text-red-200" 
+          ? "bg-red-500/10 border-red-500/20 text-red-900 dark:text-red-200" 
           : deadlineDate 
-            ? "bg-yellow-500/10 border-yellow-500/20 text-yellow-800 dark:text-yellow-200" 
-            : "bg-blue-500/10 border-blue-500/20 text-blue-800 dark:text-blue-200"
+            ? "bg-amber-500/10 border-amber-500/30 text-amber-950 dark:text-amber-200" 
+            : "bg-blue-500/10 border-blue-500/20 text-blue-900 dark:text-blue-200"
       )}>
         <div className="flex items-center gap-3">
           {isDeadlinePassed ? (
             <Lock className="text-red-600 dark:text-red-400 shrink-0 animate-bounce" size={20} />
           ) : deadlineDate ? (
-            <Unlock className="text-yellow-600 dark:text-yellow-400 shrink-0" size={20} />
+            <Unlock className="text-amber-600 dark:text-yellow-400 shrink-0" size={20} />
           ) : (
             <Calendar className="text-blue-600 dark:text-blue-400 shrink-0" size={20} />
           )}
@@ -668,7 +668,7 @@ export default function CalendarView({
               )}
             </p>
             {!isAdmin && !isDeadlinePassed && (
-              <p className="text-[10px] text-yellow-700 dark:text-yellow-400/80 mt-0.5 font-bold">Toque nos dias do calendário para marcar/desmarcar os dias em que você pode trabalhar.</p>
+              <p className="text-[10px] text-amber-900 dark:text-yellow-400/80 mt-0.5 font-bold">Toque nos dias do calendário para marcar/desmarcar os dias em que você pode trabalhar.</p>
             )}
             {isAdmin && (
               <p className="text-[10px] text-emerald-700 dark:text-emerald-400/80 mt-0.5 font-bold">⚡ Clique simples para ativar/desativar o dia de atividades CCSP. Clique duplo para gerenciar a equipe ou definir festa.</p>
@@ -849,7 +849,10 @@ export default function CalendarView({
                   const isTodayDate = isToday(day);
                   const isOpenForAvailability = isCurrentMonth && (config.isCommon || config.isParty);
                   const showBeam = isCurrentMonth && !isMyScheduled && (isOpenForAvailability || (!isAdmin && isMyAvailable));
-                  const beamGradient = 'conic-gradient(from 0deg, transparent 0deg, transparent 260deg, #34d399 300deg, #10b981 340deg, transparent 360deg)';
+                  const isGreenBeam = !isAdmin && isMyAvailable;
+                  const beamGradient = isGreenBeam
+                    ? 'conic-gradient(from 0deg, transparent 0deg, transparent 260deg, #34d399 300deg, #10b981 340deg, transparent 360deg)'
+                    : 'conic-gradient(from 0deg, transparent 0deg, transparent 260deg, #61C4F2 300deg, #38bdf8 340deg, transparent 360deg)';
 
                   return (
                     <motion.div
@@ -878,7 +881,7 @@ export default function CalendarView({
                         isAdmin && !isSelected && config.isCommon && "bg-emerald-500/[0.03] border-emerald-500/20",
                         isAdmin && !isSelected && config.isParty && "bg-purple-500/[0.03] border-purple-500/20",
                         // Status styling for recreador when scheduled (fixed border and background, no animation)
-                        !isAdmin && isMyScheduled && "bg-[#f2d861]/20 dark:bg-[#f2d861]/15 border-2 border-[#f2d861] shadow-sm z-10",
+                        !isAdmin && isMyScheduled && "bg-amber-100/90 dark:bg-[#f2d861]/15 border-2 border-[#f2d861] shadow-sm z-10",
                         idx % 7 === 6 && "border-r-0"
                       )}
                     >
@@ -897,7 +900,7 @@ export default function CalendarView({
                             className={cn(
                               "absolute inset-[1.5px] pointer-events-none z-0 transition-colors",
                               !isAdmin && isMyAvailable 
-                                ? "bg-emerald-100 dark:bg-emerald-950/60" 
+                                ? "bg-emerald-100/80 dark:bg-emerald-950" 
                                 : "bg-brand-card"
                             )} 
                           />
@@ -910,7 +913,7 @@ export default function CalendarView({
                           {(config.parties && config.parties.length > 0 ? config.parties : [{ id: 'def', name: 'Festa', time: config.partyTime }]).map((p, pIdx) => (
                             <span 
                               key={p.id || pIdx}
-                              className="text-[7px] md:text-[9px] bg-purple-500/10 dark:bg-purple-500/25 text-purple-700 dark:text-purple-300 px-1 py-0.5 rounded font-black uppercase tracking-wider scale-90 md:scale-100 truncate max-w-full"
+                              className="text-[7px] md:text-[9px] bg-purple-600/10 dark:bg-purple-500/25 text-purple-900 dark:text-purple-300 px-1 py-0.5 rounded font-black uppercase tracking-wider scale-90 md:scale-100 truncate max-w-full"
                               title={p.time ? `${p.name}: ${p.time}` : p.name}
                             >
                               🎉 {p.name}{p.time ? ` (${p.time})` : ''}
@@ -922,9 +925,14 @@ export default function CalendarView({
                       <div className="relative z-10 flex flex-col items-center justify-between h-full gap-1">
                         <span className={cn(
                           "text-xs md:text-sm font-black w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full transition-colors",
-                          isTodayDate ? "bg-brand-primary text-slate-900 font-extrabold shadow-sm" : "text-brand-muted group-hover:text-brand-text",
+                          isTodayDate 
+                            ? "bg-brand-primary text-slate-900 font-extrabold shadow-sm" 
+                            : !isAdmin && isMyScheduled 
+                              ? "bg-brand-primary text-slate-900 font-extrabold shadow-sm" 
+                              : !isAdmin && isMyAvailable 
+                                ? "text-emerald-950 dark:text-emerald-200 font-black" 
+                                : "text-brand-muted group-hover:text-brand-text",
                           isAdmin && isSelected && !isTodayDate && !isReadOnly && "text-brand-primary",
-                          !isAdmin && isMyScheduled && "bg-brand-primary text-slate-900 font-extrabold shadow-sm",
                           !isAdmin && !isMyScheduled && !config.isCommon && !config.isParty && "text-brand-muted/50"
                         )}>
                           {format(day, 'd')}
@@ -989,13 +997,13 @@ export default function CalendarView({
                           <div className="flex flex-col gap-1 items-center w-full mt-1">
                             {/* Common scheduling */}
                             {config.isCommon && isMyScheduledCommon && (
-                              <div className="bg-brand-primary/20 text-brand-primary px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 w-full max-w-[54px] lg:max-w-none truncate">
+                              <div className="bg-brand-primary text-slate-900 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 w-full max-w-[54px] lg:max-w-none truncate shadow-xs">
                                 <span className="hidden lg:inline">Escalado</span>
                                 <span className="lg:hidden">Esc.</span>
                               </div>
                             )}
                             {config.isCommon && isMyAvailableCommon && !isMyScheduledCommon && (
-                              <div className="bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 flex items-center justify-center gap-0.5 w-full max-w-[54px] lg:max-w-none truncate">
+                              <div className="bg-emerald-600 text-white dark:bg-emerald-500/20 dark:text-emerald-400 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 flex items-center justify-center gap-0.5 w-full max-w-[54px] lg:max-w-none truncate shadow-xs">
                                 <CheckCircle2 size={8} className="shrink-0" />
                                 <span className="hidden lg:inline">Disponível</span>
                                 <span className="lg:hidden">Disp.</span>
@@ -1004,13 +1012,13 @@ export default function CalendarView({
                             
                             {/* Party scheduling */}
                             {config.isParty && isMyScheduledParty && (
-                              <div className="bg-purple-500/10 dark:bg-purple-500/25 text-purple-600 dark:text-purple-300 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 w-full max-w-[54px] lg:max-w-none truncate">
+                              <div className="bg-purple-600 text-white dark:bg-purple-500/30 dark:text-purple-300 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 w-full max-w-[54px] lg:max-w-none truncate shadow-xs">
                                 <span className="hidden lg:inline">Escalado Festa</span>
                                 <span className="lg:hidden">Esc. F.</span>
                               </div>
                             )}
                             {config.isParty && isMyAvailableParty && !isMyScheduledParty && (
-                              <div className="bg-pink-500/10 dark:bg-pink-500/20 text-pink-600 dark:text-pink-300 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 flex items-center justify-center gap-0.5 w-full max-w-[54px] lg:max-w-none truncate">
+                              <div className="bg-pink-600 text-white dark:bg-pink-500/20 dark:text-pink-300 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 flex items-center justify-center gap-0.5 w-full max-w-[54px] lg:max-w-none truncate shadow-xs">
                                 <CheckCircle2 size={8} className="shrink-0" />
                                 <span className="hidden lg:inline">Disp. Festa</span>
                                 <span className="lg:hidden">Disp. F.</span>
