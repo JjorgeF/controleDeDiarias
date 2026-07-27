@@ -848,11 +848,8 @@ export default function CalendarView({
                   const isSelected = selectedDay && isSameDay(day, selectedDay);
                   const isTodayDate = isToday(day);
                   const isOpenForAvailability = isCurrentMonth && (config.isCommon || config.isParty);
-                  const showBeam = isCurrentMonth && (isOpenForAvailability || (!isAdmin && (isMyAvailable || isMyScheduled)));
-                  const isYellowBeam = !isAdmin && isMyScheduled;
-                  const beamGradient = isYellowBeam
-                    ? 'conic-gradient(from 0deg, transparent 0deg, transparent 260deg, #fbbf24 300deg, #f59e0b 340deg, transparent 360deg)'
-                    : 'conic-gradient(from 0deg, transparent 0deg, transparent 260deg, #34d399 300deg, #10b981 340deg, transparent 360deg)';
+                  const showBeam = isCurrentMonth && !isMyScheduled && (isOpenForAvailability || (!isAdmin && isMyAvailable));
+                  const beamGradient = 'conic-gradient(from 0deg, transparent 0deg, transparent 260deg, #34d399 300deg, #10b981 340deg, transparent 360deg)';
 
                   return (
                     <motion.div
@@ -880,6 +877,8 @@ export default function CalendarView({
                         isAdmin && isSelected && !isReadOnly && "bg-brand-primary/10 ring-2 ring-brand-primary border-brand-primary z-10",
                         isAdmin && !isSelected && config.isCommon && "bg-emerald-500/[0.03] border-emerald-500/20",
                         isAdmin && !isSelected && config.isParty && "bg-purple-500/[0.03] border-purple-500/20",
+                        // Status styling for recreador when scheduled (fixed border and background, no animation)
+                        !isAdmin && isMyScheduled && "bg-[#f2d861]/20 dark:bg-[#f2d861]/15 border-2 border-[#f2d861] shadow-sm z-10",
                         idx % 7 === 6 && "border-r-0"
                       )}
                     >
@@ -897,11 +896,9 @@ export default function CalendarView({
                           <div 
                             className={cn(
                               "absolute inset-[1.5px] pointer-events-none z-0 transition-colors",
-                              !isAdmin && isMyScheduled 
-                                ? "bg-amber-100 dark:bg-amber-950" 
-                                : !isAdmin && isMyAvailable 
-                                  ? "bg-emerald-100 dark:bg-emerald-950" 
-                                  : "bg-brand-card"
+                              !isAdmin && isMyAvailable 
+                                ? "bg-emerald-100 dark:bg-emerald-950/60" 
+                                : "bg-brand-card"
                             )} 
                           />
                         </>
