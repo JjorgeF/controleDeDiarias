@@ -250,21 +250,18 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
       ) || [];
       totalScheduledDaysThisMonth += monthWorkDays.length;
 
-      // Availabilities in this month (filtering for active configs only)
-      const monthAvailabilities = emp.availabilities?.filter(dateStr => {
-        if (!dateStr.startsWith(currentMonthKey)) return false;
-        if (dateStr.startsWith('login_')) return false;
+      // Availabilities in this month (filtering for active configs only, deduplicated by date and type)
+      const availStrings = emp.availabilities?.filter(str => str.startsWith(currentMonthKey) && !str.startsWith('login_')) || [];
+      const uniqueDates = Array.from(new Set(availStrings.map(s => s.split('_')[0])));
 
-        const datePart = dateStr.includes('_') ? dateStr.split('_')[0] : dateStr;
-        const config = getDayConfig(datePart);
-        const isPartyAvail = dateStr.endsWith('_party');
-        if (isPartyAvail) {
-          return config.isParty;
-        } else {
-          return config.isCommon;
-        }
-      }) || [];
-      totalAvailabilitiesThisMonth += monthAvailabilities.length;
+      uniqueDates.forEach(dateStr => {
+        const config = getDayConfig(dateStr);
+        const hasCommon = availStrings.some(s => s === dateStr || s === `${dateStr}_common`);
+        const hasParty = availStrings.some(s => s.startsWith(`${dateStr}_party`));
+
+        if (hasCommon && config.isCommon) totalAvailabilitiesThisMonth++;
+        if (hasParty && config.isParty) totalAvailabilitiesThisMonth++;
+      });
     });
 
     return {
@@ -286,24 +283,33 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
       ) || [];
       const cancellationsThisMonth = cancellationsThisMonthList.length;
 
-      // Track exact dates with active/inactive state
+      // Track exact dates with active/inactive state, deduplicated by date and type
       const activeAvails: { day: string; type: 'common' | 'party' }[] = [];
       const inactiveAvails: { day: string; type: 'common' | 'party' }[] = [];
 
-      emp.availabilities?.forEach(dateStr => {
-        if (!dateStr.startsWith(currentMonthKey)) return;
-        if (dateStr.startsWith('login_')) return;
+      const monthAvailStrings = emp.availabilities?.filter(str => str.startsWith(currentMonthKey) && !str.startsWith('login_')) || [];
+      const monthDates = Array.from(new Set(monthAvailStrings.map(s => s.split('_')[0])));
 
-        const datePart = dateStr.includes('_') ? dateStr.split('_')[0] : dateStr;
-        const config = getDayConfig(datePart);
-        const isParty = dateStr.endsWith('_party');
-        const isActive = isParty ? config.isParty : config.isCommon;
-        const dayNum = datePart.split('-')[2];
+      monthDates.forEach(dateStr => {
+        const config = getDayConfig(dateStr);
+        const dayNum = dateStr.split('-')[2];
+        const hasCommon = monthAvailStrings.some(s => s === dateStr || s === `${dateStr}_common`);
+        const hasParty = monthAvailStrings.some(s => s.startsWith(`${dateStr}_party`));
 
-        if (isActive) {
-          activeAvails.push({ day: dayNum, type: isParty ? 'party' : 'common' });
-        } else {
-          inactiveAvails.push({ day: dayNum, type: isParty ? 'party' : 'common' });
+        if (hasCommon) {
+          if (config.isCommon) {
+            activeAvails.push({ day: dayNum, type: 'common' });
+          } else {
+            inactiveAvails.push({ day: dayNum, type: 'common' });
+          }
+        }
+
+        if (hasParty) {
+          if (config.isParty) {
+            activeAvails.push({ day: dayNum, type: 'party' });
+          } else {
+            inactiveAvails.push({ day: dayNum, type: 'party' });
+          }
         }
       });
 
@@ -312,18 +318,19 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
       const totalConfirmedAllTime = emp.workDays?.filter(d => !d.isCancelled).length || 0;
       const totalCancellationsAllTime = emp.workDays?.filter(d => d.isCancelled).length || 0;
       
-      const totalAvailabilitiesAllTime = emp.availabilities?.filter(dateStr => {
-        if (dateStr.startsWith('login_')) return false;
+      // All time availabilities count, deduplicated by date and type
+      let totalAvailabilitiesAllTime = 0;
+      const allAvailStrings = emp.availabilities?.filter(str => !str.startsWith('login_')) || [];
+      const allDates = Array.from(new Set(allAvailStrings.map(s => s.split('_')[0])));
 
-        const datePart = dateStr.includes('_') ? dateStr.split('_')[0] : dateStr;
-        const config = getDayConfig(datePart);
-        const isPartyAvail = dateStr.endsWith('_party');
-        if (isPartyAvail) {
-          return config.isParty;
-        } else {
-          return config.isCommon;
-        }
-      }).length || 0;
+      allDates.forEach(dateStr => {
+        const config = getDayConfig(dateStr);
+        const hasCommon = allAvailStrings.some(s => s === dateStr || s === `${dateStr}_common`);
+        const hasParty = allAvailStrings.some(s => s.startsWith(`${dateStr}_party`));
+
+        if (hasCommon && config.isCommon) totalAvailabilitiesAllTime++;
+        if (hasParty && config.isParty) totalAvailabilitiesAllTime++;
+      });
 
       return {
         id: emp.id,
