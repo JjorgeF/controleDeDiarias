@@ -442,55 +442,64 @@ export default function DayManagementModal({
                     return (
                       <div key={emp.id} className="bg-brand-primary/5 border border-brand-primary/20 px-3 py-2.5 rounded-xl transition-all hover:border-brand-primary/40 group">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="cursor-pointer min-w-0 flex-1" onClick={() => setExpandedEmployeeId(isExpanded ? null : emp.id)}>
-                            <div className="flex items-center gap-2">
-                              <p className="text-xs font-bold text-white truncate group-hover:text-brand-primary transition-colors">{emp.artisticName || emp.name}</p>
-                              <span className="text-[10px] text-brand-primary font-black uppercase shrink-0">{emp.level}</span>
-                            </div>
-                            
-                            {/* Switcher Pills: Clicking another event moves the employee to that event (1 event per day limit) */}
-                            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                              {dayConfig.isCommon !== false && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    assignEmployee(emp, 'common');
-                                  }}
-                                  className={cn(
-                                    "text-[9px] font-black px-2.5 py-1 rounded-lg transition-all uppercase tracking-wider flex items-center gap-1",
-                                    isCommon 
-                                      ? "bg-brand-primary text-brand-bg shadow-md" 
-                                      : "bg-brand-bg border border-brand-border text-gray-400 hover:border-brand-primary/50 hover:text-brand-primary"
-                                  )}
-                                >
-                                  CCSP
-                                </button>
+                          <div className="cursor-pointer min-w-0 flex-1 flex items-center gap-2.5" onClick={() => setExpandedEmployeeId(isExpanded ? null : emp.id)}>
+                            <div className="w-8 h-8 rounded-full bg-brand-primary/20 shrink-0 overflow-hidden flex items-center justify-center text-xs font-bold text-brand-primary border border-brand-primary/30 shadow-sm">
+                              {emp.photoUrl ? (
+                                <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <span>{(emp.artisticName || emp.name).substring(0, 2).toUpperCase()}</span>
                               )}
-
-                              {normalizedParties.map((party) => {
-                                const isAssignedToThisParty = isParty && 
-                                  (currentPartyId === party.id || (!currentPartyId && party.id === 'default_party') || currentPartyName === party.name);
-
-                                return (
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <p className="text-xs font-bold text-white truncate group-hover:text-brand-primary transition-colors">{emp.artisticName || emp.name}</p>
+                                <span className="text-[10px] text-brand-primary font-black uppercase shrink-0">{emp.level}</span>
+                              </div>
+                              
+                              {/* Switcher Pills: Clicking another event moves the employee to that event (1 event per day limit) */}
+                              <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                {dayConfig.isCommon !== false && (
                                   <button
-                                    key={party.id}
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      assignEmployee(emp, 'party', party);
+                                      assignEmployee(emp, 'common');
                                     }}
                                     className={cn(
-                                      "text-[9px] font-black px-2.5 py-1 rounded-lg transition-all uppercase tracking-wider flex items-center gap-1 max-w-[200px] truncate",
-                                      isAssignedToThisParty 
-                                        ? "bg-purple-600 text-white shadow-md ring-1 ring-purple-400" 
-                                        : "bg-brand-bg border border-brand-border text-gray-400 hover:border-purple-500/50 hover:text-purple-300"
+                                      "text-[9px] font-black px-2.5 py-1 rounded-lg transition-all uppercase tracking-wider flex items-center gap-1",
+                                      isCommon 
+                                        ? "bg-brand-primary text-brand-bg shadow-md" 
+                                        : "bg-brand-bg border border-brand-border text-gray-400 hover:border-brand-primary/50 hover:text-brand-primary"
                                     )}
-                                    title={`Escalar para ${party.name}${party.time ? ` (${party.time})` : ''}`}
                                   >
-                                    <span>🎉</span>
-                                    <span className="truncate">{party.name}</span>
+                                    CCSP
                                   </button>
-                                );
-                              })}
+                                )}
+
+                                {normalizedParties.map((party) => {
+                                  const isAssignedToThisParty = isParty && 
+                                    (currentPartyId === party.id || (!currentPartyId && party.id === 'default_party') || currentPartyName === party.name);
+
+                                  return (
+                                    <button
+                                      key={party.id}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        assignEmployee(emp, 'party', party);
+                                      }}
+                                      className={cn(
+                                        "text-[9px] font-black px-2.5 py-1 rounded-lg transition-all uppercase tracking-wider flex items-center gap-1 max-w-[200px] truncate",
+                                        isAssignedToThisParty 
+                                          ? "bg-purple-600 text-white shadow-md ring-1 ring-purple-400" 
+                                          : "bg-brand-bg border border-brand-border text-gray-400 hover:border-purple-500/50 hover:text-purple-300"
+                                      )}
+                                      title={`Escalar para ${party.name}${party.time ? ` (${party.time})` : ''}`}
+                                    >
+                                      <span>🎉</span>
+                                      <span className="truncate">{party.name}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             </div>
                           </div>
 
@@ -559,9 +568,18 @@ export default function DayManagementModal({
                           key={emp.id} 
                           className="flex items-center justify-between bg-emerald-950/20 border border-emerald-500/30 p-2.5 rounded-xl gap-2 transition-all hover:border-emerald-500/50"
                         >
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-white truncate">{emp.artisticName || emp.name}</p>
-                            <p className="text-[10px] text-emerald-400 font-bold uppercase truncate">{emp.level}</p>
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div className="w-7 h-7 rounded-full bg-emerald-500/20 shrink-0 overflow-hidden flex items-center justify-center text-[10px] font-bold text-emerald-400 border border-emerald-500/30 shadow-sm">
+                              {emp.photoUrl ? (
+                                <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <span>{(emp.artisticName || emp.name).substring(0, 2).toUpperCase()}</span>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold text-white truncate">{emp.artisticName || emp.name}</p>
+                              <p className="text-[10px] text-emerald-400 font-bold uppercase truncate">{emp.level}</p>
+                            </div>
                           </div>
                           
                           <div className="flex flex-wrap items-center gap-1 shrink-0">
@@ -607,9 +625,18 @@ export default function DayManagementModal({
                           key={emp.id} 
                           className="flex items-center justify-between bg-brand-bg/40 border border-brand-border p-2.5 rounded-xl gap-2 transition-all hover:border-brand-primary/20"
                         >
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-white truncate">{emp.artisticName || emp.name}</p>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase truncate">{emp.level}</p>
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div className="w-7 h-7 rounded-full bg-brand-bg shrink-0 overflow-hidden flex items-center justify-center text-[10px] font-bold text-gray-400 border border-brand-border shadow-sm">
+                              {emp.photoUrl ? (
+                                <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <span>{(emp.artisticName || emp.name).substring(0, 2).toUpperCase()}</span>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold text-white truncate">{emp.artisticName || emp.name}</p>
+                              <p className="text-[10px] text-gray-400 font-bold uppercase truncate">{emp.level}</p>
+                            </div>
                           </div>
                           
                           <div className="flex flex-wrap items-center gap-1 shrink-0">
