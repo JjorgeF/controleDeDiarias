@@ -25,6 +25,7 @@ import { Employee } from '../types';
 import { format, parseISO, differenceInMonths, differenceInYears, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { compressProfileImage } from '../utils/imageCompressor';
+import ImageCropperModal from './ImageCropperModal';
 
 interface EmployeeStoryViewProps {
   employee: Employee;
@@ -43,6 +44,8 @@ export default function EmployeeStoryView({
 }: EmployeeStoryViewProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const [isCropperOpen, setIsCropperOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -61,17 +64,29 @@ export default function EmployeeStoryView({
     try {
       setIsUploading(true);
       setFileError(null);
-      // Compress photo to max 350px and quality 0.8 (~30-50KB)
-      const compressed = await compressProfileImage(file, 350, 0.8);
-      if (onUpdatePhoto) {
-        await onUpdatePhoto(compressed);
-      }
+      // Pre-process image to standard base64/dataURL so cropper can load it smoothly (including HEIC)
+      const base64Image = await compressProfileImage(file, 800, 0.9);
+      setImageToCrop(base64Image);
+      setIsCropperOpen(true);
     } catch (err: any) {
-      console.error('Erro ao processar imagem:', err);
-      setFileError('Não foi possível processar a imagem. Tente outra foto.');
+      console.error('Erro ao ler imagem:', err);
+      setFileError('Não foi possível carregar a imagem. Tente outra foto.');
     } finally {
       setIsUploading(false);
       if (e.target) e.target.value = '';
+    }
+  };
+
+  const handleCropComplete = async (croppedDataUrl: string) => {
+    if (!onUpdatePhoto) return;
+    try {
+      setIsUploading(true);
+      await onUpdatePhoto(croppedDataUrl);
+    } catch (err) {
+      console.error('Erro ao atualizar foto:', err);
+      setFileError('Erro ao salvar a foto de perfil.');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -567,6 +582,13 @@ export default function EmployeeStoryView({
           })}
         </div>
       </motion.div>
+
+      <ImageCropperModal
+        imageSrc={imageToCrop}
+        isOpen={isCropperOpen}
+        onClose={() => setIsCropperOpen(false)}
+        onCropComplete={handleCropComplete}
+      />
     </div>
   );
 }
