@@ -546,7 +546,10 @@ export default function CalendarView({
         return;
       }
       
-      if (config.isCommon && config.isParty) {
+      const partyCount = config.parties?.length ?? (config.isParty ? 1 : 0);
+      const hasMultipleChoiceOptions = (config.isCommon && config.isParty) || (config.isParty && partyCount > 1);
+
+      if (hasMultipleChoiceOptions) {
         setEmployeeChoiceDate(day);
         setIsEmployeeChoiceModalOpen(true);
       } else {
@@ -1798,6 +1801,9 @@ export default function CalendarView({
               {/* Common Option */}
               {(() => {
                 const dateStr = format(employeeChoiceDate, 'yyyy-MM-dd');
+                const config = getDayConfig(dateStr);
+                if (!config.isCommon) return null;
+
                 const currentAvailabilities = myEmployee.availabilities || [];
                 const isCommonChecked = currentAvailabilities.includes(dateStr) || currentAvailabilities.includes(`${dateStr}_common`);
                 
@@ -1842,11 +1848,16 @@ export default function CalendarView({
                   ? config.parties 
                   : (config.isParty ? [{ id: 'default_party', name: 'Festa', time: config.partyTime }] : []);
                 
+                const hasGeneralPartyKey = currentAvailabilities.includes(`${dateStr}_party`);
+                const hasAnySpecificPartyKeyForDate = parties.some(p => currentAvailabilities.includes(`${dateStr}_party_${p.id}`));
+
                 return (
                   <>
                     {parties.map((party) => {
                       const partyKey = `${dateStr}_party_${party.id}`;
-                      const isPartyChecked = currentAvailabilities.includes(partyKey) || currentAvailabilities.includes(`${dateStr}_party`);
+                      const hasSpecificPartyKey = currentAvailabilities.includes(partyKey);
+                      
+                      const isPartyChecked = hasSpecificPartyKey || (hasGeneralPartyKey && (parties.length === 1 || !hasAnySpecificPartyKeyForDate));
 
                       return (
                         <label key={party.id} className={cn(
@@ -1870,13 +1881,30 @@ export default function CalendarView({
                             type="checkbox"
                             checked={isPartyChecked}
                             onChange={(e) => {
-                              let newAvail: string[];
-                              if (e.target.checked) {
-                                const clean = currentAvailabilities.filter(d => d !== partyKey && d !== `${dateStr}_party` && !d.startsWith(`${dateStr}_party_`));
-                                newAvail = Array.from(new Set([...clean, `${dateStr}_party`]));
-                              } else {
-                                newAvail = currentAvailabilities.filter(d => d !== partyKey && d !== `${dateStr}_party` && !d.startsWith(`${dateStr}_party_`));
+                              const willBeChecked = e.target.checked;
+                              const newSelectedPartyIds = parties
+                                .filter(p => {
+                                  if (p.id === party.id) return willBeChecked;
+                                  const pKey = `${dateStr}_party_${p.id}`;
+                                  return currentAvailabilities.includes(pKey) || (hasGeneralPartyKey && !hasAnySpecificPartyKeyForDate);
+                                })
+                                .map(p => p.id);
+
+                              const clean = currentAvailabilities.filter(d => d !== `${dateStr}_party` && !d.startsWith(`${dateStr}_party_`));
+
+                              let partyEntriesToAdd: string[] = [];
+                              if (newSelectedPartyIds.length > 0) {
+                                if (parties.length === 1) {
+                                  partyEntriesToAdd = [`${dateStr}_party`];
+                                } else {
+                                  partyEntriesToAdd = newSelectedPartyIds.map(id => `${dateStr}_party_${id}`);
+                                  if (newSelectedPartyIds.length === parties.length) {
+                                    partyEntriesToAdd.push(`${dateStr}_party`);
+                                  }
+                                }
                               }
+
+                              const newAvail = Array.from(new Set([...clean, ...partyEntriesToAdd]));
                               if (onUpdateAvailabilities) {
                                 onUpdateAvailabilities(myEmployee.id, newAvail);
                               }
