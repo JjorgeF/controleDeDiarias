@@ -908,9 +908,9 @@ export default function CalendarView({
                             className={cn(
                               "absolute inset-[1.5px] pointer-events-none z-0 transition-colors",
                               !isAdmin && isMyScheduled
-                                ? "bg-amber-100/90 dark:bg-[#f2d861]/20"
+                                ? "bg-amber-100 dark:bg-[#2b2716]"
                                 : !isAdmin && isMyAvailable 
-                                  ? "bg-emerald-100 dark:bg-emerald-900/40" 
+                                  ? "bg-emerald-100 dark:bg-[#0f2d22]" 
                                   : "bg-brand-card"
                             )} 
                           />
