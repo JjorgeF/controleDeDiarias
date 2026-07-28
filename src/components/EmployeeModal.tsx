@@ -3,6 +3,7 @@ import { X, AlertCircle, Trash2, ArrowRight, Calendar, Sparkles, Camera, User } 
 import { Employee, EmployeeLevel } from '../types';
 import { recalculateEmployeeTimeline, LEVEL_RATES } from '../utils/promotionUtils';
 import { compressProfileImage } from '../utils/imageCompressor';
+import ImageCropperModal from './ImageCropperModal';
 
 interface EmployeeModalProps {
   isOpen: boolean;
@@ -17,6 +18,8 @@ const LEVELS: EmployeeLevel[] = ['Trainee', 'Aprendiz', 'Coordenador(a)', 'Recre
 export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, employee }: EmployeeModalProps) {
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [imageToCrop, setImageToCrop] = React.useState<string | null>(null);
+  const [isCropperOpen, setIsCropperOpen] = React.useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = React.useState<Partial<Employee>>({
     name: '',
@@ -147,11 +150,12 @@ export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, emplo
                 const file = e.target.files?.[0];
                 if (!file) return;
                 try {
-                  const compressed = await compressProfileImage(file, 350, 0.8);
-                  setFormData(prev => ({ ...prev, photoUrl: compressed }));
+                  const base64 = await compressProfileImage(file, 800, 0.9);
+                  setImageToCrop(base64);
+                  setIsCropperOpen(true);
                   setError(null);
                 } catch (err) {
-                  console.error('Erro ao comprimir foto:', err);
+                  console.error('Erro ao ler foto:', err);
                   setError('Erro ao processar a foto. Tente outra imagem.');
                 } finally {
                   if (e.target) e.target.value = '';
@@ -378,6 +382,16 @@ export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, emplo
             )}
           </div>
         </form>
+
+        <ImageCropperModal
+          imageSrc={imageToCrop}
+          isOpen={isCropperOpen}
+          onClose={() => setIsCropperOpen(false)}
+          onCropComplete={(croppedDataUrl) => {
+            setFormData(prev => ({ ...prev, photoUrl: croppedDataUrl }));
+            setIsCropperOpen(false);
+          }}
+        />
       </div>
     </div>
   );
