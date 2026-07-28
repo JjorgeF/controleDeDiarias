@@ -141,7 +141,7 @@ export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, emplo
             <input 
               type="file"
               ref={fileInputRef}
-              accept="image/*"
+              accept="image/*,.heic,.heif,image/heic,image/heif"
               className="hidden"
               onChange={async (e) => {
                 const file = e.target.files?.[0];
@@ -149,9 +149,12 @@ export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, emplo
                 try {
                   const compressed = await compressProfileImage(file, 350, 0.8);
                   setFormData(prev => ({ ...prev, photoUrl: compressed }));
+                  setError(null);
                 } catch (err) {
                   console.error('Erro ao comprimir foto:', err);
                   setError('Erro ao processar a foto. Tente outra imagem.');
+                } finally {
+                  if (e.target) e.target.value = '';
                 }
               }}
             />
