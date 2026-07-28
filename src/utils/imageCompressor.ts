@@ -1,4 +1,57 @@
-import heic2any from 'heic2any';
+/**
+ * Dynamically loads heic2any library in the browser.
+ * Uses dynamic import or CDN script tag to avoid Rollup build-time resolution errors on Vercel/GitHub.
+ */
+async function loadHeic2Any(): Promise<any> {
+  if (typeof window === 'undefined') return null;
+
+  // 1. Check if already loaded globally
+  if ((window as any).heic2any) {
+    return (window as any).heic2any;
+  }
+
+  // 2. Try dynamic import
+  try {
+    const module = await import(/* @vite-ignore */ 'heic2any');
+    const fn = module.default || module;
+    if (typeof fn === 'function') {
+      return fn;
+    }
+  } catch (e) {
+    console.warn('Dynamic import of heic2any failed, attempting CDN fallback:', e);
+  }
+
+  // 3. Fallback: inject CDN script tag on-demand in browser
+  return new Promise((resolve) => {
+    const existingScript = document.getElementById('heic2any-cdn-script');
+    if (existingScript) {
+      let checks = 0;
+      const interval = setInterval(() => {
+        checks++;
+        if ((window as any).heic2any) {
+          clearInterval(interval);
+          resolve((window as any).heic2any);
+        } else if (checks > 50) {
+          clearInterval(interval);
+          resolve(null);
+        }
+      }, 100);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.id = 'heic2any-cdn-script';
+    script.src = 'https://unpkg.com/heic2any@0.0.4/dist/heic2any.min.js';
+    script.onload = () => {
+      resolve((window as any).heic2any || null);
+    };
+    script.onerror = () => {
+      console.error('Failed to load heic2any from CDN');
+      resolve(null);
+    };
+    document.head.appendChild(script);
+  });
+}
 
 /**
  * Converts HEIC/HEIF files (common on iPhones) to standard JPEG Blob
@@ -13,15 +66,18 @@ async function ensureStandardImageBlob(file: File | Blob): Promise<Blob | File> 
     fileName.endsWith('.heif');
 
   if (isHeic) {
-    try {
-      const converted = await heic2any({
-        blob: file,
-        toType: 'image/jpeg',
-        quality: 0.85,
-      });
-      return Array.isArray(converted) ? converted[0] : converted;
-    } catch (err) {
-      console.warn('heic2any conversion failed during initial check:', err);
+    const heic2any = await loadHeic2Any();
+    if (heic2any) {
+      try {
+        const converted = await heic2any({
+          blob: file,
+          toType: 'image/jpeg',
+          quality: 0.85,
+        });
+        return Array.isArray(converted) ? converted[0] : converted;
+      } catch (err) {
+        console.warn('heic2any conversion failed during initial check:', err);
+      }
     }
   }
   return file;
@@ -92,13 +148,17 @@ export async function compressProfileImage(
     console.warn('HTMLImageElement compression failed, trying heic2any fallback:', err);
     // As a last-resort fallback for misidentified HEIC or unusual mobile camera formats
     try {
-      const fallbackConverted = await heic2any({
-        blob: file,
-        toType: 'image/jpeg',
-        quality: 0.85,
-      });
-      const validBlob = Array.isArray(fallbackConverted) ? fallbackConverted[0] : fallbackConverted;
-      return await compressWithImageElement(validBlob, maxDimension, quality);
+      const heic2any = await loadHeic2Any();
+      if (heic2any) {
+        const fallbackConverted = await heic2any({
+          blob: file,
+          toType: 'image/jpeg',
+          quality: 0.85,
+        });
+        const validBlob = Array.isArray(fallbackConverted) ? fallbackConverted[0] : fallbackConverted;
+        return await compressWithImageElement(validBlob, maxDimension, quality);
+      }
+      throw new Error('heic2any not available');
     } catch (finalErr) {
       console.error('All image compression methods failed:', finalErr);
       throw new Error('Não foi possível processar a imagem. Tente outra foto.');
