@@ -49,7 +49,11 @@ export default function EmployeeStoryView({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
+    // Mobile file validation: allow image/* mime OR empty mime with image extension
+    const isTypeImage = file.type ? (file.type.startsWith('image/') || file.type.includes('heic') || file.type.includes('heif')) : true;
+    const isExtImage = /\.(jpe?g|png|gif|webp|heic|heif|bmp|tiff)$/i.test(file.name || '');
+
+    if (!isTypeImage && !isExtImage) {
       setFileError('Por favor selecione um arquivo de imagem.');
       return;
     }
@@ -271,7 +275,7 @@ export default function EmployeeStoryView({
         <input 
           ref={fileInputRef} 
           type="file" 
-          accept="image/*" 
+          accept="image/*,.heic,.heif,image/heic,image/heif" 
           className="hidden" 
           onChange={handleFileChange} 
         />
