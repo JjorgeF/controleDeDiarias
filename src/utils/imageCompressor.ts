@@ -1,27 +1,16 @@
 /**
- * Dynamically loads heic2any library in the browser.
- * Uses dynamic import or CDN script tag to avoid Rollup build-time resolution errors on Vercel/GitHub.
+ * Dynamically loads heic2any library in the browser via CDN script tag on-demand.
+ * This completely avoids Rollup build-time module resolution errors on Vercel / GitHub.
  */
 async function loadHeic2Any(): Promise<any> {
   if (typeof window === 'undefined') return null;
 
-  // 1. Check if already loaded globally
+  // 1. Check if already loaded globally on window
   if ((window as any).heic2any) {
     return (window as any).heic2any;
   }
 
-  // 2. Try dynamic import
-  try {
-    const module = await import(/* @vite-ignore */ 'heic2any');
-    const fn = module.default || module;
-    if (typeof fn === 'function') {
-      return fn;
-    }
-  } catch (e) {
-    console.warn('Dynamic import of heic2any failed, attempting CDN fallback:', e);
-  }
-
-  // 3. Fallback: inject CDN script tag on-demand in browser
+  // 2. Load script on-demand via CDN in browser
   return new Promise((resolve) => {
     const existingScript = document.getElementById('heic2any-cdn-script');
     if (existingScript) {
@@ -41,13 +30,22 @@ async function loadHeic2Any(): Promise<any> {
 
     const script = document.createElement('script');
     script.id = 'heic2any-cdn-script';
-    script.src = 'https://unpkg.com/heic2any@0.0.4/dist/heic2any.min.js';
+    script.src = 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
+    script.async = true;
     script.onload = () => {
       resolve((window as any).heic2any || null);
     };
     script.onerror = () => {
-      console.error('Failed to load heic2any from CDN');
-      resolve(null);
+      console.warn('Failed to load heic2any from jsdelivr CDN, trying unpkg...');
+      // Fallback script
+      const unpkgScript = document.createElement('script');
+      unpkgScript.src = 'https://unpkg.com/heic2any@0.0.4/dist/heic2any.min.js';
+      unpkgScript.onload = () => resolve((window as any).heic2any || null);
+      unpkgScript.onerror = () => {
+        console.error('All CDN sources for heic2any failed');
+        resolve(null);
+      };
+      document.head.appendChild(unpkgScript);
     };
     document.head.appendChild(script);
   });
