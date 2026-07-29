@@ -11,7 +11,8 @@ import {
   addMonths, 
   subMonths,
   isToday,
-  parseISO
+  parseISO,
+  isSunday
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -45,6 +46,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Employee, WorkDay, DayType, CancellationLog, DayConfig, PartyConfig } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
 import DayManagementModal from './DayManagementModal';
+import ShiftSelector from './ShiftSelector';
 
 interface CalendarViewProps {
   employees: Employee[];
@@ -276,9 +278,11 @@ export default function CalendarView({
         return;
       }
       const filtered = employee.workDays.filter(d => d.date !== dateStr);
+      const defaultShift = isSunday(parseISO(dateStr)) ? 'Brinquedoteca (9h - 18h)' : 'Brinquedoteca 1 (9h - 18h)';
       const newDays: WorkDay[] = [...filtered, { 
         date: dateStr, 
         type: 'common', 
+        shift: defaultShift,
         extraHours: 0,
         dailyRateAtTime: employee.dailyRate,
         partyRateAtTime: employee.partyRate,
@@ -313,6 +317,16 @@ export default function CalendarView({
     }
   };
 
+  const updateShift = (employee: Employee, date: Date, shiftStr: string) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const newDays = employee.workDays.map(d => 
+      d.date === dateStr && d.type === 'common' && !d.isCancelled
+        ? { ...d, shift: shiftStr }
+        : d
+    );
+    onUpdateDays(employee.id, newDays);
+  };
+
   const toggleWorkDay = (employee: Employee, date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     const isWorking = employee.workDays.some(d => d.date === dateStr && !d.isCancelled);
@@ -322,9 +336,11 @@ export default function CalendarView({
       newDays = employee.workDays.filter(d => d.date !== dateStr);
     } else {
       const filtered = employee.workDays.filter(d => d.date !== dateStr);
+      const defaultShift = isSunday(date) ? 'Brinquedoteca (9h - 18h)' : 'Brinquedoteca 1 (9h - 18h)';
       newDays = [...filtered, { 
         date: dateStr, 
         type: 'common' as DayType, 
+        shift: defaultShift,
         extraHours: 0,
         dailyRateAtTime: employee.dailyRate,
         partyRateAtTime: employee.partyRate,
@@ -1148,9 +1164,9 @@ export default function CalendarView({
                                 </div>
                               ) : !isParty ? (
                                 <div className="text-right">
-                                  <span className="block text-[8px] text-brand-muted font-bold uppercase tracking-wider">Período</span>
-                                  <span className="inline-block bg-brand-primary/10 border border-brand-primary/20 text-amber-700 dark:text-brand-primary font-black text-[10px] px-2 py-0.5 rounded-lg">
-                                    Dia Inteiro
+                                  <span className="block text-[8px] text-brand-muted font-bold uppercase tracking-wider">Turno</span>
+                                  <span className="inline-block bg-brand-primary/10 border border-brand-primary/20 text-amber-700 dark:text-brand-primary font-black text-[10px] px-2 py-0.5 rounded-lg shadow-sm">
+                                    {d.shift || "Brinquedoteca 1 (9h - 18h)"}
                                   </span>
                                 </div>
                               ) : null}
@@ -1360,6 +1376,16 @@ export default function CalendarView({
                                     </motion.button>
                                   )}
                                 </div>
+
+                                {hasCommon && (
+                                  <div className="mt-1.5 pt-1.5 border-t border-brand-primary/10" onClick={(e) => e.stopPropagation()}>
+                                    <ShiftSelector
+                                      currentShift={dayData?.shift || (selectedDay && isSunday(selectedDay) ? 'Brinquedoteca (9h - 18h)' : 'Brinquedoteca 1 (9h - 18h)')}
+                                      dateStr={selectedDayStr}
+                                      onChange={(newShift) => updateShift(emp, selectedDay!, newShift)}
+                                    />
+                                  </div>
+                                )}
                               </div>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
