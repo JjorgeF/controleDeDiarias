@@ -1,10 +1,11 @@
 import React from 'react';
 import { X, Search, UserPlus, UserMinus, Clock, Copy, ClipboardPaste, Users, Plus, Trash2, PartyPopper, ChevronDown, ChevronUp } from 'lucide-react';
 import { Employee, WorkDay, DayType, DayConfig, PartyConfig } from '../types';
-import { format } from 'date-fns';
+import { format, isSunday, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import ShiftSelector from './ShiftSelector';
 
 interface DayManagementModalProps {
   isOpen: boolean;
@@ -171,9 +172,11 @@ export default function DayManagementModal({
         return;
       }
       const filtered = employee.workDays.filter(d => d.date !== selectedDayStr);
+      const defaultShift = isSunday(parseISO(selectedDayStr)) ? 'Brinquedoteca (9h - 18h)' : 'Brinquedoteca 1 (9h - 18h)';
       const newDays: WorkDay[] = [...filtered, {
         date: selectedDayStr,
         type: 'common',
+        shift: defaultShift,
         extraHours: 0,
         dailyRateAtTime: employee.dailyRate,
         partyRateAtTime: employee.partyRate,
@@ -209,6 +212,15 @@ export default function DayManagementModal({
 
   const removeAllWork = (employee: Employee) => {
     const newDays = employee.workDays.filter(d => d.date !== selectedDayStr);
+    onUpdateDays(employee.id, newDays);
+  };
+
+  const updateShift = (employee: Employee, shiftStr: string) => {
+    const newDays = employee.workDays.map(d => 
+      d.date === selectedDayStr && d.type === 'common' && !d.isCancelled
+        ? { ...d, shift: shiftStr }
+        : d
+    );
     onUpdateDays(employee.id, newDays);
   };
 
@@ -500,6 +512,17 @@ export default function DayManagementModal({
                                   );
                                 })}
                               </div>
+
+                              {/* Shift Selector for CCSP */}
+                              {isCommon && (
+                                <div className="mt-2 pt-2 border-t border-brand-primary/10" onClick={(e) => e.stopPropagation()}>
+                                  <ShiftSelector
+                                    currentShift={workDay?.shift || (isSunday(parseISO(selectedDayStr)) ? 'Brinquedoteca (9h - 18h)' : 'Brinquedoteca 1 (9h - 18h)')}
+                                    dateStr={selectedDayStr}
+                                    onChange={(newShift) => updateShift(emp, newShift)}
+                                  />
+                                </div>
+                              )}
                             </div>
                           </div>
 
