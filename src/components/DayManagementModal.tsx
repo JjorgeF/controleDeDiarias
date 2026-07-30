@@ -407,7 +407,7 @@ export default function DayManagementModal({
                         className="bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all active:scale-95"
                       >
                         <Plus size={14} />
-                        <span>+ Festa</span>
+                        <span>Festa</span>
                       </button>
 
                       <label 
