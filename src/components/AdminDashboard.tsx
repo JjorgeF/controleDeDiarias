@@ -10,7 +10,7 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Employee, WorkDay } from '../types';
+import { Employee, WorkDay, DayConfig } from '../types';
 import { 
   Users, 
   Calendar, 
@@ -39,7 +39,7 @@ interface AdminDashboardProps {
   employees: Employee[];
   currentMonth: Date;
   setCurrentMonth: React.Dispatch<React.SetStateAction<Date>>;
-  dayConfigs?: Record<string, { isCommon: boolean; isParty: boolean; partyTime?: string }>;
+  dayConfigs?: Record<string, DayConfig>;
 }
 
 interface AccessLog {
