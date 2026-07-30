@@ -863,8 +863,14 @@ export default function App() {
   const handleUpdateDayConfig = async (dateStr: string, config: DayConfig) => {
     if (!db) return;
     try {
+      const cleanConfig: Record<string, any> = {};
+      Object.entries(config).forEach(([key, value]) => {
+        if (value !== undefined) {
+          cleanConfig[key] = value;
+        }
+      });
       const docRef = doc(db, 'settings', 'dayConfigs');
-      await setDoc(docRef, { [dateStr]: config }, { merge: true });
+      await setDoc(docRef, { [dateStr]: cleanConfig }, { merge: true });
     } catch (error) {
       console.error("Error updating day config:", error);
       handleFirestoreError(error, OperationType.WRITE, 'settings/dayConfigs');
