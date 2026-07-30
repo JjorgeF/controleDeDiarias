@@ -39,7 +39,9 @@ interface ShiftSelectorProps {
 
 export default function ShiftSelector({ currentShift = 'Brinquedoteca 1 (9h - 18h)', dateStr, onChange, className }: ShiftSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [dropUp, setDropUp] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   const isSun = React.useMemo(() => {
     if (!dateStr) return false;
@@ -65,6 +67,20 @@ export default function ShiftSelector({ currentShift = 'Brinquedoteca 1 (9h - 18
     };
   }, [isOpen]);
 
+  const toggleOpen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      if (spaceBelow < 280) {
+        setDropUp(true);
+      } else {
+        setDropUp(false);
+      }
+    }
+    setIsOpen(!isOpen);
+  };
+
   const allOptions = [...SUNDAY_SHIFTS, ...STANDARD_SHIFTS, ...LEGACY_SHIFTS];
   const selectedOption = allOptions.find(opt => opt.value === currentShift);
 
@@ -81,11 +97,9 @@ export default function ShiftSelector({ currentShift = 'Brinquedoteca 1 (9h - 18
   return (
     <div ref={containerRef} className={cn("relative inline-block text-left", className)} onClick={(e) => e.stopPropagation()}>
       <button
+        ref={buttonRef}
         type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          setIsOpen(!isOpen);
-        }}
+        onClick={toggleOpen}
         className={cn(
           "flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all border shadow-sm",
           isOpen
@@ -103,16 +117,19 @@ export default function ShiftSelector({ currentShift = 'Brinquedoteca 1 (9h - 18
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: -4 }}
+            initial={{ opacity: 0, scale: 0.95, y: dropUp ? 4 : -4 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: -4 }}
+            exit={{ opacity: 0, scale: 0.95, y: dropUp ? 4 : -4 }}
             transition={{ duration: 0.15 }}
-            className="absolute left-0 mt-1.5 w-60 z-50 bg-brand-surface/95 backdrop-blur-md border border-brand-border/80 rounded-xl shadow-2xl p-1.5 space-y-2 overflow-hidden max-h-80 overflow-y-auto"
+            className={cn(
+              "absolute left-0 w-64 z-[100] bg-slate-950/70 backdrop-blur-2xl backdrop-saturate-150 border border-brand-primary/30 ring-1 ring-white/10 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] overflow-hidden max-h-64 overflow-y-auto divide-y divide-white/10",
+              dropUp ? "bottom-full mb-1.5" : "top-full mt-1.5"
+            )}
           >
             {/* Primary group */}
-            <div>
-              <div className="px-2 py-1 text-[9px] font-extrabold uppercase tracking-wider text-brand-primary flex items-center gap-1 bg-brand-primary/10 rounded-md mb-1">
-                {isSun ? <Sun className="w-2.5 h-2.5" /> : <CalendarDays className="w-2.5 h-2.5" />}
+            <div className="p-1.5">
+              <div className="px-2 py-1 text-[9px] font-extrabold uppercase tracking-wider text-brand-primary flex items-center gap-1 bg-brand-primary/15 border border-brand-primary/20 backdrop-blur-md rounded-md mb-1.5">
+                {isSun ? <Sun className="w-2.5 h-2.5 text-brand-primary" /> : <CalendarDays className="w-2.5 h-2.5 text-brand-primary" />}
                 {isSun ? 'Domingo (Recomendado)' : 'Turnos CCSP Padrão'}
               </div>
               <div className="space-y-0.5">
@@ -124,17 +141,17 @@ export default function ShiftSelector({ currentShift = 'Brinquedoteca 1 (9h - 18
                       type="button"
                       onClick={() => handleSelect(opt.value)}
                       className={cn(
-                        "w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] flex items-center justify-between transition-colors",
+                        "w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] flex items-center justify-between transition-all",
                         isSelected
-                          ? "bg-brand-primary/20 text-brand-primary font-bold"
-                          : "text-brand-text hover:bg-brand-primary/10 hover:text-white"
+                          ? "bg-brand-primary text-slate-950 font-bold shadow-md ring-1 ring-brand-primary/50"
+                          : "text-brand-text hover:bg-white/10 hover:text-white"
                       )}
                     >
                       <div className="flex flex-col">
                         <span className="font-semibold">{opt.label}</span>
-                        <span className="text-[10px] text-brand-muted">{opt.time}</span>
+                        <span className={cn("text-[10px]", isSelected ? "text-slate-900/90 font-medium" : "text-brand-muted")}>{opt.time}</span>
                       </div>
-                      {isSelected && <Check className="w-3.5 h-3.5 text-brand-primary shrink-0 ml-1" />}
+                      {isSelected && <Check className="w-3.5 h-3.5 text-slate-950 shrink-0 ml-1" />}
                     </button>
                   );
                 })}
@@ -142,8 +159,8 @@ export default function ShiftSelector({ currentShift = 'Brinquedoteca 1 (9h - 18
             </div>
 
             {/* Secondary group */}
-            <div>
-              <div className="px-2 py-1 text-[9px] font-extrabold uppercase tracking-wider text-brand-muted flex items-center gap-1 border-t border-brand-border/40 pt-1.5 mb-1">
+            <div className="p-1.5">
+              <div className="px-2 py-1 text-[9px] font-extrabold uppercase tracking-wider text-brand-muted flex items-center gap-1 bg-white/5 border border-white/5 backdrop-blur-md rounded-md mb-1.5">
                 {isSun ? 'Outros Turnos Semanais' : 'Turnos de Domingo'}
               </div>
               <div className="space-y-0.5">
@@ -155,17 +172,17 @@ export default function ShiftSelector({ currentShift = 'Brinquedoteca 1 (9h - 18
                       type="button"
                       onClick={() => handleSelect(opt.value)}
                       className={cn(
-                        "w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] flex items-center justify-between transition-colors",
+                        "w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] flex items-center justify-between transition-all",
                         isSelected
-                          ? "bg-brand-primary/20 text-brand-primary font-bold"
-                          : "text-brand-text hover:bg-brand-primary/10 hover:text-white"
+                          ? "bg-brand-primary text-slate-950 font-bold shadow-md ring-1 ring-brand-primary/50"
+                          : "text-brand-text hover:bg-white/10 hover:text-white"
                       )}
                     >
                       <div className="flex flex-col">
                         <span className="font-semibold">{opt.label}</span>
-                        <span className="text-[10px] text-brand-muted">{opt.time}</span>
+                        <span className={cn("text-[10px]", isSelected ? "text-slate-900/90 font-medium" : "text-brand-muted")}>{opt.time}</span>
                       </div>
-                      {isSelected && <Check className="w-3.5 h-3.5 text-brand-primary shrink-0 ml-1" />}
+                      {isSelected && <Check className="w-3.5 h-3.5 text-slate-950 shrink-0 ml-1" />}
                     </button>
                   );
                 })}
@@ -174,8 +191,8 @@ export default function ShiftSelector({ currentShift = 'Brinquedoteca 1 (9h - 18
 
             {/* Legacy group if selected */}
             {showLegacy && (
-              <div>
-                <div className="px-2 py-1 text-[9px] font-extrabold uppercase tracking-wider text-amber-500 flex items-center gap-1 border-t border-brand-border/40 pt-1.5 mb-1">
+              <div className="p-1.5">
+                <div className="px-2 py-1 text-[9px] font-extrabold uppercase tracking-wider text-amber-400 bg-amber-500/10 rounded-md mb-1.5">
                   Horário Anterior
                 </div>
                 <div className="space-y-0.5">
@@ -184,10 +201,10 @@ export default function ShiftSelector({ currentShift = 'Brinquedoteca 1 (9h - 18
                       key={opt.value}
                       type="button"
                       onClick={() => handleSelect(opt.value)}
-                      className="w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] flex items-center justify-between bg-brand-primary/20 text-brand-primary font-bold"
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] flex items-center justify-between bg-brand-primary text-slate-950 font-bold"
                     >
                       <span>{opt.value}</span>
-                      <Check className="w-3.5 h-3.5 text-brand-primary shrink-0 ml-1" />
+                      <Check className="w-3.5 h-3.5 text-slate-950 shrink-0 ml-1" />
                     </button>
                   ))}
                 </div>
