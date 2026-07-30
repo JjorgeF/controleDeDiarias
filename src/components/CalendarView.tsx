@@ -207,6 +207,7 @@ export default function CalendarView({
   const [expandedEmployeeId, setExpandedEmployeeId] = React.useState<string | null>(null);
   const [copiedTeam, setCopiedTeam] = React.useState<string[] | null>(null);
   const [isDayModalOpen, setIsDayModalOpen] = React.useState(false);
+  const [isExtraordinaryBannerDismissed, setIsExtraordinaryBannerDismissed] = React.useState(false);
 
   // Employee Choice Modal State
   const [employeeChoiceDate, setEmployeeChoiceDate] = React.useState<Date | null>(null);
@@ -755,6 +756,8 @@ export default function CalendarView({
 
         {/* Extraordinary Open Alert Banner for current month */}
         {(() => {
+          if (isExtraordinaryBannerDismissed) return null;
+
           const extraordinaryDays = calendarDays.filter(d => {
             if (!isSameMonth(d, monthStart)) return false;
             const cfg = getDayConfig(format(d, 'yyyy-MM-dd'));
@@ -764,17 +767,27 @@ export default function CalendarView({
           if (extraordinaryDays.length === 0) return null;
 
           return (
-            <div className="bg-amber-500/15 border border-amber-500/40 rounded-xl p-3.5 flex items-center gap-3 text-amber-200 animate-in fade-in shadow-md">
-              <Zap size={22} className="text-amber-400 fill-amber-400 shrink-0" />
-              <div className="flex-1 text-xs md:text-sm">
-                <p className="font-black text-amber-300 flex items-center gap-1.5">
-                  <span>⚡ Abertura Extra de Disponibilidade Ativa</span>
-                </p>
-                <p className="text-[11px] md:text-xs text-amber-100/90 font-medium mt-0.5">
-                  Há <strong>{extraordinaryDays.length} {extraordinaryDays.length === 1 ? 'dia' : 'dias'}</strong> neste mês com abertura extra de disponibilidades.
-                  {!isAdmin && " Você pode cadastrar ou alterar sua disponibilidade nestes dias destacados até o encerramento do prazo extra."}
-                </p>
+            <div className="bg-amber-500/15 border border-amber-500/40 rounded-xl p-3.5 flex items-center justify-between gap-3 text-amber-200 animate-in fade-in shadow-md">
+              <div className="flex items-center gap-3 flex-1">
+                <Zap size={22} className="text-amber-400 fill-amber-400 shrink-0" />
+                <div className="flex-1 text-xs md:text-sm">
+                  <p className="font-black text-amber-300 flex items-center gap-1.5">
+                    <span>⚡ Abertura Extra de Disponibilidade Ativa</span>
+                  </p>
+                  <p className="text-[11px] md:text-xs text-amber-100/90 font-medium mt-0.5">
+                    Há <strong>{extraordinaryDays.length} {extraordinaryDays.length === 1 ? 'dia' : 'dias'}</strong> neste mês com abertura extra de disponibilidades.
+                    {!isAdmin && " Você pode cadastrar ou alterar sua disponibilidade nestes dias destacados até o encerramento do prazo extra."}
+                  </p>
+                </div>
               </div>
+              <button
+                onClick={() => setIsExtraordinaryBannerDismissed(true)}
+                className="text-amber-300/80 hover:text-amber-100 p-1.5 rounded-lg hover:bg-amber-500/20 transition-colors shrink-0 flex items-center gap-1 text-xs font-medium"
+                title="Ocultar aviso de abertura extra"
+              >
+                <X size={16} />
+                <span className="hidden sm:inline">Ocultar</span>
+              </button>
             </div>
           );
         })()}
