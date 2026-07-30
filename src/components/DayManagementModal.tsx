@@ -201,6 +201,7 @@ export default function DayManagementModal({
         type: 'party',
         partyId: party.id,
         partyName: party.name,
+        shift: party.time || dayConfig?.partyTime || '',
         extraHours: 0,
         dailyRateAtTime: employee.dailyRate,
         partyRateAtTime: employee.partyRate,
