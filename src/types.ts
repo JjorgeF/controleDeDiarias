@@ -13,6 +13,9 @@ export interface DayConfig {
   isParty?: boolean;
   partyTime?: string;
   parties?: PartyConfig[];
+  isExtraordinaryOpen?: boolean;
+  extraordinaryDeadline?: string; // Format: 'YYYY-MM-DDTHH:mm'
+  extraordinaryLockedAvailabilities?: Record<string, string[]>; // Map employeeId -> locked availability keys before extra opening
 }
 
 export interface WorkDay {
@@ -29,6 +32,7 @@ export interface WorkDay {
   partyRateAtTime?: number;
   extraHourRateAtTime?: number;
   levelAtTime?: EmployeeLevel;
+  shift?: string; // e.g. "11h - 21h00" or "13h30 - 21h30"
 }
 
 export interface Promotion {
