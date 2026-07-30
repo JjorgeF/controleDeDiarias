@@ -462,7 +462,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
         {/* Stat 1 */}
         <div className="bg-gradient-to-br from-brand-card to-brand-card/50 p-6 rounded-2xl border border-brand-border hover:border-brand-primary/25 transition-all duration-300 group shadow-lg">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase text-gray-500 tracking-wider">Total de Recriadores</span>
+            <span className="text-xs font-bold uppercase text-gray-500 tracking-wider">TOTAL DE RECREADORES</span>
             <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary group-hover:scale-110 duration-200">
               <Users size={20} />
             </div>
