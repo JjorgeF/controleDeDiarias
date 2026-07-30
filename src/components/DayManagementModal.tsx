@@ -337,207 +337,222 @@ export default function DayManagementModal({
               )}
             </AnimatePresence>
 
-            {/* Day Configuration Section */}
-            <div className="bg-brand-bg/40 border-b border-brand-border p-3 md:px-6 space-y-3 transition-all">
-              <div className="flex items-center justify-between gap-2">
-                <div 
-                  onClick={() => setIsEventsExpanded(!isEventsExpanded)}
-                  className="flex items-center gap-2 cursor-pointer group flex-1 select-none"
-                >
-                  <div className="p-1.5 rounded-lg bg-brand-bg border border-brand-border text-gray-400 group-hover:text-white group-hover:border-brand-primary transition-all">
+            {/* Day Configuration Section - Unified "INFOS DO DIA" */}
+            <div className="bg-brand-bg/40 border-b border-brand-border p-3 md:px-6 transition-all">
+              {/* Header Bar */}
+              <div 
+                onClick={() => setIsEventsExpanded(!isEventsExpanded)}
+                className="flex items-center justify-between gap-2 cursor-pointer group select-none py-1"
+              >
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <div className="p-1.5 rounded-lg bg-brand-bg border border-brand-border text-gray-400 group-hover:text-white group-hover:border-brand-primary transition-all shrink-0">
                     {isEventsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                   </div>
-                  <div>
-                    <h4 className="text-xs font-black text-gray-200 uppercase tracking-wider group-hover:text-brand-primary transition-colors">
-                      Eventos do Dia
+                  <div className="truncate">
+                    <h4 className="text-xs font-black text-gray-200 uppercase tracking-wider group-hover:text-brand-primary transition-colors flex items-center gap-2">
+                      <span>INFOS DO DIA</span>
                     </h4>
                     <p className="text-[10px] text-gray-400 font-medium hidden sm:block">
-                      {isEventsExpanded ? "Clique para recolher e focar nos recreadores" : "Clique para expandir e editar os eventos do dia"}
+                      {isEventsExpanded ? "Clique para recolher e focar nos recreadores" : "Clique para gerenciar festas, CCSP e abertura extra"}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 shrink-0">
-                  <label className="flex items-center gap-1.5 cursor-pointer text-xs text-white select-none group bg-brand-bg px-2.5 py-1.5 rounded-xl border border-brand-border hover:border-brand-primary transition-all">
-                    <input 
-                      type="checkbox"
-                      checked={!!dayConfig.isCommon}
-                      onChange={(e) => onUpdateDayConfig(selectedDayStr, { ...dayConfig, isCommon: e.target.checked })}
-                      className="rounded border-brand-border text-brand-primary bg-brand-bg focus:ring-brand-primary w-3.5 h-3.5 cursor-pointer"
-                    />
-                    <span className="font-bold group-hover:text-brand-primary transition-colors">CCSP</span>
-                  </label>
-
-                  <button
-                    onClick={handleAddParty}
-                    className="bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 px-2.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 transition-all active:scale-95"
-                  >
-                    <Plus size={14} />
-                    <span className="hidden sm:inline">Nova Festa</span>
-                    <span className="sm:hidden">Festa</span>
-                  </button>
-
-                  <label 
-                    className={cn(
-                      "flex items-center gap-1.5 cursor-pointer text-xs select-none px-2.5 py-1.5 rounded-xl border transition-all",
-                      dayConfig.isExtraordinaryOpen
-                        ? "bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-sm shadow-amber-500/10 font-black"
-                        : "bg-brand-bg text-gray-400 border-brand-border hover:border-amber-500/40 hover:text-amber-200"
-                    )}
-                    title="Abre este dia para novos envios de disponibilidade, porém trava remoções de quem já enviou."
-                  >
-                    <input 
-                      type="checkbox"
-                      checked={!!dayConfig.isExtraordinaryOpen}
-                      onChange={(e) => {
-                        const isOpening = e.target.checked;
-                        let lockedMap = dayConfig.extraordinaryLockedAvailabilities;
-                        if (isOpening && !lockedMap) {
-                          lockedMap = {};
-                          employees.forEach(emp => {
-                            const dateStr = selectedDayStr;
-                            const empAvails = (emp.availabilities || []).filter(a => a === dateStr || a.startsWith(`${dateStr}_`));
-                            if (empAvails.length > 0) {
-                              lockedMap![emp.id] = empAvails;
-                            }
-                          });
-                        }
-                        onUpdateDayConfig(selectedDayStr, { 
-                          ...dayConfig, 
-                          isExtraordinaryOpen: isOpening,
-                          extraordinaryLockedAvailabilities: lockedMap
-                        });
-                      }}
-                      className="rounded border-brand-border text-amber-500 bg-brand-bg focus:ring-amber-500 w-3.5 h-3.5 cursor-pointer"
-                    />
-                    <Zap size={13} className={dayConfig.isExtraordinaryOpen ? "text-amber-400 fill-amber-400" : "text-gray-400"} />
-                    <span className="hidden md:inline">Abertura Extra</span>
-                    <span className="md:hidden">Abertura Extra</span>
-                  </label>
+                {/* Summary Badges when Collapsed or Always Visible */}
+                <div className="flex flex-wrap items-center gap-1.5 shrink-0 max-w-[60%] justify-end">
+                  {dayConfig.isCommon && (
+                    <span className="text-[10px] font-bold text-brand-primary bg-brand-primary/10 border border-brand-primary/30 px-2 py-0.5 rounded-md">
+                      CCSP
+                    </span>
+                  )}
+                  {normalizedParties.length > 0 && (
+                    <span className="text-[10px] font-bold text-purple-300 bg-purple-950/40 border border-purple-500/30 px-2 py-0.5 rounded-md flex items-center gap-1">
+                      <span>🎉</span>
+                      <span>{normalizedParties.length} {normalizedParties.length === 1 ? 'Festa' : 'Festas'}</span>
+                    </span>
+                  )}
+                  {dayConfig.isExtraordinaryOpen && (
+                    <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded-md flex items-center gap-1">
+                      <Zap size={11} className="fill-amber-400 text-amber-400" />
+                      <span className="hidden xs:inline">Abertura Extra</span>
+                    </span>
+                  )}
                 </div>
               </div>
 
-              {dayConfig.isExtraordinaryOpen && (
-                <div className="space-y-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200 animate-in fade-in">
-                  <div className="flex items-center gap-2">
-                    <Zap size={15} className="text-amber-400 shrink-0 fill-amber-400" />
-                    <span className="font-bold text-amber-300">Abertura Extra Ativa</span>
-                  </div>
-                  <p className="text-[11px] text-amber-100/90 leading-relaxed">
-                    Com a Abertura Extra, funcionários podem cadastrar ou alterar a disponibilidade para este dia até o horário limite definido abaixo.
-                  </p>
-                  
-                  <div className="pt-1 flex flex-col sm:flex-row sm:items-center gap-2 bg-amber-950/30 p-2 rounded-lg border border-amber-500/20">
-                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-300 shrink-0">
-                      <Clock size={13} className="text-amber-400" />
-                      <span>Prazo limite para a Abertura Extra:</span>
-                    </div>
-                    <div className="flex items-center gap-2 flex-1">
-                      <input 
-                        type="datetime-local" 
-                        value={dayConfig.extraordinaryDeadline || ''}
-                        onChange={(e) => onUpdateDayConfig(selectedDayStr, { ...dayConfig, extraordinaryDeadline: e.target.value })}
-                        className="bg-brand-bg border border-amber-500/40 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none focus:border-amber-400 w-full sm:w-auto font-mono"
-                      />
-                      {dayConfig.extraordinaryDeadline && (
-                        <button
-                          type="button"
-                          onClick={() => onUpdateDayConfig(selectedDayStr, { ...dayConfig, extraordinaryDeadline: '' })}
-                          className="text-[10px] text-amber-400/80 hover:text-amber-300 underline shrink-0"
-                          title="Remover prazo e manter a abertura extra ativa indefinidamente"
-                        >
-                          Limpar prazo
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Collapsed View Summary Chips */}
-              {!isEventsExpanded && normalizedParties.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                  {normalizedParties.map((p) => (
-                    <span key={p.id} className="text-[10px] font-bold text-purple-300 bg-purple-950/40 border border-purple-500/30 px-2.5 py-0.5 rounded-lg flex items-center gap-1">
-                      <span>🎉</span>
-                      <span>{p.name}</span>
-                      {p.time && <span className="text-purple-400/80">({p.time})</span>}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {/* List of Custom Parties / Events */}
+              {/* Expanded Content Area */}
               <AnimatePresence>
-                {isEventsExpanded && normalizedParties.length > 0 && (
-                  <motion.div 
+                {isEventsExpanded && (
+                  <motion.div
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
                     transition={{ duration: 0.2 }}
-                    className="space-y-2 pt-1 overflow-hidden"
+                    className="space-y-3 pt-3 overflow-hidden"
                   >
-                    {normalizedParties.map((party, idx) => {
-                      const { start, end } = parsePartyTime(party.time);
+                    {/* Toggles & Add Party Button */}
+                    <div className="flex flex-wrap items-center gap-2 max-w-full">
+                      <label className="flex items-center gap-1.5 cursor-pointer text-xs text-white select-none bg-brand-bg px-3 py-1.5 rounded-xl border border-brand-border hover:border-brand-primary transition-all">
+                        <input 
+                          type="checkbox"
+                          checked={!!dayConfig.isCommon}
+                          onChange={(e) => onUpdateDayConfig(selectedDayStr, { ...dayConfig, isCommon: e.target.checked })}
+                          className="rounded border-brand-border text-brand-primary bg-brand-bg focus:ring-brand-primary w-3.5 h-3.5 cursor-pointer"
+                        />
+                        <span className="font-bold">CCSP</span>
+                      </label>
 
-                      const handleTimeUpdate = (newStart: string, newEnd: string) => {
-                        let formatted = '';
-                        const s = newStart.trim();
-                        const e = newEnd.trim();
-                        if (s && e) {
-                          formatted = `${s}h até ${e}h`;
-                        } else if (s) {
-                          formatted = `${s}h`;
-                        } else if (e) {
-                          formatted = `até ${e}h`;
-                        }
-                        handleUpdateParty(party.id, 'time', formatted);
-                      };
+                      <button
+                        onClick={handleAddParty}
+                        className="bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all active:scale-95"
+                      >
+                        <Plus size={14} />
+                        <span>+ Festa</span>
+                      </button>
 
-                      return (
-                        <div key={party.id || idx} className="flex flex-wrap items-center gap-2 bg-purple-950/25 border border-purple-500/30 rounded-xl p-2.5 animate-in fade-in">
-                          <div className="flex items-center gap-1.5 flex-1 min-w-[160px]">
-                            <span className="text-sm select-none">🎉</span>
-                            <input 
-                              type="text"
-                              placeholder="Nome do Evento (ex: Festa do Antonio)"
-                              value={party.name}
-                              onChange={(e) => handleUpdateParty(party.id, 'name', e.target.value)}
-                              className="w-full bg-brand-bg border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-white font-bold placeholder-gray-500 focus:outline-none focus:border-purple-500"
-                            />
-                          </div>
+                      <label 
+                        className={cn(
+                          "flex items-center gap-1.5 cursor-pointer text-xs select-none px-3 py-1.5 rounded-xl border transition-all",
+                          dayConfig.isExtraordinaryOpen
+                            ? "bg-amber-500/20 border-amber-500/60 text-amber-300 font-bold shadow-sm shadow-amber-500/10"
+                            : "bg-brand-bg text-gray-400 border-brand-border hover:border-amber-500/40 hover:text-amber-200"
+                        )}
+                        title="Abre este dia para novos envios de disponibilidade, porém trava remoções de quem já enviou."
+                      >
+                        <input 
+                          type="checkbox"
+                          checked={!!dayConfig.isExtraordinaryOpen}
+                          onChange={(e) => {
+                            const isOpening = e.target.checked;
+                            let lockedMap = dayConfig.extraordinaryLockedAvailabilities;
+                            if (isOpening && !lockedMap) {
+                              lockedMap = {};
+                              employees.forEach(emp => {
+                                const dateStr = selectedDayStr;
+                                const empAvails = (emp.availabilities || []).filter(a => a === dateStr || a.startsWith(`${dateStr}_`));
+                                if (empAvails.length > 0) {
+                                  lockedMap![emp.id] = empAvails;
+                                }
+                              });
+                            }
+                            onUpdateDayConfig(selectedDayStr, { 
+                              ...dayConfig, 
+                              isExtraordinaryOpen: isOpening,
+                              extraordinaryLockedAvailabilities: lockedMap
+                            });
+                          }}
+                          className="rounded border-brand-border text-amber-500 bg-brand-bg focus:ring-amber-500 w-3.5 h-3.5 cursor-pointer"
+                        />
+                        <Zap size={13} className={dayConfig.isExtraordinaryOpen ? "text-amber-400 fill-amber-400" : "text-gray-400"} />
+                        <span>Abertura Extra</span>
+                      </label>
+                    </div>
 
-                          {/* Fixed structured time format: | xx:xxh até xx:xxh | */}
-                          <div className="flex items-center gap-1 bg-brand-bg border border-brand-border rounded-lg px-2.5 py-1 text-xs text-white font-semibold focus-within:border-purple-500">
-                            <span className="text-[10px] text-purple-400 font-bold uppercase shrink-0 mr-1">Horário:</span>
-                            <input 
-                              type="text"
-                              placeholder="12:00"
-                              value={start}
-                              onChange={(e) => handleTimeUpdate(e.target.value, end)}
-                              className="w-14 bg-transparent text-center font-bold text-white focus:outline-none placeholder-gray-600 text-xs"
-                            />
-                            <span className="text-gray-400 font-bold text-[11px] select-none">h até</span>
-                            <input 
-                              type="text"
-                              placeholder="17:00"
-                              value={end}
-                              onChange={(e) => handleTimeUpdate(start, e.target.value)}
-                              className="w-14 bg-transparent text-center font-bold text-white focus:outline-none placeholder-gray-600 text-xs"
-                            />
-                            <span className="text-gray-400 font-bold text-[11px] select-none">h</span>
-                          </div>
-
-                          <button 
-                            onClick={() => handleRemoveParty(party.id)}
-                            className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors ml-auto"
-                            title="Excluir este evento"
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                    {/* Integrated Abertura Extra Details & Deadline */}
+                    {dayConfig.isExtraordinaryOpen && (
+                      <div className="space-y-2 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200 animate-in fade-in">
+                        <div className="flex items-center gap-2">
+                          <Zap size={15} className="text-amber-400 shrink-0 fill-amber-400" />
+                          <span className="font-bold text-amber-300">Abertura Extra Ativa</span>
                         </div>
-                      );
-                    })}
+                        <p className="text-[11px] text-amber-100/90 leading-relaxed">
+                          Funcionários podem cadastrar ou alterar disponibilidades até o horário limite. Remoções anteriores foram travadas.
+                        </p>
+                        
+                        <div className="pt-1 flex flex-col sm:flex-row sm:items-center gap-2 bg-amber-950/40 p-2.5 rounded-lg border border-amber-500/20">
+                          <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-300 shrink-0">
+                            <Clock size={13} className="text-amber-400" />
+                            <span>Prazo limite:</span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 flex-1 w-full sm:w-auto">
+                            <input 
+                              type="datetime-local" 
+                              value={dayConfig.extraordinaryDeadline || ''}
+                              onChange={(e) => onUpdateDayConfig(selectedDayStr, { ...dayConfig, extraordinaryDeadline: e.target.value })}
+                              className="bg-brand-bg border border-amber-500/40 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400 w-full sm:w-auto font-mono"
+                            />
+                            {dayConfig.extraordinaryDeadline && (
+                              <button
+                                type="button"
+                                onClick={() => onUpdateDayConfig(selectedDayStr, { ...dayConfig, extraordinaryDeadline: '' })}
+                                className="text-[10px] text-amber-400/80 hover:text-amber-300 underline shrink-0"
+                                title="Remover prazo e manter a abertura extra ativa indefinidamente"
+                              >
+                                Limpar prazo
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Integrated Parties List */}
+                    {normalizedParties.length > 0 && (
+                      <div className="space-y-2 pt-1">
+                        {normalizedParties.map((party, idx) => {
+                          const { start, end } = parsePartyTime(party.time);
+
+                          const handleTimeUpdate = (newStart: string, newEnd: string) => {
+                            let formatted = '';
+                            const s = newStart.trim();
+                            const e = newEnd.trim();
+                            if (s && e) {
+                              formatted = `${s}h até ${e}h`;
+                            } else if (s) {
+                              formatted = `${s}h`;
+                            } else if (e) {
+                              formatted = `até ${e}h`;
+                            }
+                            handleUpdateParty(party.id, 'time', formatted);
+                          };
+
+                          return (
+                            <div key={party.id || idx} className="flex flex-col sm:flex-row sm:items-center gap-2 bg-purple-950/25 border border-purple-500/30 rounded-xl p-2.5 animate-in fade-in">
+                              <div className="flex items-center gap-1.5 flex-1 min-w-[150px]">
+                                <span className="text-sm select-none">🎉</span>
+                                <input 
+                                  type="text"
+                                  placeholder="Nome da Festa"
+                                  value={party.name}
+                                  onChange={(e) => handleUpdateParty(party.id, 'name', e.target.value)}
+                                  className="w-full bg-brand-bg border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-white font-bold placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                                />
+                              </div>
+
+                              <div className="flex items-center justify-between sm:justify-start gap-2">
+                                <div className="flex items-center gap-1 bg-brand-bg border border-brand-border rounded-lg px-2 py-1 text-xs text-white font-semibold focus-within:border-purple-500">
+                                  <span className="text-[10px] text-purple-400 font-bold uppercase shrink-0 mr-0.5">Horário:</span>
+                                  <input 
+                                    type="text"
+                                    placeholder="12:00"
+                                    value={start}
+                                    onChange={(e) => handleTimeUpdate(e.target.value, end)}
+                                    className="w-12 bg-transparent text-center font-bold text-white focus:outline-none placeholder-gray-600 text-xs"
+                                  />
+                                  <span className="text-gray-400 font-bold text-[10px] select-none">h até</span>
+                                  <input 
+                                    type="text"
+                                    placeholder="17:00"
+                                    value={end}
+                                    onChange={(e) => handleTimeUpdate(start, e.target.value)}
+                                    className="w-12 bg-transparent text-center font-bold text-white focus:outline-none placeholder-gray-600 text-xs"
+                                  />
+                                  <span className="text-gray-400 font-bold text-[10px] select-none">h</span>
+                                </div>
+
+                                <button 
+                                  onClick={() => handleRemoveParty(party.id)}
+                                  className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
+                                  title="Excluir este evento"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
