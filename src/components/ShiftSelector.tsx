@@ -160,7 +160,8 @@ export default function ShiftSelector({ currentShift = 'Brinquedoteca 1 (9h - 18
 
             {/* Secondary group */}
             <div className="p-1.5">
-              <div className="px-2 py-1 text-[9px] font-extrabold uppercase tracking-wider text-brand-muted flex items-center gap-1 bg-white/5 border border-white/5 backdrop-blur-md rounded-md mb-1.5">
+              <div className="px-2 py-1 text-[9px] font-extrabold uppercase tracking-wider text-brand-primary flex items-center gap-1 bg-brand-primary/15 border border-brand-primary/20 backdrop-blur-md rounded-md mb-1.5">
+                {isSun ? <CalendarDays className="w-2.5 h-2.5 text-brand-primary" /> : <Sun className="w-2.5 h-2.5 text-brand-primary" />}
                 {isSun ? 'Outros Turnos Semanais' : 'Turnos de Domingo'}
               </div>
               <div className="space-y-0.5">
