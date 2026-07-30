@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Search, UserPlus, UserMinus, Clock, Copy, ClipboardPaste, Users, Plus, Trash2, PartyPopper, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Search, UserPlus, UserMinus, Clock, Copy, ClipboardPaste, Users, Plus, Trash2, PartyPopper, ChevronDown, ChevronUp, Zap, Lock } from 'lucide-react';
 import { Employee, WorkDay, DayType, DayConfig, PartyConfig } from '../types';
 import { format, isSunday, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -33,6 +33,7 @@ export default function DayManagementModal({
   onUpdateDayConfig
 }: DayManagementModalProps) {
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [expandedEmployeeId, setExpandedEmployeeId] = React.useState<string | null>(null);
   const [isEventsExpanded, setIsEventsExpanded] = React.useState(true);
 
@@ -246,12 +247,12 @@ export default function DayManagementModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ duration: 0.22, ease: "easeOut" }}
-            className="bg-brand-card border border-brand-border w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+            className="bg-brand-card border border-brand-border w-full max-w-3xl md:max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[90vh] max-h-[90vh]"
           >
             {/* Header */}
             <div className="p-4 md:p-6 border-b border-brand-border flex items-center justify-between bg-brand-bg/30">
               <div className="flex items-center gap-3 md:gap-4">
-                <div className="w-10 h-10 md:w-12 md:h-12 bg-brand-primary/20 rounded-xl flex items-center justify-center text-brand-primary">
+                <div className="w-10 h-10 md:w-12 md:h-12 bg-brand-primary/20 rounded-xl flex items-center justify-center text-brand-primary shrink-0">
                   <Users size={20} className="md:w-6 md:h-6" />
                 </div>
                 <div>
@@ -262,6 +263,21 @@ export default function DayManagementModal({
                 </div>
               </div>
               <div className="flex items-center gap-1 md:gap-2">
+                <button 
+                  onClick={() => {
+                    setIsSearchOpen(!isSearchOpen);
+                    if (isSearchOpen) setSearchQuery('');
+                  }}
+                  className={cn(
+                    "p-1.5 md:p-2 rounded-lg transition-all flex items-center gap-1.5",
+                    isSearchOpen || searchQuery
+                      ? "text-brand-primary bg-brand-primary/10 border border-brand-primary/30"
+                      : "text-gray-400 hover:text-white hover:bg-white/5"
+                  )}
+                  title={isSearchOpen ? "Fechar busca" : "Buscar recreador"}
+                >
+                  <Search size={18} className="md:w-5 md:h-5" />
+                </button>
                 <button 
                   onClick={onCopyTeam}
                   className="p-1.5 md:p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all"
@@ -287,6 +303,40 @@ export default function DayManagementModal({
               </div>
             </div>
 
+            {/* Collapsible Search Input */}
+            <AnimatePresence>
+              {(isSearchOpen || searchQuery) && (
+                <motion.div 
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="p-3 md:px-6 md:py-3 border-b border-brand-border bg-brand-bg/80 backdrop-blur-md overflow-hidden"
+                >
+                  <div className="relative flex items-center">
+                    <Search className="absolute left-3.5 text-brand-primary shrink-0" size={16} />
+                    <input 
+                      type="text"
+                      autoFocus
+                      placeholder="Buscar recreador por nome ou nome artístico..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full bg-brand-bg/90 border border-brand-primary/40 rounded-xl py-2 pl-10 pr-9 text-xs md:text-sm text-white placeholder-gray-400 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary transition-all shadow-inner"
+                    />
+                    {searchQuery && (
+                      <button 
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-3 text-gray-400 hover:text-white text-xs font-bold p-1"
+                        title="Limpar busca"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Day Configuration Section */}
             <div className="bg-brand-bg/40 border-b border-brand-border p-3 md:px-6 space-y-3 transition-all">
               <div className="flex items-center justify-between gap-2">
@@ -307,7 +357,7 @@ export default function DayManagementModal({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <label className="flex items-center gap-1.5 cursor-pointer text-xs text-white select-none group bg-brand-bg px-2.5 py-1.5 rounded-xl border border-brand-border hover:border-brand-primary transition-all">
                     <input 
                       type="checkbox"
@@ -326,8 +376,83 @@ export default function DayManagementModal({
                     <span className="hidden sm:inline">Nova Festa</span>
                     <span className="sm:hidden">Festa</span>
                   </button>
+
+                  <label 
+                    className={cn(
+                      "flex items-center gap-1.5 cursor-pointer text-xs select-none px-2.5 py-1.5 rounded-xl border transition-all",
+                      dayConfig.isExtraordinaryOpen
+                        ? "bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-sm shadow-amber-500/10 font-black"
+                        : "bg-brand-bg text-gray-400 border-brand-border hover:border-amber-500/40 hover:text-amber-200"
+                    )}
+                    title="Abre este dia para novos envios de disponibilidade, porém trava remoções de quem já enviou."
+                  >
+                    <input 
+                      type="checkbox"
+                      checked={!!dayConfig.isExtraordinaryOpen}
+                      onChange={(e) => {
+                        const isOpening = e.target.checked;
+                        let lockedMap = dayConfig.extraordinaryLockedAvailabilities;
+                        if (isOpening && !lockedMap) {
+                          lockedMap = {};
+                          employees.forEach(emp => {
+                            const dateStr = selectedDayStr;
+                            const empAvails = (emp.availabilities || []).filter(a => a === dateStr || a.startsWith(`${dateStr}_`));
+                            if (empAvails.length > 0) {
+                              lockedMap![emp.id] = empAvails;
+                            }
+                          });
+                        }
+                        onUpdateDayConfig(selectedDayStr, { 
+                          ...dayConfig, 
+                          isExtraordinaryOpen: isOpening,
+                          extraordinaryLockedAvailabilities: lockedMap
+                        });
+                      }}
+                      className="rounded border-brand-border text-amber-500 bg-brand-bg focus:ring-amber-500 w-3.5 h-3.5 cursor-pointer"
+                    />
+                    <Zap size={13} className={dayConfig.isExtraordinaryOpen ? "text-amber-400 fill-amber-400" : "text-gray-400"} />
+                    <span className="hidden md:inline">Abertura Extra</span>
+                    <span className="md:hidden">Abertura Extra</span>
+                  </label>
                 </div>
               </div>
+
+              {dayConfig.isExtraordinaryOpen && (
+                <div className="space-y-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200 animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <Zap size={15} className="text-amber-400 shrink-0 fill-amber-400" />
+                    <span className="font-bold text-amber-300">Abertura Extra Ativa</span>
+                  </div>
+                  <p className="text-[11px] text-amber-100/90 leading-relaxed">
+                    Com a Abertura Extra, funcionários podem cadastrar ou alterar a disponibilidade para este dia até o horário limite definido abaixo.
+                  </p>
+                  
+                  <div className="pt-1 flex flex-col sm:flex-row sm:items-center gap-2 bg-amber-950/30 p-2 rounded-lg border border-amber-500/20">
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-300 shrink-0">
+                      <Clock size={13} className="text-amber-400" />
+                      <span>Prazo limite para a Abertura Extra:</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-1">
+                      <input 
+                        type="datetime-local" 
+                        value={dayConfig.extraordinaryDeadline || ''}
+                        onChange={(e) => onUpdateDayConfig(selectedDayStr, { ...dayConfig, extraordinaryDeadline: e.target.value })}
+                        className="bg-brand-bg border border-amber-500/40 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none focus:border-amber-400 w-full sm:w-auto font-mono"
+                      />
+                      {dayConfig.extraordinaryDeadline && (
+                        <button
+                          type="button"
+                          onClick={() => onUpdateDayConfig(selectedDayStr, { ...dayConfig, extraordinaryDeadline: '' })}
+                          className="text-[10px] text-amber-400/80 hover:text-amber-300 underline shrink-0"
+                          title="Remover prazo e manter a abertura extra ativa indefinidamente"
+                        >
+                          Limpar prazo
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Collapsed View Summary Chips */}
               {!isEventsExpanded && normalizedParties.length > 0 && (
@@ -418,22 +543,8 @@ export default function DayManagementModal({
               </AnimatePresence>
             </div>
 
-            {/* Search Bar */}
-            <div className="p-3 md:p-4 border-b border-brand-border bg-brand-bg/10">
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                <input 
-                  type="text"
-                  placeholder="Buscar recreador por nome ou nome artístico..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-brand-bg border border-brand-border rounded-xl py-2.5 md:py-3 pl-10 md:pl-12 pr-4 text-sm md:text-base focus:outline-none focus:border-brand-primary transition-colors shadow-inner"
-                />
-              </div>
-            </div>
-
             {/* Content */}
-            <div className="flex-1 overflow-auto p-4 md:p-6 space-y-6 md:space-y-8">
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 md:space-y-8 pb-44">
               {/* Working List */}
               <div>
                 <div className="flex items-center justify-between mb-4">
