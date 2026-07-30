@@ -348,6 +348,7 @@ export default function CalendarView({
         type: 'party', 
         partyId: selectedParty.id,
         partyName: selectedParty.name,
+        shift: selectedParty.time || getDayConfig(dateStr).partyTime || '',
         extraHours: 0,
         dailyRateAtTime: employee.dailyRate,
         partyRateAtTime: employee.partyRate,
@@ -1190,7 +1191,24 @@ export default function CalendarView({
                         const dateObj = parseISO(d.date);
                         const isParty = d.type === 'party';
                         const config = getDayConfig(d.date);
-                        const partyTime = config.partyTime;
+
+                        // Resolve party name and time
+                        let partyName = d.partyName;
+                        let partyTime = d.shift || config.partyTime;
+
+                        if (isParty) {
+                          const matchedParty = d.partyId 
+                            ? config.parties?.find(p => p.id === d.partyId) 
+                            : config.parties?.find(p => p.name === d.partyName);
+                          
+                          if (matchedParty) {
+                            if (!partyName || partyName === 'Festa') partyName = matchedParty.name;
+                            if (matchedParty.time) partyTime = matchedParty.time;
+                          } else if (config.parties && config.parties.length > 0) {
+                            if (!partyName || partyName === 'Festa') partyName = config.parties[0].name;
+                            if (config.parties[0].time) partyTime = config.parties[0].time;
+                          }
+                        }
 
                         const dayBase = isParty 
                           ? (d.partyRateAtTime !== undefined ? d.partyRateAtTime : myEmployee.partyRate) 
@@ -1228,14 +1246,21 @@ export default function CalendarView({
                               </div>
 
                               {/* Details */}
-                              <div className="space-y-0.5">
+                              <div className="space-y-1">
                                 <p className="text-xs font-bold text-brand-text capitalize">
                                   {format(dateObj, "EEEE, dd 'de' MMMM", { locale: ptBR })}
                                 </p>
+
+                                {isParty && partyName && partyName !== 'Festa' && (
+                                  <p className="text-xs font-black text-purple-600 dark:text-purple-300 flex items-center gap-1">
+                                    <span>🎉 Festa: <span className="underline decoration-purple-400/50">{partyName}</span></span>
+                                  </p>
+                                )}
+
                                 <div className="flex flex-wrap items-center gap-1.5">
                                   {isParty ? (
                                     <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-purple-500/10 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded">
-                                      Festa 🥳
+                                      {(!partyName || partyName === 'Festa') ? 'Festa 🥳' : 'Festa'}
                                     </span>
                                   ) : (
                                     <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-brand-primary/10 dark:bg-brand-primary/20 text-amber-700 dark:text-brand-primary px-1.5 py-0.5 rounded">
@@ -1258,21 +1283,21 @@ export default function CalendarView({
 
                             {/* Party Time or Action badge */}
                             <div className="flex flex-col items-end gap-1.5 shrink-0 pl-2">
-                              {isParty && partyTime ? (
+                              {isParty ? (
                                 <div className="text-right">
                                   <span className="block text-[8px] text-brand-muted font-bold uppercase tracking-wider">Horário</span>
-                                  <span className="inline-block bg-purple-500/10 dark:bg-purple-500/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 font-black text-[10px] px-2 py-0.5 rounded-lg shadow-sm">
-                                    {partyTime}
+                                  <span className="inline-block bg-purple-500/10 dark:bg-purple-500/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 font-black text-[10px] md:text-xs px-2 py-0.5 rounded-lg shadow-sm">
+                                    {partyTime || "A definir"}
                                   </span>
                                 </div>
-                              ) : !isParty ? (
+                              ) : (
                                 <div className="text-right">
                                   <span className="block text-[8px] text-brand-muted font-bold uppercase tracking-wider">Turno</span>
-                                  <span className="inline-block bg-brand-primary/10 border border-brand-primary/20 text-amber-700 dark:text-brand-primary font-black text-[10px] px-2 py-0.5 rounded-lg shadow-sm">
+                                  <span className="inline-block bg-brand-primary/10 border border-brand-primary/20 text-amber-700 dark:text-brand-primary font-black text-[10px] md:text-xs px-2 py-0.5 rounded-lg shadow-sm">
                                     {d.shift || "Brinquedoteca 1 (9h - 18h)"}
                                   </span>
                                 </div>
-                              ) : null}
+                              )}
                               <span className="text-[9px] font-bold text-red-600 dark:text-red-400 group-hover:opacity-100 opacity-0 transition-opacity uppercase tracking-wider">
                                 Desistir ✕
                               </span>
@@ -2138,51 +2163,71 @@ export default function CalendarView({
       )}
 
       {/* Employee Cancellation Modal */}
-      {!isAdmin && isCancelModalOpen && cancelTargetDate && myEmployee && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="bg-brand-card border border-brand-border w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 text-center space-y-4">
-              <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
-                <AlertCircle size={32} />
+      {!isAdmin && isCancelModalOpen && cancelTargetDate && myEmployee && (() => {
+        const cancelDateStr = format(cancelTargetDate, 'yyyy-MM-dd');
+        const targetWorkDay = myEmployee.workDays?.find(wd => wd.date === cancelDateStr && !wd.isCancelled);
+        const isPartyDay = targetWorkDay?.type === 'party';
+        const config = getDayConfig(cancelDateStr);
+        const matchedParty = isPartyDay
+          ? (targetWorkDay?.partyId 
+              ? config.parties?.find(p => p.id === targetWorkDay.partyId) 
+              : config.parties?.find(p => p.name === targetWorkDay?.partyName))
+          : undefined;
+        const pName = targetWorkDay?.partyName || matchedParty?.name || (config.parties?.[0]?.name);
+        const pTime = matchedParty?.time || targetWorkDay?.shift || config.partyTime;
+
+        return (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <div className="bg-brand-card border border-brand-border w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="p-6 text-center space-y-4">
+                <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
+                  <AlertCircle size={32} />
+                </div>
+                <h3 className="text-xl font-bold text-brand-text">Cancelar Escala?</h3>
+                <div className="text-brand-muted text-sm leading-relaxed space-y-2">
+                  <p>
+                    Você está escalado para trabalhar no dia <span className="text-brand-primary font-bold">{format(cancelTargetDate, "dd/MM 'de' MMMM", { locale: ptBR })}</span>.
+                  </p>
+                  {isPartyDay && pName && (
+                    <div className="p-2.5 bg-purple-500/10 border border-purple-500/20 rounded-xl text-xs font-bold text-purple-600 dark:text-purple-300">
+                      🎉 Festa: <span className="font-black text-brand-text">{pName}</span>
+                      {pTime && <span className="block text-[11px] text-purple-600 dark:text-purple-300/90 font-semibold mt-0.5">⏰ Horário: {pTime}</span>}
+                    </div>
+                  )}
+                  <p className="text-xs text-brand-muted">
+                    Deseja realmente solicitar o cancelamento da sua escala para esta data? Os administradores serão notificados imediatamente.
+                  </p>
+                </div>
               </div>
-              <h3 className="text-xl font-bold text-brand-text">Cancelar Escala?</h3>
-              <div className="text-brand-muted text-sm leading-relaxed space-y-2">
-                <p>
-                  Você está escalado para trabalhar no dia <span className="text-brand-primary font-bold">{format(cancelTargetDate, "dd/MM 'de' MMMM", { locale: ptBR })}</span>.
-                </p>
-                <p className="text-xs text-brand-muted">
-                  Deseja realmente solicitar o cancelamento da sua escala para esta data? Os administradores serão notificados imediatamente.
-                </p>
+              <div className="p-4 bg-brand-bg/50 border-t border-brand-border flex gap-3">
+                <button 
+                  type="button"
+                  disabled={isCancellingLoading}
+                  onClick={() => {
+                    setIsCancelModalOpen(false);
+                    setCancelTargetDate(null);
+                  }}
+                  className="flex-1 bg-slate-700 hover:bg-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold py-2.5 px-4 rounded-xl transition-all text-sm disabled:opacity-50"
+                >
+                  Voltar
+                </button>
+                <button 
+                  type="button"
+                  disabled={isCancellingLoading}
+                  onClick={handleConfirmCancellation}
+                  className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2.5 px-4 rounded-xl transition-all text-sm shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {isCancellingLoading ? (
+                    <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                  ) : (
+                    'Confirmar'
+                  )}
+                </button>
               </div>
-            </div>
-            <div className="p-4 bg-brand-bg/50 border-t border-brand-border flex gap-3">
-              <button 
-                type="button"
-                disabled={isCancellingLoading}
-                onClick={() => {
-                  setIsCancelModalOpen(false);
-                  setCancelTargetDate(null);
-                }}
-                className="flex-1 bg-slate-700 hover:bg-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold py-2.5 px-4 rounded-xl transition-all text-sm disabled:opacity-50"
-              >
-                Voltar
-              </button>
-              <button 
-                type="button"
-                disabled={isCancellingLoading}
-                onClick={handleConfirmCancellation}
-                className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2.5 px-4 rounded-xl transition-all text-sm shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {isCancellingLoading ? (
-                  <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                ) : (
-                  'Confirmar'
-                )}
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
