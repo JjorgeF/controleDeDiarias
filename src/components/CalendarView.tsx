@@ -1003,16 +1003,6 @@ export default function CalendarView({
                         idx % 7 === 6 && "border-r-0"
                       )}
                     >
-                      {/* Extraordinary Open Badge */}
-                      {isExtraordinary && (
-                        <div 
-                          className="absolute top-1 left-1 flex items-center gap-0.5 bg-amber-500/25 text-amber-300 border border-amber-500/50 px-1 py-0.5 rounded text-[7px] md:text-[8px] font-black uppercase tracking-wider z-20 pointer-events-none shadow-sm animate-pulse"
-                          title="Dia com Abertura Extra (Apenas inclusões liberadas, remoções travadas)"
-                        >
-                          <Zap size={9} className="fill-amber-300 text-amber-300 shrink-0" />
-                          <span className="hidden md:inline">Abertura Extra</span>
-                        </div>
-                      )}
                       {/* Animated Moving Border with Solid Opaque Inner Mask */}
                       {showBeam && (
                         <>
@@ -1037,94 +1027,91 @@ export default function CalendarView({
                         </>
                       )}
 
-                      {/* Party indicator badges */}
-                      {config.isParty && (
-                        <div className="absolute top-1 right-1 flex flex-col items-end gap-0.5 z-10 max-w-[85%] pointer-events-none">
-                          {(config.parties && config.parties.length > 0 ? config.parties : [{ id: 'def', name: 'Festa', time: config.partyTime }]).map((p, pIdx) => (
-                            <span 
-                              key={p.id || pIdx}
-                              className="text-[7px] md:text-[9px] bg-purple-600/10 dark:bg-purple-500/25 text-purple-900 dark:text-purple-300 px-1 py-0.5 rounded font-black uppercase tracking-wider scale-90 md:scale-100 truncate max-w-full"
-                              title={p.time ? `${p.name}: ${p.time}` : p.name}
-                            >
-                              🎉 {p.name}{p.time ? ` (${p.time})` : ''}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      <div className="relative z-10 flex flex-col items-center justify-between h-full gap-1">
-                        <span className={cn(
-                          "text-xs md:text-sm font-black w-6 h-6 md:w-8 md:h-8 flex items-center justify-center rounded-full transition-colors",
-                          isTodayDate 
-                            ? "bg-brand-primary text-slate-900 font-extrabold shadow-sm" 
-                            : !isAdmin && isMyScheduled 
+                      {/* Cell Content Wrapper */}
+                      <div className="relative z-10 flex flex-col justify-between h-full w-full gap-1">
+                        {/* Cell Header Row: Day Number on left, Badges stacked on right */}
+                        <div className="flex items-start justify-between gap-1 w-full shrink-0">
+                          {/* Day Number */}
+                          <span className={cn(
+                            "text-xs md:text-sm font-black w-5 h-5 md:w-7 md:h-7 flex items-center justify-center rounded-full shrink-0 transition-colors shadow-2xs",
+                            isTodayDate 
                               ? "bg-brand-primary text-slate-900 font-extrabold shadow-sm" 
-                              : !isAdmin && isMyAvailable 
-                                ? "text-emerald-950 dark:text-emerald-200 font-black" 
-                                : "text-brand-muted group-hover:text-brand-text",
-                          isAdmin && isSelected && !isTodayDate && !isReadOnly && "text-brand-primary",
-                          !isAdmin && !isMyScheduled && !config.isCommon && !config.isParty && "text-brand-muted/50"
-                        )}>
-                          {format(day, 'd')}
-                        </span>
-                        
-                        {/* Status indicators */}
+                              : !isAdmin && isMyScheduled 
+                                ? "bg-brand-primary text-slate-900 font-extrabold shadow-sm" 
+                                : !isAdmin && isMyAvailable 
+                                  ? "text-emerald-950 dark:text-emerald-200 font-black bg-emerald-500/20" 
+                                  : "text-brand-muted group-hover:text-brand-text",
+                            isAdmin && isSelected && !isTodayDate && !isReadOnly && "text-brand-primary bg-brand-primary/20",
+                            !isAdmin && !isMyScheduled && !config.isCommon && !config.isParty && "text-brand-muted/50"
+                          )}>
+                            {format(day, 'd')}
+                          </span>
+
+                          {/* Stacked Badges Container (Top Right) */}
+                          <div className="flex flex-col items-end gap-0.5 min-w-0 max-w-[calc(100%-1.6rem)] pointer-events-none">
+                            {/* Extraordinary Open Badge */}
+                            {isExtraordinary && (
+                              <div 
+                                className="inline-flex items-center gap-0.5 bg-amber-500/25 text-amber-600 dark:text-amber-300 border border-amber-500/50 px-1 py-0.2 rounded text-[7px] md:text-[8px] font-black uppercase tracking-wider shadow-2xs animate-pulse truncate max-w-full"
+                                title="Dia com Abertura Extra (Apenas inclusões liberadas, remoções travadas)"
+                              >
+                                <Zap size={8} className="fill-amber-400 text-amber-400 shrink-0" />
+                                <span className="truncate">Extra</span>
+                              </div>
+                            )}
+
+                            {/* Party indicator badge (single badge) */}
+                            {config.isParty && (() => {
+                              const partiesList = config.parties && config.parties.length > 0 
+                                ? config.parties 
+                                : [{ id: 'def', name: 'Festa', time: config.partyTime }];
+                              
+                              const isMultiple = partiesList.length > 1;
+                              const tooltipTitle = partiesList.map(p => p.time ? `${p.name} (${p.time})` : p.name).join(', ');
+                              
+                              return (
+                                <span 
+                                  className="inline-flex items-center gap-0.5 text-[7px] md:text-[8px] bg-purple-600/15 dark:bg-purple-500/25 text-purple-900 dark:text-purple-300 border border-purple-500/30 px-1 py-0.2 rounded font-black uppercase tracking-wider truncate max-w-full"
+                                  title={tooltipTitle}
+                                >
+                                  <span className="shrink-0">🎉</span>
+                                  <span className="truncate">
+                                    {isMultiple 
+                                      ? `${partiesList.length} Festas` 
+                                      : `${partiesList[0].name}${partiesList[0].time ? ` (${partiesList[0].time})` : ''}`
+                                    }
+                                  </span>
+                                </span>
+                              );
+                            })()}
+                          </div>
+                        </div>
+
+                        {/* Status indicators (Bottom Row) */}
                         {isAdmin ? (
-                          <div className="flex flex-wrap gap-1 justify-center items-center mt-1">
-                            {/* Common counts */}
-                            {config.isCommon && (
-                              <>
-                                {workersCommonCount > 0 && (
-                                  <div 
-                                    title={`${workersCommonCount} escalados (CCSP)`}
-                                    className="bg-brand-primary/20 text-brand-primary px-1.5 py-0.5 rounded-full text-[8px] md:text-[10px] font-black shrink-0"
-                                  >
-                                    {workersCommonCount} C
-                                  </div>
-                                )}
-                                {availablesCommonCount > 0 && (
-                                  <div 
-                                    title={`${availablesCommonCount} disponíveis (CCSP)`}
-                                    className="bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded-full text-[8px] md:text-[10px] font-black shrink-0 flex items-center gap-0.5"
-                                  >
-                                    <span className="w-1.5 h-1.5 bg-emerald-500 dark:bg-emerald-400 rounded-full"></span>
-                                    {availablesCommonCount}
-                                  </div>
-                                )}
-                                {workersCommonCount === 0 && availablesCommonCount === 0 && (
-                                  <div className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded-full text-[8px] md:text-[10px] font-black shrink-0 flex items-center gap-1 select-none">
-                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shrink-0"></span>
-                                    Ativo
-                                  </div>
-                                )}
-                              </>
+                          <div className="flex flex-wrap gap-1 justify-center items-center mt-auto w-full">
+                            {/* Common scheduled count */}
+                            {config.isCommon && workersCommonCount > 0 && (
+                              <div 
+                                title={`${workersCommonCount} escalados (CCSP)`}
+                                className="bg-brand-primary/20 text-brand-primary px-1.5 py-0.5 rounded-full text-[8px] md:text-[10px] font-black shrink-0"
+                              >
+                                {workersCommonCount} C
+                              </div>
                             )}
                             
-                            {/* Party counts */}
-                            {config.isParty && (
-                              <>
-                                {workersPartyCount > 0 && (
-                                  <div 
-                                    title={`${workersPartyCount} escalados (Festa)`}
-                                    className="bg-purple-500/10 dark:bg-purple-500/20 text-purple-600 dark:text-purple-300 px-1.5 py-0.5 rounded-full text-[8px] md:text-[10px] font-black shrink-0"
-                                  >
-                                    {workersPartyCount} F 🥳
-                                  </div>
-                                )}
-                                {availablesPartyCount > 0 && (
-                                  <div 
-                                    title={`${availablesPartyCount} disponíveis (Festa)`}
-                                    className="bg-pink-500/10 dark:bg-pink-500/20 text-pink-600 dark:text-pink-300 px-1.5 py-0.5 rounded-full text-[8px] md:text-[10px] font-black shrink-0 flex items-center gap-0.5"
-                                  >
-                                    <span className="w-1.5 h-1.5 bg-pink-500 dark:bg-pink-400 rounded-full"></span>
-                                    {availablesPartyCount}
-                                  </div>
-                                )}
-                              </>
+                            {/* Party scheduled count */}
+                            {config.isParty && workersPartyCount > 0 && (
+                              <div 
+                                title={`${workersPartyCount} escalados (Festa)`}
+                                className="bg-purple-500/10 dark:bg-purple-500/20 text-purple-600 dark:text-purple-300 px-1.5 py-0.5 rounded-full text-[8px] md:text-[10px] font-black shrink-0"
+                              >
+                                {workersPartyCount} F 🥳
+                              </div>
                             )}
                           </div>
                         ) : (
-                          <div className="flex flex-col gap-1 items-center w-full mt-1">
+                          <div className="flex flex-col gap-1 items-center w-full mt-auto">
                             {/* Common scheduling */}
                             {config.isCommon && isMyScheduledCommon && (
                               <div className="bg-[#f2d861] text-slate-950 dark:bg-[#f2d861] dark:text-slate-950 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 w-full max-w-[54px] lg:max-w-none truncate shadow-sm">
