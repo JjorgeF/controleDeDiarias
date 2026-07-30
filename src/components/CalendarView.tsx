@@ -40,7 +40,9 @@ import {
   Sparkles,
   TrendingUp,
   Plus,
-  Minus
+  Minus,
+  Zap,
+  ShieldAlert
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Employee, WorkDay, DayType, CancellationLog, DayConfig, PartyConfig } from '../types';
@@ -66,6 +68,40 @@ interface CalendarViewProps {
   onMarkCancellationRead?: (cancellationId: string) => void;
   sidebarTab?: 'availabilities' | 'cancellations';
   onSidebarTabChange?: React.Dispatch<React.SetStateAction<'availabilities' | 'cancellations'>>;
+}
+
+export function isExtraordinaryActive(config?: DayConfig): boolean {
+  if (!config || !config.isExtraordinaryOpen) return false;
+  if (config.extraordinaryDeadline) {
+    const deadlineDate = new Date(config.extraordinaryDeadline);
+    if (!isNaN(deadlineDate.getTime()) && new Date() > deadlineDate) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function isOptionLockedForEmployee(
+  dayStr: string,
+  optionKey: string,
+  employee: Employee | null | undefined,
+  dayConfig: DayConfig | undefined,
+  isDeadlinePassed: boolean
+): boolean {
+  if (!isDeadlinePassed) return false;
+  if (!employee || !dayConfig) return false;
+  
+  const isExtra = isExtraordinaryActive(dayConfig);
+  if (!isExtra) return true; // Deadline passed and no active extra opening -> locked
+  
+  const lockedMap = dayConfig.extraordinaryLockedAvailabilities;
+  // If lockedMap was not defined when extra was opened, lock pre-existing availabilities
+  if (!lockedMap) {
+    return true;
+  }
+  
+  const empLockedKeys = lockedMap[employee.id] || [];
+  return empLockedKeys.some(k => k === optionKey || (optionKey === dayStr && k === `${dayStr}_common`) || (k === dayStr && optionKey === `${dayStr}_common`));
 }
 
 export default function CalendarView({ 
@@ -99,7 +135,10 @@ export default function CalendarView({
         isCommon: !!config.isCommon,
         isParty: parties.length > 0 || !!config.isParty,
         partyTime: config.partyTime || (parties[0]?.time || ''),
-        parties
+        parties,
+        isExtraordinaryOpen: !!config.isExtraordinaryOpen,
+        extraordinaryDeadline: config.extraordinaryDeadline,
+        extraordinaryLockedAvailabilities: config.extraordinaryLockedAvailabilities
       };
     }
 
@@ -136,7 +175,8 @@ export default function CalendarView({
       isCommon: !!isCommon,
       isParty,
       partyTime: parties[0]?.time || '',
-      parties
+      parties,
+      isExtraordinaryOpen: false
     };
   };
 
@@ -550,15 +590,16 @@ export default function CalendarView({
       const monthKey = format(day, 'yyyy-MM');
       const deadlineVal = deadlines?.[monthKey];
       const isExpired = deadlineVal ? new Date() > new Date(deadlineVal) : false;
+      const config = getDayConfig(dayStr);
+      const isExtraordinary = isExtraordinaryActive(config);
       
-      if (isExpired) {
-        return; // Click disabled because deadline expired
+      // If deadline is expired AND day is NOT extraordinarily open, click disabled
+      if (isExpired && !isExtraordinary) {
+        return;
       }
       
-      const config = getDayConfig(dayStr);
-      
-      // Se não houver atividade comum nem de festa marcada pelo admin, o funcionário não pode selecionar disponibilidade
-      if (!config.isCommon && !config.isParty) {
+      // Se não houver atividade comum nem de festa marcada pelo admin E também não tiver Abertura Extra, o funcionário não pode selecionar disponibilidade
+      if (!config.isCommon && !config.isParty && !isExtraordinary) {
         return;
       }
       
@@ -575,6 +616,10 @@ export default function CalendarView({
         if (config.isParty) {
           const hasParty = currentAvailabilities.some(d => d.startsWith(`${dayStr}_party`));
           if (hasParty) {
+            if (isOptionLockedForEmployee(dayStr, `${dayStr}_party`, myEmployee, config, isExpired)) {
+              alert("🔒 Sua disponibilidade para este evento já estava confirmada antes da Abertura Extra e não pode ser removida.");
+              return;
+            }
             newAvailabilities = currentAvailabilities.filter(d => !d.startsWith(`${dayStr}_party`));
           } else {
             const clean = currentAvailabilities.filter(d => !d.startsWith(`${dayStr}_party`));
@@ -584,6 +629,10 @@ export default function CalendarView({
           // Common day (default)
           const hasCommon = currentAvailabilities.includes(dayStr) || currentAvailabilities.includes(`${dayStr}_common`);
           if (hasCommon) {
+            if (isOptionLockedForEmployee(dayStr, dayStr, myEmployee, config, isExpired)) {
+              alert("🔒 Sua disponibilidade para este dia já estava confirmada antes da Abertura Extra e não pode ser removida.");
+              return;
+            }
             newAvailabilities = currentAvailabilities.filter(d => d !== dayStr && d !== `${dayStr}_common`);
           } else {
             const clean = currentAvailabilities.filter(d => d !== dayStr && d !== `${dayStr}_common`);
@@ -663,44 +712,72 @@ export default function CalendarView({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Deadline Notification Banner */}
-      <div className={cn(
-        "border rounded-xl p-4 flex items-center justify-between shadow-md transition-all duration-200 animate-in fade-in slide-in-from-top-2",
-        isDeadlinePassed 
-          ? "bg-red-500/10 border-red-500/20 text-red-900 dark:text-red-200" 
-          : deadlineDate 
-            ? "bg-amber-500/10 border-amber-500/30 text-amber-950 dark:text-amber-200" 
-            : "bg-blue-500/10 border-blue-500/20 text-blue-900 dark:text-blue-200"
-      )}>
-        <div className="flex items-center gap-3">
-          {isDeadlinePassed ? (
-            <Lock className="text-red-600 dark:text-red-400 shrink-0 animate-bounce" size={20} />
-          ) : deadlineDate ? (
-            <Unlock className="text-amber-600 dark:text-yellow-400 shrink-0" size={20} />
-          ) : (
-            <Calendar className="text-blue-600 dark:text-blue-400 shrink-0" size={20} />
-          )}
-          <div>
-            <p className="text-xs md:text-sm font-black">
-              {isDeadlinePassed ? (
-                `Prazo Encerrado! O envio de disponibilidades para ${format(currentMonth, 'MMMM', { locale: ptBR })} expirou em ${format(deadlineDate!, "dd/MM/yyyy 'às' HH:mm")}.`
-              ) : deadlineDate ? (
-                `Prazo Limite: Defina suas disponibilidades de ${format(currentMonth, 'MMMM', { locale: ptBR })} até ${format(deadlineDate, "dd/MM/yyyy 'às' HH:mm")}.`
-              ) : (
-                `Disponibilidades de ${format(currentMonth, 'MMMM', { locale: ptBR })}: Sem prazo limite definido.`
+      {/* Deadline & Extraordinary Open Notification Banners */}
+      <div className="space-y-3">
+        <div className={cn(
+          "border rounded-xl p-4 flex items-center justify-between shadow-md transition-all duration-200 animate-in fade-in slide-in-from-top-2",
+          isDeadlinePassed 
+            ? "bg-red-500/10 border-red-500/20 text-red-900 dark:text-red-200" 
+            : deadlineDate 
+              ? "bg-amber-500/10 border-amber-500/30 text-amber-950 dark:text-amber-200" 
+              : "bg-blue-500/10 border-blue-500/20 text-blue-900 dark:text-blue-200"
+        )}>
+          <div className="flex items-center gap-3">
+            {isDeadlinePassed ? (
+              <Lock className="text-red-600 dark:text-red-400 shrink-0 animate-bounce" size={20} />
+            ) : deadlineDate ? (
+              <Unlock className="text-amber-600 dark:text-yellow-400 shrink-0" size={20} />
+            ) : (
+              <Calendar className="text-blue-600 dark:text-blue-400 shrink-0" size={20} />
+            )}
+            <div>
+              <p className="text-xs md:text-sm font-black">
+                {isDeadlinePassed ? (
+                  `Prazo Encerrado! O envio de disponibilidades para ${format(currentMonth, 'MMMM', { locale: ptBR })} expirou em ${format(deadlineDate!, "dd/MM/yyyy 'às' HH:mm")}.`
+                ) : deadlineDate ? (
+                  `Prazo Limite: Defina suas disponibilidades de ${format(currentMonth, 'MMMM', { locale: ptBR })} até ${format(deadlineDate, "dd/MM/yyyy 'às' HH:mm")}.`
+                ) : (
+                  `Disponibilidades de ${format(currentMonth, 'MMMM', { locale: ptBR })}: Sem prazo limite definido.`
+                )}
+              </p>
+              {!isAdmin && !isDeadlinePassed && (
+                <p className="text-[10px] text-amber-900 dark:text-yellow-400/80 mt-0.5 font-bold">Toque nos dias do calendário para marcar/desmarcar os dias em que você pode trabalhar.</p>
               )}
-            </p>
-            {!isAdmin && !isDeadlinePassed && (
-              <p className="text-[10px] text-amber-900 dark:text-yellow-400/80 mt-0.5 font-bold">Toque nos dias do calendário para marcar/desmarcar os dias em que você pode trabalhar.</p>
-            )}
-            {isAdmin && (
-              <p className="text-[10px] text-emerald-700 dark:text-emerald-400/80 mt-0.5 font-bold">⚡ Clique simples para ativar/desativar o dia de atividades CCSP. Clique duplo para gerenciar a equipe ou definir festa.</p>
-            )}
-            {!isAdmin && isDeadlinePassed && (
-              <p className="text-[10px] text-red-700 dark:text-red-400/80 mt-0.5 font-bold">As datas deste mês foram travadas. Caso precise alterar, entre em contato com um administrador.</p>
-            )}
+              {isAdmin && (
+                <p className="text-[10px] text-emerald-700 dark:text-emerald-400/80 mt-0.5 font-bold">⚡ Clique simples para ativar/desativar o dia de atividades CCSP. Clique duplo para gerenciar a equipe ou definir festa.</p>
+              )}
+              {!isAdmin && isDeadlinePassed && (
+                <p className="text-[10px] text-red-700 dark:text-red-400/80 mt-0.5 font-bold">As datas gerais deste mês foram travadas. Caso haja dias com abertura extraordinária (⚡), novos envios ainda são permitidos.</p>
+              )}
+            </div>
           </div>
         </div>
+
+        {/* Extraordinary Open Alert Banner for current month */}
+        {(() => {
+          const extraordinaryDays = calendarDays.filter(d => {
+            if (!isSameMonth(d, monthStart)) return false;
+            const cfg = getDayConfig(format(d, 'yyyy-MM-dd'));
+            return isExtraordinaryActive(cfg);
+          });
+
+          if (extraordinaryDays.length === 0) return null;
+
+          return (
+            <div className="bg-amber-500/15 border border-amber-500/40 rounded-xl p-3.5 flex items-center gap-3 text-amber-200 animate-in fade-in shadow-md">
+              <Zap size={22} className="text-amber-400 fill-amber-400 shrink-0" />
+              <div className="flex-1 text-xs md:text-sm">
+                <p className="font-black text-amber-300 flex items-center gap-1.5">
+                  <span>⚡ Abertura Extra de Disponibilidade Ativa</span>
+                </p>
+                <p className="text-[11px] md:text-xs text-amber-100/90 font-medium mt-0.5">
+                  Há <strong>{extraordinaryDays.length} {extraordinaryDays.length === 1 ? 'dia' : 'dias'}</strong> neste mês com abertura extra de disponibilidades.
+                  {!isAdmin && " Você pode cadastrar ou alterar sua disponibilidade nestes dias destacados até o encerramento do prazo extra."}
+                </p>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Admin Deadline Setup Panel */}
@@ -841,6 +918,7 @@ export default function CalendarView({
                   {calendarDays.map((day, idx) => {
                   const dayStr = format(day, 'yyyy-MM-dd');
                   const config = getDayConfig(dayStr);
+                  const isExtraordinary = isExtraordinaryActive(config);
                   
                   // Counts for admin view
                   const workersCommonCount = employees.filter(emp => 
@@ -859,7 +937,8 @@ export default function CalendarView({
                   // Status for employee view
                   const isMyCancelledCommon = myEmployee?.workDays?.some(d => d.date === dayStr && d.type === 'common' && d.isCancelled);
                   const isMyCancelledParty = myEmployee?.workDays?.some(d => d.date === dayStr && d.type === 'party' && d.isCancelled);
-                  const isMyAvailableCommon = config.isCommon && !isMyCancelledCommon && (myEmployee?.availabilities?.includes(dayStr) || myEmployee?.availabilities?.includes(`${dayStr}_common`));
+                  const isCommonActive = config.isCommon || isExtraordinary;
+                  const isMyAvailableCommon = isCommonActive && !isMyCancelledCommon && (myEmployee?.availabilities?.includes(dayStr) || myEmployee?.availabilities?.includes(`${dayStr}_common`));
                   const isMyAvailableParty = config.isParty && !isMyCancelledParty && myEmployee?.availabilities?.includes(`${dayStr}_party`);
                   const isMyScheduledCommon = myEmployee?.workDays?.some(d => d.date === dayStr && d.type === 'common' && !d.isCancelled);
                   const isMyScheduledParty = myEmployee?.workDays?.some(d => d.date === dayStr && d.type === 'party' && !d.isCancelled);
@@ -870,7 +949,7 @@ export default function CalendarView({
                   const isCurrentMonth = isSameMonth(day, monthStart);
                   const isSelected = selectedDay && isSameDay(day, selectedDay);
                   const isTodayDate = isToday(day);
-                  const isOpenForAvailability = isCurrentMonth && (config.isCommon || config.isParty);
+                  const isOpenForAvailability = isCurrentMonth && (config.isCommon || config.isParty || isExtraordinary) && (!isDeadlinePassed || isExtraordinary);
                   const showBeam = isCurrentMonth && !isMyScheduled && (isOpenForAvailability || (!isAdmin && isMyAvailable));
                   const isGreenBeam = !isAdmin && isMyAvailable;
                   const beamGradient = isGreenBeam
@@ -893,9 +972,9 @@ export default function CalendarView({
                         isCurrentMonth && (
                           isAdmin 
                             ? "hover:bg-brand-primary/5 cursor-pointer" 
-                            : isDeadlinePassed 
+                            : (isDeadlinePassed && !isExtraordinary)
                               ? "cursor-not-allowed opacity-80" 
-                              : (config.isCommon || config.isParty)
+                              : (config.isCommon || config.isParty || isExtraordinary)
                                 ? "hover:opacity-90 cursor-pointer"
                                 : "cursor-not-allowed opacity-30"
                         ),
@@ -903,12 +982,23 @@ export default function CalendarView({
                         isAdmin && isSelected && !isReadOnly && "bg-brand-primary/10 ring-2 ring-brand-primary border-brand-primary z-10",
                         isAdmin && !isSelected && config.isCommon && "bg-emerald-500/[0.03] border-emerald-500/20",
                         isAdmin && !isSelected && config.isParty && "bg-purple-500/[0.03] border-purple-500/20",
+                        isAdmin && isExtraordinary && "border-amber-500/40 bg-amber-500/[0.04]",
                         // Status styling for recreador when scheduled
                         !isAdmin && isMyScheduled && "bg-amber-100 dark:bg-[#f2d861]/25 border-2 border-amber-400 dark:border-[#f2d861] shadow-sm z-10",
                         !isAdmin && !isMyScheduled && isMyAvailable && "border-2 border-emerald-500/60 dark:border-emerald-400/60 z-10",
                         idx % 7 === 6 && "border-r-0"
                       )}
                     >
+                      {/* Extraordinary Open Badge */}
+                      {isExtraordinary && (
+                        <div 
+                          className="absolute top-1 left-1 flex items-center gap-0.5 bg-amber-500/25 text-amber-300 border border-amber-500/50 px-1 py-0.5 rounded text-[7px] md:text-[8px] font-black uppercase tracking-wider z-20 pointer-events-none shadow-sm animate-pulse"
+                          title="Dia com Abertura Extra (Apenas inclusões liberadas, remoções travadas)"
+                        >
+                          <Zap size={9} className="fill-amber-300 text-amber-300 shrink-0" />
+                          <span className="hidden md:inline">Abertura Extra</span>
+                        </div>
+                      )}
                       {/* Animated Moving Border with Solid Opaque Inner Mask */}
                       {showBeam && (
                         <>
@@ -1824,15 +1914,46 @@ export default function CalendarView({
             </div>
 
             <div className="space-y-4">
+              {/* Extraordinary Open Notice Banner in Modal */}
+              {(() => {
+                const dateStr = format(employeeChoiceDate, 'yyyy-MM-dd');
+                const cfg = getDayConfig(dateStr);
+                if (!isExtraordinaryActive(cfg)) return null;
+
+                return (
+                  <div className="flex items-center gap-2.5 bg-amber-500/15 border border-amber-500/40 rounded-xl p-3 text-xs text-amber-200 animate-in fade-in">
+                    <Zap size={18} className="text-amber-400 shrink-0 fill-amber-400" />
+                    <div>
+                      <p className="font-bold text-amber-300 flex items-center gap-1.5">
+                        <span>Abertura Extra Ativa</span>
+                        {cfg.extraordinaryDeadline && (
+                          <span className="text-[10px] text-amber-200/90 font-normal">
+                            (Até {format(new Date(cfg.extraordinaryDeadline), "dd/MM 'às' HH:mm")})
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-[11px] text-amber-200/90 mt-0.5">
+                        Você pode cadastrar ou alterar sua disponibilidade para este dia até o encerramento do prazo extra.
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Common Option */}
               {(() => {
                 const dateStr = format(employeeChoiceDate, 'yyyy-MM-dd');
                 const config = getDayConfig(dateStr);
                 if (!config.isCommon) return null;
 
+                const monthKey = format(employeeChoiceDate, 'yyyy-MM');
+                const deadlineVal = deadlines?.[monthKey];
+                const isDeadlinePassed = deadlineVal ? new Date() > new Date(deadlineVal) : false;
+
                 const currentAvailabilities = myEmployee.availabilities || [];
                 const isCommonChecked = currentAvailabilities.includes(dateStr) || currentAvailabilities.includes(`${dateStr}_common`);
-                
+                const isLocked = isCommonChecked && isOptionLockedForEmployee(dateStr, dateStr, myEmployee, config, isDeadlinePassed);
+
                 return (
                   <label className={cn(
                     "flex items-center justify-between p-4 rounded-xl border cursor-pointer select-none transition-all",
@@ -1841,13 +1962,25 @@ export default function CalendarView({
                       : "bg-brand-bg/40 border-brand-border text-brand-muted hover:border-brand-primary/30"
                   )}>
                     <div className="flex flex-col">
-                      <span className="font-bold text-sm text-brand-text">Dia CCSP</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-sm text-brand-text">Dia CCSP</span>
+                        {isLocked && (
+                          <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
+                            <Lock size={10} />
+                            <span>Confirmado (Trava pré-abertura)</span>
+                          </span>
+                        )}
+                      </div>
                       <span className="text-xs text-brand-muted">Trabalho padrão do dia a dia</span>
                     </div>
                     <input 
                       type="checkbox"
                       checked={isCommonChecked}
                       onChange={(e) => {
+                        if (!e.target.checked && isLocked) {
+                          alert("🔒 Sua disponibilidade para este dia já estava confirmada antes da Abertura Extra e não pode ser removida.");
+                          return;
+                        }
                         let newAvail: string[];
                         if (e.target.checked) {
                           const clean = currentAvailabilities.filter(d => d !== dateStr && d !== `${dateStr}_common`);
@@ -1868,6 +2001,10 @@ export default function CalendarView({
               {/* Party Option(s) */}
               {(() => {
                 const dateStr = format(employeeChoiceDate, 'yyyy-MM-dd');
+                const monthKey = format(employeeChoiceDate, 'yyyy-MM');
+                const deadlineVal = deadlines?.[monthKey];
+                const isDeadlinePassed = deadlineVal ? new Date() > new Date(deadlineVal) : false;
+
                 const currentAvailabilities = myEmployee.availabilities || [];
                 const config = getDayConfig(dateStr);
                 const parties = config.parties && config.parties.length > 0 
@@ -1884,6 +2021,7 @@ export default function CalendarView({
                       const hasSpecificPartyKey = currentAvailabilities.includes(partyKey);
                       
                       const isPartyChecked = hasSpecificPartyKey || (hasGeneralPartyKey && (parties.length === 1 || !hasAnySpecificPartyKeyForDate));
+                      const isLocked = isPartyChecked && isOptionLockedForEmployee(dateStr, partyKey, myEmployee, config, isDeadlinePassed);
 
                       return (
                         <label key={party.id} className={cn(
@@ -1896,6 +2034,12 @@ export default function CalendarView({
                             <span className="font-bold text-sm text-brand-text flex items-center gap-1.5">
                               <span>🎉</span>
                               <span>{party.name}</span>
+                              {isLocked && (
+                                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
+                                  <Lock size={10} />
+                                  <span>Confirmado (Trava pré-abertura)</span>
+                                </span>
+                              )}
                             </span>
                             {party.time ? (
                               <span className="text-xs text-purple-600 dark:text-purple-300 font-bold mt-1">Horário: {party.time}</span>
@@ -1908,6 +2052,10 @@ export default function CalendarView({
                             checked={isPartyChecked}
                             onChange={(e) => {
                               const willBeChecked = e.target.checked;
+                              if (!willBeChecked && isLocked) {
+                                alert("🔒 Sua disponibilidade para este evento já estava confirmada antes da Abertura Extra e não pode ser removida.");
+                                return;
+                              }
                               const newSelectedPartyIds = parties
                                 .filter(p => {
                                   if (p.id === party.id) return willBeChecked;
