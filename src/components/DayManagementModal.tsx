@@ -884,7 +884,7 @@ export default function DayManagementModal({
             </div>
           </motion.div>
         </motion.div>
-      )}
+      )} 
     </AnimatePresence>
   );
 }
