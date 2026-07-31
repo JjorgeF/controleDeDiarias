@@ -20,8 +20,8 @@ export const STANDARD_SHIFTS: ShiftOption[] = [
 
 export const SUNDAY_SHIFTS: ShiftOption[] = [
   { label: 'Brinquedoteca', time: '9h às 18h', value: 'Brinquedoteca (9h - 18h)', category: 'Domingo' },
-  { label: 'Externo (5 a 10 anos)', time: '10h às 18h', value: 'Externo - 5 a 10 anos (10h - 18h)', category: 'Domingo' },
-  { label: 'Externo (+11 anos)', time: '10h às 18h', value: 'Externo - +11 anos (10h - 18h)', category: 'Domingo' },
+  { label: '5 a 10 anos', time: '10h às 18h', value: '5 a 10 anos (10h - 18h)', category: 'Domingo' },
+  { label: '+11 anos', time: '10h às 18h', value: '+11 anos (10h - 18h)', category: 'Domingo' },
 ];
 
 export const LEGACY_SHIFTS: ShiftOption[] = [

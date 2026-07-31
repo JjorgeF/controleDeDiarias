@@ -54,6 +54,7 @@ import ShiftSelector from './ShiftSelector';
 
 interface CalendarViewProps {
   employees: Employee[];
+  allEmployees?: Employee[];
   onUpdateDays: (employeeId: string, days: WorkDay[]) => void;
   currentMonth: Date;
   setCurrentMonth: React.Dispatch<React.SetStateAction<Date>>;
@@ -108,6 +109,7 @@ export function isOptionLockedForEmployee(
 
 export default function CalendarView({ 
   employees, 
+  allEmployees,
   onUpdateDays, 
   currentMonth, 
   setCurrentMonth,
@@ -1298,6 +1300,12 @@ export default function CalendarView({
                         const extra = (d.extraHours || 0) * extraRate;
                         const dayTotal = dayBase + extra;
 
+                        const coworkersOnDay = (allEmployees || employees).flatMap(emp => 
+                          (emp.workDays || [])
+                            .filter(wd => wd.date === d.date && !wd.isCancelled)
+                            .map(wd => ({ employee: emp, workDay: wd }))
+                        ).filter(item => item.employee.id !== myEmployee.id);
+
                         return (
                           <div 
                             key={d.date}
@@ -1306,83 +1314,108 @@ export default function CalendarView({
                               setIsCancelModalOpen(true);
                             }}
                             className={cn(
-                              "flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none hover:scale-[1.01] duration-150 group",
+                              "flex flex-col p-3.5 rounded-xl border transition-all cursor-pointer select-none hover:scale-[1.01] duration-150 group gap-2.5",
                               isParty 
                                 ? "bg-purple-500/5 border-purple-500/20 hover:border-purple-500/45 hover:bg-purple-500/10" 
                                 : "bg-brand-primary/5 border-brand-primary/20 hover:border-brand-primary/45 hover:bg-brand-primary/10"
                             )}
                           >
-                            <div className="flex items-center gap-3 animate-in fade-in duration-200">
-                              {/* Date circle badge */}
-                              <div className={cn(
-                                "w-11 h-11 rounded-xl flex flex-col items-center justify-center font-black shrink-0 shadow-md transition-all",
-                                isParty 
-                                  ? "bg-purple-600 text-white group-hover:bg-purple-500" 
-                                  : "bg-brand-primary text-slate-900 group-hover:bg-brand-primary-hover"
-                              )}>
-                                <span className="text-sm leading-none">{format(dateObj, 'dd')}</span>
-                                <span className="text-[8px] uppercase tracking-wider leading-none mt-0.5 font-bold">
-                                  {format(dateObj, 'EEE', { locale: ptBR }).substring(0, 3)}
-                                </span>
-                              </div>
+                            <div className="flex items-center justify-between w-full">
+                              <div className="flex items-center gap-3 animate-in fade-in duration-200">
+                                {/* Date circle badge */}
+                                <div className={cn(
+                                  "w-11 h-11 rounded-xl flex flex-col items-center justify-center font-black shrink-0 shadow-md transition-all",
+                                  isParty 
+                                    ? "bg-purple-600 text-white group-hover:bg-purple-500" 
+                                    : "bg-brand-primary text-slate-900 group-hover:bg-brand-primary-hover"
+                                )}>
+                                  <span className="text-sm leading-none">{format(dateObj, 'dd')}</span>
+                                  <span className="text-[8px] uppercase tracking-wider leading-none mt-0.5 font-bold">
+                                    {format(dateObj, 'EEE', { locale: ptBR }).substring(0, 3)}
+                                  </span>
+                                </div>
 
-                              {/* Details */}
-                              <div className="space-y-1">
-                                <p className="text-xs font-bold text-brand-text capitalize">
-                                  {format(dateObj, "EEEE, dd 'de' MMMM", { locale: ptBR })}
-                                </p>
-
-                                {isParty && partyName && partyName !== 'Festa' && (
-                                  <p className="text-xs font-black text-purple-600 dark:text-purple-300 flex items-center gap-1">
-                                    <span>🎉 Festa: <span className="underline decoration-purple-400/50">{partyName}</span></span>
+                                {/* Details */}
+                                <div className="space-y-1">
+                                  <p className="text-xs font-bold text-brand-text capitalize">
+                                    {format(dateObj, "EEEE, dd 'de' MMMM", { locale: ptBR })}
                                   </p>
-                                )}
 
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                  {isParty ? (
-                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-purple-500/10 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded">
-                                      {(!partyName || partyName === 'Festa') ? 'Festa 🥳' : 'Festa'}
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-brand-primary/10 dark:bg-brand-primary/20 text-amber-700 dark:text-brand-primary px-1.5 py-0.5 rounded">
-                                      Dia CCSP 🏢
-                                    </span>
+                                  {isParty && partyName && partyName !== 'Festa' && (
+                                    <p className="text-xs font-black text-purple-600 dark:text-purple-300 flex items-center gap-1">
+                                      <span>🎉 Festa: <span className="underline decoration-purple-400/50">{partyName}</span></span>
+                                    </p>
                                   )}
 
-                                  {d.extraHours ? (
-                                    <span className="inline-flex items-center gap-1 text-[9px] font-bold bg-yellow-500/10 dark:bg-yellow-500/20 text-yellow-800 dark:text-yellow-300 px-1.5 py-0.5 rounded">
-                                      +{d.extraHours}h extras
-                                    </span>
-                                  ) : null}
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    {isParty ? (
+                                      <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-purple-500/10 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded">
+                                        {(!partyName || partyName === 'Festa') ? 'Festa 🥳' : 'Festa'}
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-brand-primary/10 dark:bg-brand-primary/20 text-amber-700 dark:text-brand-primary px-1.5 py-0.5 rounded">
+                                        Dia CCSP 🏢
+                                      </span>
+                                    )}
 
-                                  <span className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                                    {formatCurrency(dayTotal)}
-                                  </span>
+                                    {d.extraHours ? (
+                                      <span className="inline-flex items-center gap-1 text-[9px] font-bold bg-yellow-500/10 dark:bg-yellow-500/20 text-yellow-800 dark:text-yellow-300 px-1.5 py-0.5 rounded">
+                                        +{d.extraHours}h extras
+                                      </span>
+                                    ) : null}
+
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                      {formatCurrency(dayTotal)}
+                                    </span>
+                                  </div>
                                 </div>
+                              </div>
+
+                              {/* Party Time or Action badge */}
+                              <div className="flex flex-col items-end gap-1.5 shrink-0 pl-2">
+                                {isParty ? (
+                                  <div className="text-right">
+                                    <span className="block text-[8px] text-brand-muted font-bold uppercase tracking-wider">Horário</span>
+                                    <span className="inline-block bg-purple-500/10 dark:bg-purple-500/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 font-black text-[10px] md:text-xs px-2 py-0.5 rounded-lg shadow-sm">
+                                      {partyTime || "A definir"}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div className="text-right">
+                                    <span className="block text-[8px] text-brand-muted font-bold uppercase tracking-wider">Turno</span>
+                                    <span className="inline-block bg-brand-primary/10 border border-brand-primary/20 text-amber-700 dark:text-brand-primary font-black text-[10px] md:text-xs px-2 py-0.5 rounded-lg shadow-sm">
+                                      {d.shift || "Brinquedoteca 1 (9h - 18h)"}
+                                    </span>
+                                  </div>
+                                )}
+                                <span className="text-[9px] font-bold text-red-600 dark:text-red-400 group-hover:opacity-100 opacity-0 transition-opacity uppercase tracking-wider">
+                                  Desistir ✕
+                                </span>
                               </div>
                             </div>
 
-                            {/* Party Time or Action badge */}
-                            <div className="flex flex-col items-end gap-1.5 shrink-0 pl-2">
-                              {isParty ? (
-                                <div className="text-right">
-                                  <span className="block text-[8px] text-brand-muted font-bold uppercase tracking-wider">Horário</span>
-                                  <span className="inline-block bg-purple-500/10 dark:bg-purple-500/20 border border-purple-500/30 text-purple-600 dark:text-purple-300 font-black text-[10px] md:text-xs px-2 py-0.5 rounded-lg shadow-sm">
-                                    {partyTime || "A definir"}
-                                  </span>
+                            {/* Co-workers on same day */}
+                            {coworkersOnDay.length > 0 && (
+                              <div className="pt-2 border-t border-brand-border/40 flex flex-wrap items-center gap-1.5 text-[10px]">
+                                <span className="font-bold text-brand-muted flex items-center gap-1 shrink-0">
+                                  <Users size={12} className="text-brand-primary" />
+                                  Escalados com você ({coworkersOnDay.length}):
+                                </span>
+                                <div className="flex flex-wrap items-center gap-1">
+                                  {coworkersOnDay.map(({ employee, workDay }) => (
+                                    <span 
+                                      key={employee.id} 
+                                      className="inline-flex items-center gap-1 bg-brand-bg border border-brand-border/60 text-brand-text px-1.5 py-0.5 rounded text-[9.5px] font-semibold"
+                                    >
+                                      <span className="font-bold text-brand-text">{employee.artisticName || employee.name}</span>
+                                      <span className="text-[8.5px] text-brand-muted font-normal">
+                                        ({workDay.type === 'party' ? (workDay.partyName || 'Festa') : (workDay.shift ? workDay.shift.split(' ')[0] : 'CCSP')})
+                                      </span>
+                                    </span>
+                                  ))}
                                 </div>
-                              ) : (
-                                <div className="text-right">
-                                  <span className="block text-[8px] text-brand-muted font-bold uppercase tracking-wider">Turno</span>
-                                  <span className="inline-block bg-brand-primary/10 border border-brand-primary/20 text-amber-700 dark:text-brand-primary font-black text-[10px] md:text-xs px-2 py-0.5 rounded-lg shadow-sm">
-                                    {d.shift || "Brinquedoteca 1 (9h - 18h)"}
-                                  </span>
-                                </div>
-                              )}
-                              <span className="text-[9px] font-bold text-red-600 dark:text-red-400 group-hover:opacity-100 opacity-0 transition-opacity uppercase tracking-wider">
-                                Desistir ✕
-                              </span>
-                            </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
