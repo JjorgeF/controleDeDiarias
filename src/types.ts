@@ -64,7 +64,7 @@ export interface Employee {
   photoUrl?: string; // Base64 compressed profile photo or URL
 }
 
-export type ViewMode = 'grid' | 'list' | 'calendar' | 'dashboard';
+export type ViewMode = 'grid' | 'list' | 'calendar' | 'dashboard' | 'master_schedule';
 
 export interface CancellationLog {
   id: string;

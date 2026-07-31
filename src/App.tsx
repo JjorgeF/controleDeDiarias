@@ -26,10 +26,11 @@ import ManageDaysModal from './components/ManageDaysModal';
 import SendNotificationModal from './components/SendNotificationModal';
 import SimulationBanner from './components/SimulationBanner';
 import EmployeeStoryView from './components/EmployeeStoryView';
+import MonthlyScheduleView from './components/MonthlyScheduleView';
 import InAppBrowserGuide, { isInAppBrowser } from './components/InAppBrowserGuide';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import Logo from './components/Logo';
-import { LogIn, AlertTriangle, Calendar, Award, X } from 'lucide-react';
+import { LogIn, AlertTriangle, Calendar, Award, X, Table, UserPlus, Plus } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format, isSameMonth, parseISO, eachDayOfInterval, startOfMonth, endOfMonth, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -59,7 +60,7 @@ export default function App() {
   const isViewingAsAdmin = isAdmin && (!isSimulationEnabled || !simulationActive);
 
   // Modals & Navigation state
-  const [employeeActiveTab, setEmployeeActiveTab] = useState<'schedule' | 'story'>('schedule');
+  const [employeeActiveTab, setEmployeeActiveTab] = useState<'schedule' | 'master_schedule' | 'story'>('schedule');
   const [selectedStoryEmployee, setSelectedStoryEmployee] = useState<Employee | null>(null);
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
   const [isManageDaysModalOpen, setIsManageDaysModalOpen] = useState(false);
@@ -1093,32 +1094,52 @@ export default function App() {
           }}
         />
 
-        <main className="w-full mx-auto px-2 md:px-4 py-4 md:py-8 max-w-4xl">
+        <main className={`w-full mx-auto px-2 md:px-4 py-4 md:py-8 ${employeeActiveTab === 'master_schedule' ? 'max-w-7xl' : 'max-w-4xl'}`}>
           {myEmployeeRecord ? (
             <div className="space-y-6">
-              {/* Navegação de Abas da Interface do Funcionário */}
-              <div className="flex items-center gap-2 border-b border-brand-border pb-3">
+              {/* Navegação de Abas da Interface do Funcionário (Alinhadas Lado a Lado) */}
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-3 border-b border-brand-border pb-3 w-full">
                 <button
+                  type="button"
                   onClick={() => setEmployeeActiveTab('schedule')}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all ${
+                  className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all text-center whitespace-nowrap ${
                     employeeActiveTab === 'schedule'
-                      ? 'bg-brand-primary text-slate-900 shadow-md'
+                      ? 'bg-brand-primary text-slate-900 shadow-md ring-1 ring-brand-primary/50'
                       : 'bg-brand-card hover:bg-brand-primary/10 text-gray-700 dark:text-gray-300 hover:text-brand-text border border-brand-border'
                   }`}
                 >
-                  <Calendar size={18} />
-                  Meu Calendário & Disponibilidade
+                  <Calendar size={18} className="shrink-0" />
+                  <span className="truncate">
+                    <span className="inline md:hidden">Meu Calendário</span>
+                    <span className="hidden md:inline">Meu Calendário & Disponibilidade</span>
+                  </span>
                 </button>
                 <button
-                  onClick={() => setEmployeeActiveTab('story')}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all ${
-                    employeeActiveTab === 'story'
-                      ? 'bg-brand-primary text-slate-900 shadow-md'
+                  type="button"
+                  onClick={() => setEmployeeActiveTab('master_schedule')}
+                  className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all text-center whitespace-nowrap ${
+                    employeeActiveTab === 'master_schedule'
+                      ? 'bg-brand-primary text-slate-900 shadow-md ring-1 ring-brand-primary/50'
                       : 'bg-brand-card hover:bg-brand-primary/10 text-gray-700 dark:text-gray-300 hover:text-brand-text border border-brand-border'
                   }`}
                 >
-                  <Award size={18} />
-                  Minha História
+                  <Table size={18} className="shrink-0" />
+                  <span className="truncate">
+                    <span className="inline md:hidden">Escala Geral</span>
+                    <span className="hidden md:inline">Escala Geral Mensal</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEmployeeActiveTab('story')}
+                  className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all text-center whitespace-nowrap ${
+                    employeeActiveTab === 'story'
+                      ? 'bg-brand-primary text-slate-900 shadow-md ring-1 ring-brand-primary/50'
+                      : 'bg-brand-card hover:bg-brand-primary/10 text-gray-700 dark:text-gray-300 hover:text-brand-text border border-brand-border'
+                  }`}
+                >
+                  <Award size={18} className="shrink-0" />
+                  <span className="truncate">Minha História</span>
                 </button>
               </div>
 
@@ -1156,6 +1177,15 @@ export default function App() {
                     />
                   </div>
                 </div>
+              ) : employeeActiveTab === 'master_schedule' ? (
+                <MonthlyScheduleView 
+                  employees={employees}
+                  currentMonth={currentMonth}
+                  setCurrentMonth={setCurrentMonth}
+                  currentEmployee={myEmployeeRecord}
+                  isAdmin={false}
+                  dayConfigs={dayConfigs}
+                />
               ) : (
                 <EmployeeStoryView 
                   employee={myEmployeeRecord}
@@ -1258,28 +1288,74 @@ export default function App() {
         )}
 
         {viewMode === 'grid' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredEmployees.map(emp => (
-              <EmployeeCard 
-                key={emp.id}
-                employee={emp}
-                onEdit={(e) => {
-                  setSelectedEmployee(e);
-                  setIsEmployeeModalOpen(true);
-                }}
-                onManageDays={(e) => {
-                  setSelectedEmployee(e);
-                  setIsManageDaysModalOpen(true);
-                }}
-                onViewStory={(e) => setSelectedStoryEmployee(e)}
-                currentMonth={currentMonth}
-              />
-            ))}
-            {filteredEmployees.length === 0 && (
-              <div className="col-span-full py-20 text-center">
-                <p className="text-gray-500 text-lg">Nenhum funcionário encontrado.</p>
+          <div className="space-y-6">
+            {isViewingAsAdmin && (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-brand-card/90 backdrop-blur-md p-4 rounded-2xl border border-brand-border shadow-md">
+                <div>
+                  <h2 className="text-lg font-black text-brand-text flex items-center gap-2">
+                    <span>Equipe de Recreação</span>
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary border border-brand-primary/20">
+                      {filteredEmployees.length} {filteredEmployees.length === 1 ? 'recreador' : 'recreadores'}
+                    </span>
+                  </h2>
+                  <p className="text-xs text-brand-muted mt-0.5">Gerencie cartões, taxas, diárias e atalhos individuais</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedEmployee(undefined);
+                    setIsEmployeeModalOpen(true);
+                  }}
+                  className="bg-brand-primary hover:bg-brand-primary-hover text-slate-950 font-black px-4 py-2.5 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-xs md:text-sm shrink-0 active:scale-95"
+                >
+                  <UserPlus size={18} />
+                  <span>Adicionar Recreador</span>
+                </button>
               </div>
             )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {isViewingAsAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedEmployee(undefined);
+                    setIsEmployeeModalOpen(true);
+                  }}
+                  className="border-2 border-dashed border-brand-border hover:border-brand-primary/60 bg-brand-card/30 hover:bg-brand-card/80 rounded-2xl p-6 flex flex-col items-center justify-center gap-3 text-brand-muted hover:text-brand-primary transition-all group min-h-[260px] shadow-sm"
+                >
+                  <div className="w-14 h-14 rounded-full bg-brand-primary/10 group-hover:bg-brand-primary/20 border border-brand-primary/30 flex items-center justify-center text-brand-primary transition-all group-hover:scale-110">
+                    <UserPlus size={26} />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-extrabold text-sm text-brand-text group-hover:text-brand-primary">Adicionar Recreador</p>
+                    <p className="text-xs text-brand-muted mt-1">Cadastrar novo membro na equipe</p>
+                  </div>
+                </button>
+              )}
+
+              {filteredEmployees.map(emp => (
+                <EmployeeCard 
+                  key={emp.id}
+                  employee={emp}
+                  onEdit={(e) => {
+                    setSelectedEmployee(e);
+                    setIsEmployeeModalOpen(true);
+                  }}
+                  onManageDays={(e) => {
+                    setSelectedEmployee(e);
+                    setIsManageDaysModalOpen(true);
+                  }}
+                  onViewStory={(e) => setSelectedStoryEmployee(e)}
+                  currentMonth={currentMonth}
+                />
+              ))}
+              {filteredEmployees.length === 0 && !isViewingAsAdmin && (
+                <div className="col-span-full py-20 text-center">
+                  <p className="text-gray-500 text-lg">Nenhum funcionário encontrado.</p>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -1325,6 +1401,17 @@ export default function App() {
             employees={employees}
             currentMonth={currentMonth}
             setCurrentMonth={setCurrentMonth}
+            dayConfigs={dayConfigs}
+          />
+        )}
+
+        {viewMode === 'master_schedule' && (
+          <MonthlyScheduleView 
+            employees={employees}
+            currentMonth={currentMonth}
+            setCurrentMonth={setCurrentMonth}
+            currentEmployee={simulationActive ? employees.find(e => e.id === simulatedEmployeeId) : null}
+            isAdmin={isViewingAsAdmin}
             dayConfigs={dayConfigs}
           />
         )}

@@ -90,4 +90,25 @@
   animation: borderGlowSpin 5s linear infinite;
 }
 
+@keyframes logoBorderGradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.bg-logo-gradient {
+  background: linear-gradient(135deg, #b2127a, #1ca249, #fcb913, #2563eb, #b2127a, #1ca249);
+  background-size: 300% 300%;
+}
+
+.animate-logo-border {
+  animation: logoBorderGradient 5s ease infinite;
+}
+
 
