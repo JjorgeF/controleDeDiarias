@@ -911,6 +911,23 @@ export default function MonthlyScheduleView({
                       {dayItems.map(({ employee, workDay }) => {
                         const isThisHighlighted = effectiveHighlightEmployee && employee.id === effectiveHighlightEmployee.id;
 
+                        const isParty = workDay.type === 'party';
+                        let resolvedPartyName = workDay.partyName;
+                        if (isParty && (!resolvedPartyName || resolvedPartyName === 'Festa')) {
+                          const matchedParty = workDay.partyId 
+                            ? config?.parties?.find(p => p.id === workDay.partyId)
+                            : config?.parties?.find(p => p.name === workDay.partyName);
+                          if (matchedParty) {
+                            resolvedPartyName = matchedParty.name;
+                          } else if (config?.parties && config.parties.length > 0) {
+                            resolvedPartyName = config.parties[0].name;
+                          }
+                        }
+
+                        const displayLabel = isParty
+                          ? (resolvedPartyName ? `Festa: ${resolvedPartyName}` : (workDay.shift || 'Festa'))
+                          : (workDay.shift || 'CCSP');
+
                         return (
                           <div 
                             key={employee.id}
@@ -935,8 +952,13 @@ export default function MonthlyScheduleView({
                               </div>
                             </div>
 
-                            <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-brand-bg border border-brand-border text-brand-primary shrink-0 ml-2">
-                              {workDay.shift || workDay.type}
+                            <span className={cn(
+                              "text-[10px] font-bold px-2 py-1 rounded-lg border shrink-0 ml-2 truncate max-w-[150px]",
+                              isParty
+                                ? "bg-purple-950/80 text-purple-200 border-purple-500/40"
+                                : "bg-brand-bg border-brand-border text-brand-primary"
+                            )}>
+                              {displayLabel}
                             </span>
                           </div>
                         );
@@ -1066,21 +1088,38 @@ export default function MonthlyScheduleView({
                           </div>
                         </div>
 
-                        <div className="text-right shrink-0">
-                          <span className={cn(
-                            "text-xs font-black px-2.5 py-1 rounded-lg border inline-block",
-                            workDay.type === 'party'
-                              ? "bg-purple-950 text-purple-200 border-purple-500/40"
-                              : "bg-brand-primary/15 text-brand-primary border-brand-primary/30"
-                          )}>
-                            {workDay.shift || (workDay.type === 'party' ? 'Festa' : 'CCSP')}
-                          </span>
-                          {workDay.partyName && (
-                            <p className="text-[10px] text-purple-300 font-medium mt-0.5 truncate max-w-[120px]">
-                              {workDay.partyName}
-                            </p>
-                          )}
-                        </div>
+                        {(() => {
+                          const isModalParty = workDay.type === 'party';
+                          let modalPartyName = workDay.partyName;
+                          if (isModalParty && (!modalPartyName || modalPartyName === 'Festa')) {
+                            const matchedParty = workDay.partyId 
+                              ? modalConfig?.parties?.find(p => p.id === workDay.partyId)
+                              : modalConfig?.parties?.find(p => p.name === workDay.partyName);
+                            if (matchedParty) {
+                              modalPartyName = matchedParty.name;
+                            } else if (modalConfig?.parties && modalConfig.parties.length > 0) {
+                              modalPartyName = modalConfig.parties[0].name;
+                            }
+                          }
+
+                          return (
+                            <div className="text-right shrink-0">
+                              <span className={cn(
+                                "text-xs font-black px-2.5 py-1 rounded-lg border inline-block",
+                                isModalParty
+                                  ? "bg-purple-950 text-purple-200 border-purple-500/40"
+                                  : "bg-brand-primary/15 text-brand-primary border-brand-primary/30"
+                              )}>
+                                {workDay.shift || (isModalParty ? (modalPartyName ? `Festa: ${modalPartyName}` : 'Festa') : 'CCSP')}
+                              </span>
+                              {isModalParty && modalPartyName && workDay.shift && (
+                                <p className="text-[10px] text-purple-300 font-medium mt-0.5 truncate max-w-[140px]">
+                                  🎉 {modalPartyName}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     );
                   })
