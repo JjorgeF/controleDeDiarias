@@ -265,10 +265,12 @@ export default function EmployeeStoryView({
         transition={{ duration: 0.3 }}
         className="bg-brand-card border border-brand-border rounded-2xl overflow-hidden shadow-2xl relative"
       >
-        {/* Background Decorative Gradient */}
-        <div className="h-32 bg-gradient-to-r from-brand-primary/20 via-purple-500/20 to-brand-primary/10 relative overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(59,130,246,0.15),transparent_70%)]" />
-          <div className="absolute top-4 right-4 flex items-center gap-2">
+        {/* Background Decorative Gradient with Logo Colors Animation */}
+        <div className="h-32 bg-brand-bg relative overflow-hidden">
+          <div className="absolute inset-0 bg-logo-gradient animate-logo-border opacity-25" />
+          <div className="absolute inset-0 bg-gradient-to-b from-brand-card/30 via-brand-card/60 to-brand-card" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.08),transparent_70%)]" />
+          <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
             {canEditPhoto && onUpdatePhoto && (
               <button 
                 onClick={() => fileInputRef.current?.click()}
@@ -299,7 +301,7 @@ export default function EmployeeStoryView({
         <div className="px-6 pb-6 relative -mt-12 flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div className="flex flex-col md:flex-row items-center md:items-end gap-4 text-center md:text-left">
             {/* Avatar Circle */}
-            <div className="w-24 h-24 rounded-2xl bg-gradient-to-tr from-brand-primary to-emerald-400 p-1 shadow-xl shrink-0 relative group">
+            <div className="w-24 h-24 rounded-2xl bg-brand-card p-1 ring-2 ring-brand-border shadow-2xl shrink-0 relative group">
               <div className="w-full h-full bg-brand-card rounded-[14px] flex items-center justify-center font-black text-3xl text-brand-primary uppercase overflow-hidden relative">
                 {employee.photoUrl ? (
                   <img 

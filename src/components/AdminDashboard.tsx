@@ -332,6 +332,8 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
         if (hasParty && config.isParty) totalAvailabilitiesAllTime++;
       });
 
+      const hasDeclaredNoAvailThisMonth = emp.availabilities?.includes(`no_avail_${currentMonthKey}`);
+
       return {
         id: emp.id,
         name: emp.name,
@@ -340,6 +342,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
         level: emp.level,
         confirmedThisMonth,
         availabilitiesThisMonth,
+        hasDeclaredNoAvailThisMonth,
         cancellationsThisMonth,
         totalConfirmedAllTime,
         totalAvailabilitiesAllTime,
@@ -847,6 +850,13 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                           </div>
 
                           {/* Micro-lista de datas para depuração transparente */}
+                          {rankMetric === 'availabilities' && item.hasDeclaredNoAvailThisMonth && item.availabilitiesThisMonth === 0 && (
+                            <div className="pt-1.5">
+                              <span className="text-red-400 font-bold text-[10px] bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-md inline-flex items-center gap-1">
+                                🚫 Declaro Indisponível neste Mês
+                              </span>
+                            </div>
+                          )}
                           {rankMetric === 'availabilities' && (item.activeAvails.length > 0 || item.inactiveAvails.length > 0) && (
                             <div className="flex flex-wrap items-center gap-1.5 pt-1.5 text-[10px]">
                               {item.activeAvails.map((av, idx) => (

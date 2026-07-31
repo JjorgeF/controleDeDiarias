@@ -130,12 +130,14 @@ export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, emplo
               onClick={() => fileInputRef.current?.click()}
               title="Clique para escolher/alterar a foto do perfil"
             >
-              <div className="w-20 h-20 rounded-full bg-brand-bg border-2 border-brand-primary/40 overflow-hidden flex items-center justify-center text-brand-primary text-xl font-bold shadow-md group-hover:border-brand-primary transition-all">
-                {formData.photoUrl ? (
-                  <img src={formData.photoUrl} alt="Foto do perfil" className="w-full h-full object-cover" />
-                ) : (
-                  <span>{(formData.artisticName || formData.name || 'R').substring(0, 2).toUpperCase()}</span>
-                )}
+              <div className="w-20 h-20 rounded-full bg-logo-gradient animate-logo-border p-[3px] shadow-md group-hover:scale-105 transition-all">
+                <div className="w-full h-full bg-brand-bg rounded-full overflow-hidden flex items-center justify-center text-brand-primary text-xl font-bold">
+                  {formData.photoUrl ? (
+                    <img src={formData.photoUrl} alt="Foto do perfil" className="w-full h-full object-cover" />
+                  ) : (
+                    <span>{(formData.artisticName || formData.name || 'R').substring(0, 2).toUpperCase()}</span>
+                  )}
+                </div>
               </div>
               <div className="absolute bottom-0 right-0 bg-brand-primary text-brand-bg p-1.5 rounded-full shadow-md group-hover:scale-110 transition-transform">
                 <Camera size={14} />

@@ -121,7 +121,7 @@ const EmployeeCard: React.FC<EmployeeCardProps> = ({
         <div className="p-5 flex-1">
         <div className="flex justify-between items-start mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-brand-primary to-emerald-400 p-0.5 shrink-0 shadow-md">
+            <div className="w-12 h-12 rounded-xl bg-logo-gradient animate-logo-border p-0.5 shrink-0 shadow-md">
               <div className="w-full h-full bg-brand-card rounded-[10px] flex items-center justify-center font-extrabold text-sm text-brand-primary uppercase overflow-hidden">
                 {employee.photoUrl ? (
                   <img src={employee.photoUrl} alt={employee.name} className="w-full h-full object-cover rounded-[10px]" />

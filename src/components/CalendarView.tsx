@@ -42,7 +42,9 @@ import {
   Plus,
   Minus,
   Zap,
-  ShieldAlert
+  ShieldAlert,
+  Ban,
+  CalendarX
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Employee, WorkDay, DayType, CancellationLog, DayConfig, PartyConfig } from '../types';
@@ -218,13 +220,49 @@ export default function CalendarView({
   const [cancelTargetDate, setCancelTargetDate] = React.useState<Date | null>(null);
   const [isCancellingLoading, setIsCancellingLoading] = React.useState(false);
 
-
-
   // Deadline Admin State
   const [deadlineInputDate, setDeadlineInputDate] = React.useState('');
   const [deadlineInputTime, setDeadlineInputTime] = React.useState('');
 
+  // Employee No Availability Modal State
+  const [isNoAvailModalOpen, setIsNoAvailModalOpen] = React.useState(false);
+  const [isNoAvailLoading, setIsNoAvailLoading] = React.useState(false);
+
   const currentMonthKey = format(currentMonth, 'yyyy-MM');
+
+  const myEmployee = employees[0];
+
+  const hasDeclaredNoAvail = React.useMemo(() => {
+    if (!myEmployee || !myEmployee.availabilities) return false;
+    return myEmployee.availabilities.includes(`no_avail_${currentMonthKey}`);
+  }, [myEmployee, currentMonthKey]);
+
+  const handleConfirmNoAvailability = async () => {
+    if (!myEmployee || !onUpdateAvailabilities) return;
+    setIsNoAvailLoading(true);
+    try {
+      const currentAvails = myEmployee.availabilities || [];
+      const cleanAvails = currentAvails.filter(s => !s.startsWith(currentMonthKey));
+      const newAvails = Array.from(new Set([...cleanAvails, `no_avail_${currentMonthKey}`]));
+      await onUpdateAvailabilities(myEmployee.id, newAvails);
+      setIsNoAvailModalOpen(false);
+    } catch (error) {
+      console.error("Erro ao declarar indisponibilidade:", error);
+    } finally {
+      setIsNoAvailLoading(false);
+    }
+  };
+
+  const handleClearNoAvailability = async () => {
+    if (!myEmployee || !onUpdateAvailabilities) return;
+    try {
+      const currentAvails = myEmployee.availabilities || [];
+      const newAvails = currentAvails.filter(s => s !== `no_avail_${currentMonthKey}`);
+      await onUpdateAvailabilities(myEmployee.id, newAvails);
+    } catch (error) {
+      console.error("Erro ao remover indisponibilidade:", error);
+    }
+  };
   const deadlineStr = deadlines?.[currentMonthKey] || '';
 
   React.useEffect(() => {
@@ -480,8 +518,6 @@ export default function CalendarView({
     setReplicationTarget(null);
   };
 
-  const myEmployee = employees[0];
-
   const handleConfirmCancellation = async () => {
     if (!cancelTargetDate || !myEmployee || !onCancelWorkDay) return;
     setIsCancellingLoading(true);
@@ -612,7 +648,7 @@ export default function CalendarView({
         setEmployeeChoiceDate(day);
         setIsEmployeeChoiceModalOpen(true);
       } else {
-        const currentAvailabilities = myEmployee.availabilities || [];
+        const currentAvailabilities = (myEmployee.availabilities || []).filter(d => d !== `no_avail_${monthKey}`);
         let newAvailabilities: string[];
         
         if (config.isParty) {
@@ -655,7 +691,8 @@ export default function CalendarView({
     return employees.map(emp => {
       let count = 0;
       const monthAvailStrings = emp.availabilities?.filter(str => str.startsWith(currentMonthKey) && !str.startsWith('login_')) || [];
-      const uniqueDates = Array.from(new Set(monthAvailStrings.map(s => s.split('_')[0])));
+      const hasDeclaredNoAvail = emp.availabilities?.includes(`no_avail_${currentMonthKey}`);
+      const uniqueDates = Array.from(new Set(monthAvailStrings.filter(s => !s.startsWith('no_avail_')).map(s => s.split('_')[0])));
 
       uniqueDates.forEach(dateStr => {
         const config = getDayConfig(dateStr);
@@ -666,8 +703,12 @@ export default function CalendarView({
         if (hasParty && config.isParty) count++;
       });
 
-      return { ...emp, availabilitiesCount: count };
-    }).sort((a, b) => b.availabilitiesCount - a.availabilitiesCount);
+      return { ...emp, availabilitiesCount: count, hasDeclaredNoAvail };
+    }).sort((a, b) => {
+      if (a.hasDeclaredNoAvail && !b.hasDeclaredNoAvail) return 1;
+      if (!a.hasDeclaredNoAvail && b.hasDeclaredNoAvail) return -1;
+      return b.availabilitiesCount - a.availabilitiesCount;
+    });
   }, [employees, currentMonthKey, dayConfigs]);
 
   const scheduledDaysThisMonth = React.useMemo(() => {
@@ -792,6 +833,34 @@ export default function CalendarView({
             </div>
           );
         })()}
+
+        {/* No Availability Declared Alert Banner for employee */}
+        {!isAdmin && hasDeclaredNoAvail && (
+          <div className="bg-red-500/15 border border-red-500/40 rounded-xl p-3.5 flex items-center justify-between gap-3 text-red-200 animate-in fade-in shadow-md">
+            <div className="flex items-center gap-3 flex-1">
+              <div className="w-9 h-9 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
+                <Ban size={20} className="text-red-400" />
+              </div>
+              <div className="flex-1 text-xs md:text-sm">
+                <p className="font-black text-red-300">
+                  Você declarou que NÃO terá disponibilidade em {format(currentMonth, "MMMM 'de' yyyy", { locale: ptBR })}.
+                </p>
+                <p className="text-[11px] text-red-200/80 font-medium mt-0.5">
+                  A administração foi notificada que você respondeu e que não estará disponível neste mês.
+                </p>
+              </div>
+            </div>
+            {!isDeadlinePassed && (
+              <button
+                type="button"
+                onClick={handleClearNoAvailability}
+                className="bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/40 font-bold px-3 py-1.5 rounded-lg text-xs transition-colors shrink-0"
+              >
+                Alterar / Selecionar Dias
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Admin Deadline Setup Panel */}
@@ -876,22 +945,47 @@ export default function CalendarView({
                 </div>
               </div>
               
-              <div className="hidden sm:flex items-center gap-4 text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-widest">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 bg-brand-primary rounded-full"></span>
-                  <span>Escalado</span>
-                </div>
-                {isAdmin ? (
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 bg-emerald-500 rounded-full"></span>
-                    <span>Disponível</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 bg-emerald-500 rounded-full"></span>
-                    <span>Sua Disponibilidade</span>
+              <div className="flex items-center gap-4">
+                {!isAdmin && (
+                  <div>
+                    {hasDeclaredNoAvail ? (
+                      <span className="px-2.5 py-1 rounded-lg bg-red-500/15 text-red-600 dark:text-red-300 border border-red-500/30 text-[11px] md:text-xs font-black flex items-center gap-1.5">
+                        <Ban size={13} /> Indisponível no Mês
+                      </span>
+                    ) : (
+                      !isDeadlinePassed && (
+                        <button
+                          type="button"
+                          onClick={() => setIsNoAvailModalOpen(true)}
+                          className="flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/20 px-2.5 py-1.5 rounded-lg text-[11px] md:text-xs font-bold transition-all active:scale-95 shadow-sm"
+                          title="Declara que você não poderá trabalhar em nenhum dia deste mês"
+                        >
+                          <Ban size={13} />
+                          <span className="hidden sm:inline">Sem disponibilidade este mês</span>
+                          <span className="sm:hidden">Sem disp.</span>
+                        </button>
+                      )
+                    )}
                   </div>
                 )}
+
+                <div className="hidden sm:flex items-center gap-4 text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-widest">
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 bg-brand-primary rounded-full"></span>
+                    <span>Escalado</span>
+                  </div>
+                  {isAdmin ? (
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 bg-emerald-500 rounded-full"></span>
+                      <span>Disponível</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 bg-emerald-500 rounded-full"></span>
+                      <span>Sua Disponibilidade</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1767,14 +1861,19 @@ export default function CalendarView({
                       <p className="text-xs font-bold text-brand-text">{emp.artisticName || emp.name}</p>
                       <p className="text-[10px] text-brand-muted font-medium uppercase">{emp.level}</p>
                     </div>
-                    <div className={cn(
-                      "px-2.5 py-1 rounded-full text-xs font-black",
-                      emp.availabilitiesCount > 0 
-                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" 
-                        : "bg-brand-bg text-brand-muted"
-                    )}>
-                      {emp.availabilitiesCount} {emp.availabilitiesCount === 1 ? 'dia' : 'dias'}
-                    </div>
+                    {emp.availabilitiesCount > 0 ? (
+                      <div className="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                        {emp.availabilitiesCount} {emp.availabilitiesCount === 1 ? 'dia' : 'dias'}
+                      </div>
+                    ) : emp.hasDeclaredNoAvail ? (
+                      <div className="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30 flex items-center gap-1 shrink-0" title="Declarou sem disponibilidade neste mês">
+                        <Ban size={11} /> Sem Disp.
+                      </div>
+                    ) : (
+                      <div className="px-2.5 py-1 rounded-full text-xs font-black bg-brand-bg text-brand-muted">
+                        0 dias
+                      </div>
+                    )}
                   </div>
                 ))}
                 {employeesWithAvailabilitiesCount.length === 0 && (
@@ -2215,6 +2314,50 @@ export default function CalendarView({
           </div>
         );
       })()}
+
+      {/* Employee No Availability Modal */}
+      {!isAdmin && isNoAvailModalOpen && myEmployee && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="bg-brand-card border border-brand-border w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center space-y-4">
+              <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-2 border border-red-500/30">
+                <Ban size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-brand-text">Sem Disponibilidade neste Mês?</h3>
+              <div className="text-brand-muted text-sm leading-relaxed space-y-2">
+                <p>
+                  Você está informando que <strong className="text-red-400 font-black">NÃO poderá trabalhar em nenhum dia</strong> de <span className="text-brand-primary font-bold">{format(currentMonth, "MMMM 'de' yyyy", { locale: ptBR })}</span>.
+                </p>
+                <p className="text-xs text-brand-muted">
+                  Caso já tenha marcado algum dia de disponibilidade neste mês, essas seleções serão limpas. A administração saberá que você está ativo e respondeu que não estará disponível neste mês.
+                </p>
+              </div>
+            </div>
+            <div className="p-4 bg-brand-bg/50 border-t border-brand-border flex gap-3">
+              <button 
+                type="button"
+                disabled={isNoAvailLoading}
+                onClick={() => setIsNoAvailModalOpen(false)}
+                className="flex-1 bg-slate-700 hover:bg-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold py-2.5 px-4 rounded-xl transition-all text-sm disabled:opacity-50"
+              >
+                Voltar
+              </button>
+              <button 
+                type="button"
+                disabled={isNoAvailLoading}
+                onClick={handleConfirmNoAvailability}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2.5 px-4 rounded-xl transition-all text-sm shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isNoAvailLoading ? (
+                  <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                ) : (
+                  'Confirmar (0 Dias)'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

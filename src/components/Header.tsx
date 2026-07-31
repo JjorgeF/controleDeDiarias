@@ -12,7 +12,8 @@ import {
   Smartphone,
   BarChart3,
   Settings,
-  Send
+  Send,
+  Table
 } from 'lucide-react';
 import { auth, googleProvider } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
@@ -167,6 +168,16 @@ export default function Header({
                 title="Calendário de Escalas"
               >
                 <CalendarIcon size={18} />
+              </button>
+              <button 
+                onClick={() => setViewMode('master_schedule')}
+                className={cn(
+                  "p-1.5 rounded transition-colors",
+                  viewMode === 'master_schedule' ? "bg-brand-bg text-brand-primary font-bold" : "text-gray-400 hover:text-white"
+                )}
+                title="Escala Mensal Unificada"
+              >
+                <Table size={18} />
               </button>
               {isAdmin && (
                 <button 
@@ -342,6 +353,7 @@ export default function Header({
                 "p-1.5 rounded transition-colors",
                 viewMode === 'grid' ? "bg-brand-bg text-brand-primary" : "text-gray-400 hover:text-white"
               )}
+              title="Visualização em Grade"
             >
               <LayoutGrid size={18} />
             </button>
@@ -351,6 +363,7 @@ export default function Header({
                 "p-1.5 rounded transition-colors",
                 viewMode === 'list' ? "bg-brand-bg text-brand-primary" : "text-gray-400 hover:text-white"
               )}
+              title="Visualização em Lista"
             >
               <List size={18} />
             </button>
@@ -360,8 +373,19 @@ export default function Header({
                 "p-1.5 rounded transition-colors",
                 viewMode === 'calendar' ? "bg-brand-bg text-brand-primary" : "text-gray-400 hover:text-white"
               )}
+              title="Calendário de Escalas"
             >
               <CalendarIcon size={18} />
+            </button>
+            <button 
+              onClick={() => setViewMode('master_schedule')}
+              className={cn(
+                "p-1.5 rounded transition-colors",
+                viewMode === 'master_schedule' ? "bg-brand-bg text-brand-primary font-bold" : "text-gray-400 hover:text-white"
+              )}
+              title="Escala Mensal Unificada"
+            >
+              <Table size={18} />
             </button>
             {isAdmin && (
               <button 
@@ -370,7 +394,7 @@ export default function Header({
                   "p-1.5 rounded transition-colors border-l border-brand-border/40 pl-2 ml-1",
                   viewMode === 'dashboard' ? "bg-brand-bg text-brand-primary" : "text-gray-400 hover:text-white"
                 )}
-                title="Dashboard"
+                title="Dashboard de Estatísticas"
               >
                 <BarChart3 size={18} />
               </button>
