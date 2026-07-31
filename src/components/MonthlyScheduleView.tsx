@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Calendar as CalendarIcon, 
   ChevronLeft, 
@@ -553,362 +554,395 @@ export default function MonthlyScheduleView({
 
       {/* ----------------- VIEW MODE 1: DAILY CARDS GRID ----------------- */}
       {layoutMode === 'grid' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredMonthDays.map(day => {
-            const dateStr = format(day, 'yyyy-MM-dd');
-            const dayItems = dailyScheduleMap[dateStr] || [];
-            const config = dayConfigs[dateStr];
-            const isCurrentToday = isToday(day);
-            const isWeekendDay = isWeekend(day);
+        <AnimatePresence mode="wait">
+          <motion.div 
+            key={`grid_${timeScope}_${eventFilter}_${onlyMyDays}_${effectiveHighlightEmployee?.id || 'all'}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+          >
+            {filteredMonthDays.map((day, index) => {
+              const dateStr = format(day, 'yyyy-MM-dd');
+              const dayItems = dailyScheduleMap[dateStr] || [];
+              const config = dayConfigs[dateStr];
+              const isCurrentToday = isToday(day);
+              const isWeekendDay = isWeekend(day);
 
-            // Check if highlight employee is working on this day
-            const myWorkItem = effectiveHighlightEmployee 
-              ? dayItems.find(item => item.employee.id === effectiveHighlightEmployee.id)
-              : null;
-            const isMyDay = !!myWorkItem;
+              // Check if highlight employee is working on this day
+              const myWorkItem = effectiveHighlightEmployee 
+                ? dayItems.find(item => item.employee.id === effectiveHighlightEmployee.id)
+                : null;
+              const isMyDay = !!myWorkItem;
 
-            return (
-              <div 
-                key={dateStr}
-                className={cn(
-                  "bg-brand-card rounded-2xl border transition-all duration-200 flex flex-col overflow-hidden relative group",
-                  isMyDay
-                    ? "border-amber-500/80 ring-2 ring-amber-500/30 bg-gradient-to-b from-brand-card via-brand-card to-amber-950/20 shadow-lg shadow-amber-500/5"
-                    : isCurrentToday
-                    ? "border-brand-primary ring-1 ring-brand-primary/40"
-                    : "border-brand-border hover:border-brand-primary/40"
-                )}
-              >
-                {/* Header of Day Card */}
-                <div className={cn(
-                  "p-3 border-b flex items-center justify-between gap-2",
-                  isMyDay ? "bg-amber-500/10 border-amber-500/30" : "bg-brand-bg/60 border-brand-border/60"
-                )}>
-                  <div className="flex items-center gap-2">
+              return (
+                <motion.div 
+                  key={dateStr}
+                  initial={{ opacity: 0, y: 16, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.25, delay: Math.min(index * 0.03, 0.4), ease: 'easeOut' }}
+                  whileHover={{ y: -4, transition: { duration: 0.18 } }}
+                  className={cn(
+                    "rounded-2xl transition-all duration-200 flex flex-col relative group shadow-md hover:shadow-xl",
+                    isMyDay
+                      ? "bg-logo-gradient animate-logo-border p-[1.5px] shadow-sm shadow-purple-500/10"
+                      : isCurrentToday
+                      ? "bg-brand-card border border-brand-primary ring-1 ring-brand-primary/40"
+                      : "bg-brand-card border border-brand-border hover:border-brand-primary/50"
+                  )}
+                >
+                  <div className="w-full h-full bg-brand-card rounded-[14.5px] flex flex-col overflow-hidden">
+                    {/* Header of Day Card */}
                     <div className={cn(
-                      "min-w-[46px] px-1.5 py-1 h-11 rounded-xl flex flex-col items-center justify-center font-black shrink-0 border text-center shadow-sm",
-                      isCurrentToday
-                        ? "bg-brand-primary text-slate-950 border-brand-primary"
-                        : isMyDay
-                        ? "bg-amber-500 text-slate-950 border-amber-400"
-                        : isWeekendDay
-                        ? "bg-purple-950/60 text-purple-200 border-purple-500/40"
-                        : "bg-brand-bg text-white border-brand-border"
+                      "p-3 border-b flex items-center justify-between gap-2",
+                      isMyDay ? "bg-purple-950/10 border-purple-500/20" : "bg-brand-bg/60 border-brand-border/60"
                     )}>
-                      <span className="text-sm leading-none font-black tracking-tight">{format(day, 'dd')}</span>
-                      <span className="text-[8.5px] uppercase font-extrabold leading-tight mt-0.5 opacity-90 truncate max-w-full tracking-wider">
-                        {format(day, 'eee', { locale: ptBR }).replace('.', '')}
-                      </span>
-                    </div>
-
-                    <div>
-                      <h3 className="text-xs font-black text-white capitalize">
-                        {format(day, "EEEE, d 'de' MMMM", { locale: ptBR })}
-                      </h3>
-                      <div className="flex flex-wrap items-center gap-1 mt-0.5">
-                        {config?.isCommon && (
-                          <span className="text-[9px] font-black text-brand-primary bg-brand-primary/15 border border-brand-primary/30 px-1.5 py-0.2 rounded-md">
-                            CCSP
+                      <div className="flex items-center gap-2">
+                        <div className={cn(
+                          "min-w-[46px] px-1.5 py-1 h-11 rounded-xl flex flex-col items-center justify-center font-black shrink-0 border text-center shadow-sm",
+                          isCurrentToday
+                            ? "bg-brand-primary text-slate-950 border-brand-primary"
+                            : isMyDay
+                            ? "bg-amber-500 text-slate-950 border-amber-400"
+                            : isWeekendDay
+                            ? "bg-purple-950/60 text-purple-200 border-purple-500/40"
+                            : "bg-brand-bg text-white border-brand-border"
+                        )}>
+                          <span className="text-sm leading-none font-black tracking-tight">{format(day, 'dd')}</span>
+                          <span className="text-[8.5px] uppercase font-extrabold leading-tight mt-0.5 opacity-90 truncate max-w-full tracking-wider">
+                            {format(day, 'eee', { locale: ptBR }).replace('.', '')}
                           </span>
-                        )}
-                        {config?.parties && config.parties.length > 0 && (
-                          <span className="text-[9px] font-black text-purple-300 bg-purple-950/50 border border-purple-500/30 px-1.5 py-0.2 rounded-md flex items-center gap-1">
-                            <PartyPopper size={10} />
-                            <span>{config.parties.length} {config.parties.length === 1 ? 'Festa' : 'Festas'}</span>
-                          </span>
-                        )}
-                        {config?.isExtraordinaryOpen && (
-                          <span className="text-[9px] font-black text-amber-300 bg-amber-500/20 border border-amber-500/40 px-1.5 py-0.2 rounded-md flex items-center gap-1">
-                            <Zap size={10} className="fill-amber-400" />
-                            <span>Abertura Extra</span>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                        </div>
 
-                  {/* Highlight Badge */}
-                  {isMyDay && (
-                    <span className="text-[10px] font-black text-slate-950 bg-amber-400 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm shrink-0 animate-pulse">
-                      <Star size={10} className="fill-slate-950" />
-                      <span>{effectiveHighlightEmployee?.id === currentEmployee?.id ? 'VOCÊ' : 'DESTAQUE'}</span>
-                    </span>
-                  )}
-                </div>
-
-                {/* Day Parties Summary */}
-                {config?.parties && config.parties.length > 0 && (
-                  <div className="bg-purple-950/20 border-b border-purple-500/20 p-2 text-[11px] space-y-1">
-                    {config.parties.map((p, idx) => (
-                      <div key={p.id || idx} className="flex items-center justify-between text-purple-200">
-                        <span className="font-bold truncate flex items-center gap-1">
-                          <span>🎉</span> {p.name}
-                        </span>
-                        {p.time && (
-                          <span className="text-[10px] text-purple-300/80 font-mono shrink-0 ml-1">
-                            ({p.time})
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Body: List of Assigned Employees Grouped by Shift */}
-                <div className="p-2.5 space-y-3 flex-1 min-h-[100px]">
-                  {dayItems.length === 0 ? (
-                    <div className="py-6 text-center text-gray-500 text-xs">
-                      Nenhum recreador escalado
-                    </div>
-                  ) : (
-                    (() => {
-                      // Group dayItems by shift / schedule / party
-                      const groupedMap: Record<string, {
-                        label: string;
-                        isParty: boolean;
-                        partyName?: string;
-                        items: typeof dayItems;
-                      }> = {};
-
-                      dayItems.forEach(item => {
-                        const isParty = item.workDay.type === 'party';
-                        const shiftTime = item.workDay.shift || (isParty ? 'Festa' : 'CCSP (Horário Padrão)');
-                        const groupKey = isParty 
-                          ? `party_${item.workDay.partyName || 'festa'}_${shiftTime}` 
-                          : `shift_${shiftTime}`;
-
-                        if (!groupedMap[groupKey]) {
-                          groupedMap[groupKey] = {
-                            label: shiftTime,
-                            isParty,
-                            partyName: item.workDay.partyName,
-                            items: []
-                          };
-                        }
-                        groupedMap[groupKey].items.push(item);
-                      });
-
-                      const getShiftRank = (labelStr: string) => {
-                        const norm = (labelStr || '').toLowerCase();
-                        if (norm.includes('brinquedoteca 1') || norm === 'brinquedoteca (9h - 18h)') return 10;
-                        if (norm.includes('brinquedoteca 2')) return 11;
-                        if (norm.includes('brinquedoteca')) return 12;
-                        if (norm.includes('5 a 10')) return 20;
-                        if (norm.includes('+11')) return 30;
-                        if (norm.includes('externo')) return 40;
-                        return 100;
-                      };
-
-                      const sortedGroups = Object.entries(groupedMap).sort(([_keyA, a], [_keyB, b]) => {
-                        if (a.isParty && !b.isParty) return -1;
-                        if (!a.isParty && b.isParty) return 1;
-
-                        const rankA = getShiftRank(a.label);
-                        const rankB = getShiftRank(b.label);
-                        if (rankA !== rankB) return rankA - rankB;
-
-                        return a.label.localeCompare(b.label);
-                      });
-
-                      return sortedGroups.map(([groupKey, group]) => {
-                        const headerText = group.isParty
-                          ? `🎉 ${group.partyName || 'Festa'}${group.label && group.label !== 'Festa' ? ` (${group.label})` : ''}`
-                          : group.label;
-
-                        return (
-                          <div key={groupKey} className="space-y-1.5">
-                            <div className={cn(
-                              "flex items-center justify-between text-[10px] font-extrabold px-2.5 py-1 rounded-lg border transition-all shadow-sm",
-                              group.isParty
-                                ? "bg-purple-900/80 text-purple-100 border-purple-500/60 ring-1 ring-purple-500/20"
-                                : "bg-brand-primary/10 text-brand-primary border-brand-primary/20"
-                            )}>
-                              <span className="truncate flex items-center gap-1.5">
-                                {group.isParty ? (
-                                  <PartyPopper size={12} className="shrink-0 text-purple-300" />
-                                ) : (
-                                  <Clock size={11} className="shrink-0 text-brand-primary" />
-                                )}
-                                <span className="truncate font-black">{headerText}</span>
+                        <div>
+                          <h3 className="text-xs font-black text-white capitalize">
+                            {format(day, "EEEE, d 'de' MMMM", { locale: ptBR })}
+                          </h3>
+                          <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                            {config?.isCommon && (
+                              <span className="text-[9px] font-black text-brand-primary bg-brand-primary/15 border border-brand-primary/30 px-1.5 py-0.2 rounded-md">
+                                CCSP
                               </span>
-                              <span className={cn("text-[9px] font-bold ml-1.5 shrink-0", group.isParty ? "text-purple-200/90" : "text-gray-400")}>
-                                {group.items.length} {group.items.length === 1 ? 'pessoa' : 'pessoas'}
+                            )}
+                            {config?.parties && config.parties.length > 0 && (
+                              <span className="text-[9px] font-black text-purple-300 bg-purple-950/50 border border-purple-500/30 px-1.5 py-0.2 rounded-md flex items-center gap-1">
+                                <PartyPopper size={10} className="animate-bounce" />
+                                <span>{config.parties.length} {config.parties.length === 1 ? 'Festa' : 'Festas'}</span>
                               </span>
-                            </div>
-
-                            <div className="space-y-1">
-                              {group.items.map(({ employee, workDay }) => {
-                                const isThisHighlighted = effectiveHighlightEmployee && employee.id === effectiveHighlightEmployee.id;
-
-                                return (
-                                  <div 
-                                    key={`${employee.id}_${workDay.date}_${workDay.type}`}
-                                    className={cn(
-                                      "flex items-center justify-between gap-2 p-1.5 rounded-xl transition-all border text-xs",
-                                      isThisHighlighted
-                                        ? "bg-amber-500/20 border-amber-500/60 text-white font-bold ring-1 ring-amber-500/40 shadow-sm"
-                                        : group.isParty
-                                          ? "bg-purple-950/40 border-purple-500/30 hover:border-purple-500/60 text-gray-200"
-                                          : "bg-brand-bg/70 border-brand-border/60 hover:border-brand-primary/30 text-gray-200"
-                                    )}
-                                  >
-                                    {/* Recreador Info */}
-                                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                                      <div className="relative shrink-0">
-                                        {employee.photoUrl ? (
-                                          <img 
-                                            src={employee.photoUrl} 
-                                            alt={employee.artisticName || employee.name} 
-                                            className="w-7 h-7 rounded-full object-cover border border-brand-border"
-                                          />
-                                        ) : (
-                                          <div className="w-7 h-7 rounded-full bg-brand-primary/20 text-brand-primary font-black flex items-center justify-center text-[10px] border border-brand-primary/30">
-                                            {(employee.artisticName || employee.name).charAt(0).toUpperCase()}
-                                          </div>
-                                        )}
-                                        {isThisHighlighted && (
-                                          <div className="absolute -top-1 -right-1 bg-amber-400 text-slate-950 p-0.5 rounded-full">
-                                            <Star size={8} className="fill-slate-950" />
-                                          </div>
-                                        )}
-                                      </div>
-
-                                      <div className="truncate min-w-0">
-                                        <p className={cn("truncate font-bold leading-tight text-xs", isThisHighlighted ? "text-amber-200" : "text-white")}>
-                                          {employee.artisticName || employee.name}
-                                        </p>
-                                        <p className="text-[10px] text-gray-400 truncate leading-tight">
-                                          {employee.level}
-                                        </p>
-                                      </div>
-                                    </div>
-
-                                    {!group.isParty && workDay.partyName && (
-                                      <span className="text-[10px] font-extrabold text-purple-200 bg-purple-900/80 border border-purple-500/50 px-2 py-0.5 rounded-md truncate max-w-[120px] shrink-0 shadow-sm">
-                                        {workDay.partyName}
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
+                            )}
+                            {config?.isExtraordinaryOpen && (
+                              <span className="text-[9px] font-black text-amber-300 bg-amber-500/20 border border-amber-500/40 px-1.5 py-0.2 rounded-md flex items-center gap-1">
+                                <Zap size={10} className="fill-amber-400" />
+                                <span>Abertura Extra</span>
+                              </span>
+                            )}
                           </div>
-                        );
-                      });
-                    })()
-                  )}
-                </div>
+                        </div>
+                      </div>
 
-                {/* Footer Count */}
-                <div className="px-3 py-1.5 bg-brand-bg/40 border-t border-brand-border/40 text-[10px] font-bold text-gray-400 flex items-center justify-between">
-                  <span>{dayItems.length} {dayItems.length === 1 ? 'escalado' : 'escalados'}</span>
+                      {/* Highlight Badge */}
+                      {isMyDay && (
+                        <span className="text-[10px] font-black text-slate-950 bg-amber-400 px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm shrink-0">
+                          <Star size={10} className="fill-slate-950" />
+                          <span>{effectiveHighlightEmployee?.id === currentEmployee?.id ? 'VOCÊ' : 'DESTAQUE'}</span>
+                        </span>
+                      )}
+                    </div>
+
+                  {/* Day Parties Summary */}
+                  {config?.parties && config.parties.length > 0 && (
+                    <div className="bg-purple-950/20 border-b border-purple-500/20 p-2 text-[11px] space-y-1">
+                      {config.parties.map((p, idx) => (
+                        <div key={p.id || idx} className="flex items-center justify-between text-purple-200">
+                          <span className="font-bold truncate flex items-center gap-1">
+                            <span>🎉</span> {p.name}
+                          </span>
+                          {p.time && (
+                            <span className="text-[10px] text-purple-300/80 font-mono shrink-0 ml-1">
+                              ({p.time})
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Body: List of Assigned Employees Grouped by Shift */}
+                  <div className="p-2.5 space-y-3 flex-1 min-h-[100px]">
+                    {dayItems.length === 0 ? (
+                      <div className="py-6 text-center text-gray-500 text-xs">
+                        Nenhum recreador escalado
+                      </div>
+                    ) : (
+                      (() => {
+                        // Group dayItems by shift / schedule / party
+                        const groupedMap: Record<string, {
+                          label: string;
+                          isParty: boolean;
+                          partyName?: string;
+                          items: typeof dayItems;
+                        }> = {};
+
+                        dayItems.forEach(item => {
+                          const isParty = item.workDay.type === 'party';
+                          const shiftTime = item.workDay.shift || (isParty ? 'Festa' : 'CCSP (Horário Padrão)');
+                          const groupKey = isParty 
+                            ? `party_${item.workDay.partyName || 'festa'}_${shiftTime}` 
+                            : `shift_${shiftTime}`;
+
+                          if (!groupedMap[groupKey]) {
+                            groupedMap[groupKey] = {
+                              label: shiftTime,
+                              isParty,
+                              partyName: item.workDay.partyName,
+                              items: []
+                            };
+                          }
+                          groupedMap[groupKey].items.push(item);
+                        });
+
+                        const getShiftRank = (labelStr: string) => {
+                          const norm = (labelStr || '').toLowerCase();
+                          if (norm.includes('brinquedoteca 1') || norm === 'brinquedoteca (9h - 18h)') return 10;
+                          if (norm.includes('brinquedoteca 2')) return 11;
+                          if (norm.includes('brinquedoteca')) return 12;
+                          if (norm.includes('5 a 10')) return 20;
+                          if (norm.includes('+11')) return 30;
+                          if (norm.includes('externo')) return 40;
+                          return 100;
+                        };
+
+                        const sortedGroups = Object.entries(groupedMap).sort(([_keyA, a], [_keyB, b]) => {
+                          if (a.isParty && !b.isParty) return -1;
+                          if (!a.isParty && b.isParty) return 1;
+
+                          const rankA = getShiftRank(a.label);
+                          const rankB = getShiftRank(b.label);
+                          if (rankA !== rankB) return rankA - rankB;
+
+                          return a.label.localeCompare(b.label);
+                        });
+
+                        return sortedGroups.map(([groupKey, group]) => {
+                          const headerText = group.isParty
+                            ? `🎉 ${group.partyName || 'Festa'}${group.label && group.label !== 'Festa' ? ` (${group.label})` : ''}`
+                            : group.label;
+
+                          return (
+                            <div key={groupKey} className="space-y-1.5">
+                              <div className={cn(
+                                "flex items-center justify-between text-[10px] font-extrabold px-2.5 py-1 rounded-lg border transition-all shadow-sm",
+                                group.isParty
+                                  ? "bg-purple-900/80 text-purple-100 border-purple-500/60 ring-1 ring-purple-500/20"
+                                  : "bg-brand-primary/10 text-brand-primary border-brand-primary/20"
+                              )}>
+                                <span className="truncate flex items-center gap-1.5">
+                                  {group.isParty ? (
+                                    <PartyPopper size={12} className="shrink-0 text-purple-300" />
+                                  ) : (
+                                    <Clock size={11} className="shrink-0 text-brand-primary" />
+                                  )}
+                                  <span className="truncate font-black">{headerText}</span>
+                                </span>
+                                <span className={cn("text-[9px] font-bold ml-1.5 shrink-0", group.isParty ? "text-purple-200/90" : "text-gray-400")}>
+                                  {group.items.length} {group.items.length === 1 ? 'pessoa' : 'pessoas'}
+                                </span>
+                              </div>
+
+                              <div className="space-y-1">
+                                {group.items.map(({ employee, workDay }) => {
+                                  const isThisHighlighted = effectiveHighlightEmployee && employee.id === effectiveHighlightEmployee.id;
+
+                                  return (
+                                    <div 
+                                      key={`${employee.id}_${workDay.date}_${workDay.type}`}
+                                      className={cn(
+                                        "flex items-center justify-between gap-2 p-1.5 rounded-xl transition-all border text-xs",
+                                        isThisHighlighted
+                                          ? "bg-amber-500/20 border-amber-500/60 text-white font-bold ring-1 ring-amber-500/40 shadow-sm"
+                                          : group.isParty
+                                            ? "bg-purple-950/40 border-purple-500/30 hover:border-purple-500/60 text-gray-200"
+                                            : "bg-brand-bg/70 border-brand-border/60 hover:border-brand-primary/30 text-gray-200"
+                                      )}
+                                    >
+                                      {/* Recreador Info */}
+                                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                                        <div className="relative shrink-0">
+                                          {employee.photoUrl ? (
+                                            <img 
+                                              src={employee.photoUrl} 
+                                              alt={employee.artisticName || employee.name} 
+                                              className="w-7 h-7 rounded-full object-cover border border-brand-border"
+                                            />
+                                          ) : (
+                                            <div className="w-7 h-7 rounded-full bg-brand-primary/20 text-brand-primary font-black flex items-center justify-center text-[10px] border border-brand-primary/30">
+                                              {(employee.artisticName || employee.name).charAt(0).toUpperCase()}
+                                            </div>
+                                          )}
+                                          {isThisHighlighted && (
+                                            <div className="absolute -top-1 -right-1 bg-amber-400 text-slate-950 p-0.5 rounded-full">
+                                              <Star size={8} className="fill-slate-950" />
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        <div className="truncate min-w-0">
+                                          <p className={cn("truncate font-bold leading-tight text-xs", isThisHighlighted ? "text-amber-200" : "text-white")}>
+                                            {employee.artisticName || employee.name}
+                                          </p>
+                                          <p className="text-[10px] text-gray-400 truncate leading-tight">
+                                            {employee.level}
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      {!group.isParty && workDay.partyName && (
+                                        <span className="text-[10px] font-extrabold text-purple-200 bg-purple-900/80 border border-purple-500/50 px-2 py-0.5 rounded-md truncate max-w-[120px] shrink-0 shadow-sm">
+                                          {workDay.partyName}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()
+                    )}
+                  </div>
+
+                  {/* Footer Count */}
+                  <div className="px-3 py-1.5 bg-brand-bg/40 border-t border-brand-border/40 text-[10px] font-bold text-gray-400 flex items-center justify-between">
+                    <span>{dayItems.length} {dayItems.length === 1 ? 'escalado' : 'escalados'}</span>
+                  </div>
                 </div>
-              </div>
+              </motion.div>
             );
           })}
-        </div>
-      )}
+        </motion.div>
+      </AnimatePresence>
+    )}
 
       {/* ----------------- VIEW MODE 2: TIMELINE LIST ----------------- */}
       {layoutMode === 'timeline' && (
-        <div className="space-y-3">
-          {filteredMonthDays.map(day => {
-            const dateStr = format(day, 'yyyy-MM-dd');
-            const dayItems = dailyScheduleMap[dateStr] || [];
-            const config = dayConfigs[dateStr];
-            const isMyDay = effectiveHighlightEmployee && dayItems.some(i => i.employee.id === effectiveHighlightEmployee.id);
+        <AnimatePresence mode="wait">
+          <motion.div 
+            key={`timeline_${timeScope}_${eventFilter}_${onlyMyDays}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="space-y-3"
+          >
+            {filteredMonthDays.map((day, index) => {
+              const dateStr = format(day, 'yyyy-MM-dd');
+              const dayItems = dailyScheduleMap[dateStr] || [];
+              const config = dayConfigs[dateStr];
+              const isMyDay = effectiveHighlightEmployee && dayItems.some(i => i.employee.id === effectiveHighlightEmployee.id);
 
-            if (dayItems.length === 0 && !config?.parties?.length && !config?.isCommon) {
-              return null;
-            }
+              if (dayItems.length === 0 && !config?.parties?.length && !config?.isCommon) {
+                return null;
+              }
 
-            return (
-              <div 
-                key={dateStr}
-                className={cn(
-                  "bg-brand-card border rounded-2xl p-4 transition-all shadow-md",
-                  isMyDay ? "border-amber-500/80 bg-gradient-to-r from-brand-card via-brand-card to-amber-950/20" : "border-brand-border"
-                )}
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-brand-border/60">
-                  <div className="flex items-center gap-3">
-                    <div className="text-center bg-brand-bg px-3 py-1.5 rounded-xl border border-brand-border">
-                      <span className="text-xs font-bold text-gray-400 uppercase block">{format(day, 'eee', { locale: ptBR })}</span>
-                      <span className="text-lg font-black text-white leading-none">{format(day, 'dd/MM')}</span>
-                    </div>
-
-                    <div>
-                      <h3 className="text-sm font-black text-white capitalize">
-                        {format(day, "EEEE, d 'de' MMMM", { locale: ptBR })}
-                      </h3>
-                      <div className="flex flex-wrap items-center gap-2 mt-1">
-                        {config?.isCommon && (
-                          <span className="text-[10px] font-black text-brand-primary bg-brand-primary/10 border border-brand-primary/30 px-2 py-0.5 rounded-md">
-                            Dia CCSP
-                          </span>
-                        )}
-                        {config?.parties?.map((p, idx) => (
-                          <span key={p.id || idx} className="text-[10px] font-black text-purple-300 bg-purple-950/50 border border-purple-500/30 px-2 py-0.5 rounded-md">
-                            🎉 {p.name} {p.time && `(${p.time})`}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-gray-400 bg-brand-bg px-3 py-1.5 rounded-xl border border-brand-border">
-                      {dayItems.length} {dayItems.length === 1 ? 'recreador' : 'recreadores'}
-                    </span>
-                    {isMyDay && (
-                      <span className="text-xs font-black text-slate-950 bg-amber-400 px-3 py-1.5 rounded-xl flex items-center gap-1 shadow-sm">
-                        <Star size={14} className="fill-slate-950" />
-                        <span>Você trabalha neste dia</span>
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* List of Employees */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-3">
-                  {dayItems.map(({ employee, workDay }) => {
-                    const isThisHighlighted = effectiveHighlightEmployee && employee.id === effectiveHighlightEmployee.id;
-
-                    return (
-                      <div 
-                        key={employee.id}
-                        className={cn(
-                          "flex items-center justify-between p-2.5 rounded-xl border text-xs",
-                          isThisHighlighted
-                            ? "bg-amber-500/20 border-amber-500/60 text-white font-bold ring-1 ring-amber-500/40"
-                            : "bg-brand-bg/60 border-brand-border/60 text-gray-200"
-                        )}
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          {employee.photoUrl ? (
-                            <img src={employee.photoUrl} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
-                          ) : (
-                            <div className="w-8 h-8 rounded-full bg-brand-primary/20 text-brand-primary font-black flex items-center justify-center shrink-0">
-                              {(employee.artisticName || employee.name).charAt(0)}
-                            </div>
-                          )}
-                          <div className="truncate">
-                            <p className="font-bold text-white truncate">{employee.artisticName || employee.name}</p>
-                            <p className="text-[10px] text-gray-400 truncate">{employee.level}</p>
-                          </div>
+              return (
+                <motion.div 
+                  key={dateStr}
+                  initial={{ opacity: 0, x: -16 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.25, delay: Math.min(index * 0.025, 0.35) }}
+                  whileHover={{ x: 4, transition: { duration: 0.15 } }}
+                  className={cn(
+                    "rounded-2xl transition-all shadow-md relative overflow-hidden",
+                    isMyDay
+                      ? "bg-logo-gradient animate-logo-border p-[1.5px] shadow-sm shadow-purple-500/10"
+                      : "bg-brand-card border border-brand-border"
+                  )}
+                >
+                  <div className="w-full h-full rounded-[14.5px] p-4 bg-brand-card">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-brand-border/60">
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "text-center px-3 py-1.5 rounded-xl border",
+                          isMyDay ? "bg-amber-500 text-slate-950 border-amber-400 font-bold shadow-sm" : "bg-brand-bg border-brand-border"
+                        )}>
+                          <span className={cn("text-xs font-bold uppercase block", isMyDay ? "text-slate-900" : "text-gray-400")}>{format(day, 'eee', { locale: ptBR })}</span>
+                          <span className={cn("text-lg font-black leading-none", isMyDay ? "text-slate-950" : "text-white")}>{format(day, 'dd/MM')}</span>
                         </div>
 
-                        <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-brand-bg border border-brand-border text-brand-primary shrink-0 ml-2">
-                          {workDay.shift || workDay.type}
-                        </span>
+                        <div>
+                          <h3 className="text-sm font-black text-white capitalize">
+                            {format(day, "EEEE, d 'de' MMMM", { locale: ptBR })}
+                          </h3>
+                          <div className="flex flex-wrap items-center gap-2 mt-1">
+                            {config?.isCommon && (
+                              <span className="text-[10px] font-black text-brand-primary bg-brand-primary/10 border border-brand-primary/30 px-2 py-0.5 rounded-md">
+                                Dia CCSP
+                              </span>
+                            )}
+                            {config?.parties?.map((p, idx) => (
+                              <span key={p.id || idx} className="text-[10px] font-black text-purple-300 bg-purple-950/50 border border-purple-500/30 px-2 py-0.5 rounded-md">
+                                🎉 {p.name} {p.time && `(${p.time})`}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-gray-400 bg-brand-bg px-3 py-1.5 rounded-xl border border-brand-border">
+                          {dayItems.length} {dayItems.length === 1 ? 'recreador' : 'recreadores'}
+                        </span>
+                        {isMyDay && (
+                          <span className="text-xs font-black text-slate-950 bg-amber-400 px-3 py-1.5 rounded-xl flex items-center gap-1 shadow-sm shrink-0">
+                            <Star size={14} className="fill-slate-950" />
+                            <span>Você trabalha neste dia</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* List of Employees */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-3">
+                      {dayItems.map(({ employee, workDay }) => {
+                        const isThisHighlighted = effectiveHighlightEmployee && employee.id === effectiveHighlightEmployee.id;
+
+                        return (
+                          <div 
+                            key={employee.id}
+                            className={cn(
+                              "flex items-center justify-between p-2.5 rounded-xl border text-xs",
+                              isThisHighlighted
+                                ? "bg-amber-500/20 border-amber-500/60 text-white font-bold ring-1 ring-amber-500/40"
+                                : "bg-brand-bg/60 border-brand-border/60 text-gray-200"
+                            )}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              {employee.photoUrl ? (
+                                <img src={employee.photoUrl} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
+                              ) : (
+                                <div className="w-8 h-8 rounded-full bg-brand-primary/20 text-brand-primary font-black flex items-center justify-center shrink-0">
+                                  {(employee.artisticName || employee.name).charAt(0)}
+                                </div>
+                              )}
+                              <div className="truncate">
+                                <p className="font-bold text-white truncate">{employee.artisticName || employee.name}</p>
+                                <p className="text-[10px] text-gray-400 truncate">{employee.level}</p>
+                              </div>
+                            </div>
+
+                            <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-brand-bg border border-brand-border text-brand-primary shrink-0 ml-2">
+                              {workDay.shift || workDay.type}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        </AnimatePresence>
       )}
 
       {/* ----------------- DAY DETAILS MODAL ----------------- */}
