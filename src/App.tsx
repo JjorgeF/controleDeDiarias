@@ -260,13 +260,8 @@ export default function App() {
     const userEmailLower = userEmailRaw.toLowerCase();
     const emailOptions = Array.from(new Set([userEmailRaw, userEmailLower])).filter(Boolean);
 
-    // Se for admin, busca todos. Se não, busca pelos emails correspondentes (insensível a maiúsculas) ou por e-mail direto
-    const q = isAdmin 
-      ? query(collection(db, 'employees'))
-      : query(
-          collection(db, 'employees'), 
-          where('email', 'in', emailOptions.length > 0 ? emailOptions : [''])
-        );
+    // Todos os usuários (admins e colaboradores) carregam a lista completa para visualização da escala geral e colegas de trabalho
+    const q = query(collection(db, 'employees'));
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       let emps = snapshot.docs.map(doc => ({
@@ -285,8 +280,9 @@ export default function App() {
 
       // Auto-vincular o UID do usuário autenticado se ele for funcionário e o campo userId estiver vazio
       if (!isAdmin && emps.length > 0 && user) {
-        const myEmp = emps[0];
-        if (!myEmp.userId || myEmp.userId !== user.uid) {
+        const myEmailLower = (user.email || '').trim().toLowerCase();
+        const myEmp = emps.find(emp => (myEmailLower && (emp.email || '').trim().toLowerCase() === myEmailLower) || (emp.userId && emp.userId === user.uid));
+        if (myEmp && (!myEmp.userId || myEmp.userId !== user.uid)) {
           try {
             const empRef = doc(db, 'employees', myEmp.id);
             await updateDoc(empRef, { userId: user.uid });
@@ -1053,9 +1049,13 @@ export default function App() {
 
   // Interface do Funcionário (Não Admin)
   if (!isViewingAsAdmin) {
+    const userEmailLower = (user?.email || '').trim().toLowerCase();
     const myEmployeeRecord = simulationActive
       ? employees.find(emp => emp.id === simulatedEmployeeId)
-      : employees[0];
+      : (employees.find(emp => 
+          (userEmailLower && (emp.email || '').trim().toLowerCase() === userEmailLower) || 
+          (user?.uid && emp.userId === user.uid)
+        ) || employees[0]);
 
     return (
       <div className="min-h-screen bg-brand-bg pb-12">
@@ -1159,6 +1159,7 @@ export default function App() {
                     <h2 className="text-lg md:text-xl font-black text-brand-text mb-2">Meu Calendário de Trabalho / Disponibilidade</h2>
                     <CalendarView 
                       employees={[myEmployeeRecord]} // Pass the simulated employee as the single record
+                      allEmployees={employees} // Pass all employees to list co-workers
                       onUpdateDays={() => {}}
                       currentMonth={currentMonth}
                       setCurrentMonth={setCurrentMonth}
