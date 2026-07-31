@@ -349,38 +349,38 @@ export default function MonthlyScheduleView({
         </div>
 
       {/* Filter and View Controls Bar */}
-      <div className="bg-brand-card border border-brand-border p-3 md:p-4 rounded-2xl flex flex-col gap-3 shadow-md">
-        {/* Top Row: Search & Filters */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2 flex-1">
-            {/* Search Input */}
-            <div className="relative flex-1 min-w-[200px]">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input 
-                type="text"
-                placeholder="Buscar por recreador, evento ou turno..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-brand-bg border border-brand-border rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-primary transition-all"
-              />
-              {searchQuery && (
-                <button 
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
+      <div className="bg-brand-card border border-brand-border p-3 sm:p-4 rounded-2xl flex flex-col gap-3 shadow-md">
+        {/* Top Row: Search Input */}
+        <div className="relative w-full">
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input 
+            type="text"
+            placeholder="Buscar por recreador, evento ou turno..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-brand-bg border border-brand-border rounded-xl pl-10 pr-9 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-primary transition-all"
+          />
+          {searchQuery && (
+            <button 
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white p-1"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
 
+        {/* Middle Row: Filters (Structured Grid on Mobile, Flex on Desktop) */}
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap items-center gap-2 flex-1">
             {/* Highlight Selection Dropdown */}
-            <div className="flex items-center gap-1.5 bg-brand-bg border border-brand-border px-2.5 py-1.5 rounded-xl">
+            <div className="flex items-center gap-1.5 bg-brand-bg border border-brand-border px-3 py-2 rounded-xl">
               <UserCheck size={14} className="text-amber-400 shrink-0" />
-              <span className="text-[11px] font-bold text-gray-400 hidden xl:inline">Destacar:</span>
+              <span className="text-[11px] font-bold text-gray-400 shrink-0">Destacar:</span>
               <select
                 value={selectedHighlightId}
                 onChange={(e) => setSelectedHighlightId(e.target.value)}
-                className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer max-w-[150px] truncate"
+                className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer w-full truncate"
               >
                 {currentEmployee && (
                   <option value={currentEmployee.id} className="bg-brand-card text-white">
@@ -399,20 +399,22 @@ export default function MonthlyScheduleView({
             </div>
 
             {/* Filter Event Type */}
-            <select
-              value={eventFilter}
-              onChange={(e) => setEventFilter(e.target.value as any)}
-              className="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-brand-primary cursor-pointer shrink-0"
-            >
-              <option value="all" className="bg-brand-card">Todos os Eventos</option>
-              <option value="common" className="bg-brand-card">Apenas CCSP</option>
-              <option value="party" className="bg-brand-card">Apenas Festas</option>
-            </select>
+            <div className="flex items-center bg-brand-bg border border-brand-border px-3 py-2 rounded-xl">
+              <select
+                value={eventFilter}
+                onChange={(e) => setEventFilter(e.target.value as any)}
+                className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer w-full"
+              >
+                <option value="all" className="bg-brand-card">Todos os Eventos</option>
+                <option value="common" className="bg-brand-card">Apenas CCSP</option>
+                <option value="party" className="bg-brand-card">Apenas Festas</option>
+              </select>
+            </div>
 
             {/* Checkbox: Only My Days */}
             {effectiveHighlightEmployee && (
               <label className={cn(
-                "flex items-center gap-2 cursor-pointer text-xs font-bold px-3 py-2 rounded-xl border transition-all select-none shrink-0",
+                "flex items-center justify-center sm:justify-start gap-2 cursor-pointer text-xs font-bold px-3 py-2 rounded-xl border transition-all select-none sm:col-span-2 lg:col-span-1",
                 onlyMyDays 
                   ? "bg-amber-500/20 border-amber-500/60 text-amber-300" 
                   : "bg-brand-bg border-brand-border text-gray-400 hover:text-white"
@@ -424,131 +426,134 @@ export default function MonthlyScheduleView({
                   className="rounded border-brand-border text-amber-500 focus:ring-amber-500 w-3.5 h-3.5 cursor-pointer"
                 />
                 <Star size={13} className={onlyMyDays ? "fill-amber-400 text-amber-400" : ""} />
-                <span>Apenas {effectiveHighlightEmployee.id === currentEmployee?.id ? 'Minhas Escalas' : 'Escalas do Destaque'}</span>
+                <span className="truncate">Apenas {effectiveHighlightEmployee.id === currentEmployee?.id ? 'Minhas Escalas' : 'Escalas do Destaque'}</span>
               </label>
             )}
           </div>
 
-          {/* Right: Layout Modes & Export */}
-          <div className="flex items-center gap-2 shrink-0 justify-between md:justify-end">
+          {/* Right Action Controls: Layout Modes & Export */}
+          <div className="flex items-center justify-between lg:justify-end gap-2 pt-1 lg:pt-0 border-t lg:border-t-0 border-brand-border/40 shrink-0">
             {/* View Modes */}
-            <div className="flex items-center bg-brand-bg border border-brand-border rounded-xl p-1">
+            <div className="flex items-center bg-brand-bg border border-brand-border rounded-xl p-1 gap-1">
               <button
                 onClick={() => setLayoutMode('grid')}
                 className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all",
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
                   layoutMode === 'grid' ? "bg-brand-primary text-slate-950 shadow-sm" : "text-gray-400 hover:text-white"
                 )}
                 title="Visão em Cards por Dia"
               >
                 <LayoutGrid size={14} />
-                <span className="hidden sm:inline">Diário</span>
+                <span>Diário</span>
               </button>
 
               <button
                 onClick={() => setLayoutMode('timeline')}
                 className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all",
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
                   layoutMode === 'timeline' ? "bg-brand-primary text-slate-950 shadow-sm" : "text-gray-400 hover:text-white"
                 )}
                 title="Visão Cronológica"
               >
                 <List size={14} />
-                <span className="hidden sm:inline">Lista</span>
+                <span>Lista</span>
               </button>
             </div>
 
             {/* Excel Export Button */}
             <button
               onClick={handleExportExcel}
-              className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95"
+              className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-sm"
               title="Exportar Escala em Excel"
             >
               <FileSpreadsheet size={15} />
-              <span className="hidden lg:inline">Exportar Excel</span>
+              <span className="hidden sm:inline">Exportar Excel</span>
+              <span className="sm:hidden">Excel</span>
             </button>
           </div>
         </div>
 
         {/* Bottom Row: Weekly Scope Tabs Selector */}
-        <div className="flex items-center gap-1 overflow-x-auto pt-2 border-t border-brand-border/60 text-xs no-scrollbar">
-          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-2 border-t border-brand-border/60 text-xs">
+          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0 flex items-center gap-1">
             <Filter size={12} className="text-brand-primary" /> Visualização:
           </span>
 
-          <button
-            onClick={() => setTimeScope('month')}
-            className={cn(
-              "px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all border shrink-0",
-              timeScope === 'month'
-                ? "bg-brand-primary text-slate-950 border-brand-primary shadow-sm"
-                : "bg-brand-bg text-gray-400 border-brand-border hover:text-white"
-            )}
-          >
-            🗓️ Mês Inteiro ({monthDays.length} dias)
-          </button>
-
-          <button
-            onClick={() => setTimeScope('week1')}
-            className={cn(
-              "px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all border shrink-0",
-              timeScope === 'week1'
-                ? "bg-brand-primary text-slate-950 border-brand-primary shadow-sm"
-                : "bg-brand-bg text-gray-400 border-brand-border hover:text-white"
-            )}
-          >
-            Semana 1 (1 a 7)
-          </button>
-
-          <button
-            onClick={() => setTimeScope('week2')}
-            className={cn(
-              "px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all border shrink-0",
-              timeScope === 'week2'
-                ? "bg-brand-primary text-slate-950 border-brand-primary shadow-sm"
-                : "bg-brand-bg text-gray-400 border-brand-border hover:text-white"
-            )}
-          >
-            Semana 2 (8 a 14)
-          </button>
-
-          <button
-            onClick={() => setTimeScope('week3')}
-            className={cn(
-              "px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all border shrink-0",
-              timeScope === 'week3'
-                ? "bg-brand-primary text-slate-950 border-brand-primary shadow-sm"
-                : "bg-brand-bg text-gray-400 border-brand-border hover:text-white"
-            )}
-          >
-            Semana 3 (15 a 21)
-          </button>
-
-          <button
-            onClick={() => setTimeScope('week4')}
-            className={cn(
-              "px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all border shrink-0",
-              timeScope === 'week4'
-                ? "bg-brand-primary text-slate-950 border-brand-primary shadow-sm"
-                : "bg-brand-bg text-gray-400 border-brand-border hover:text-white"
-            )}
-          >
-            Semana 4 (22 a 28)
-          </button>
-
-          {monthDays.length > 28 && (
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 no-scrollbar -mx-3 px-3 sm:mx-0 sm:px-0 touch-pan-x">
             <button
-              onClick={() => setTimeScope('week5')}
+              onClick={() => setTimeScope('month')}
               className={cn(
                 "px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all border shrink-0",
-                timeScope === 'week5'
+                timeScope === 'month'
                   ? "bg-brand-primary text-slate-950 border-brand-primary shadow-sm"
                   : "bg-brand-bg text-gray-400 border-brand-border hover:text-white"
               )}
             >
-              Semana 5 (29 a {monthDays.length})
+              🗓️ Mês Inteiro ({monthDays.length} dias)
             </button>
-          )}
+
+            <button
+              onClick={() => setTimeScope('week1')}
+              className={cn(
+                "px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all border shrink-0",
+                timeScope === 'week1'
+                  ? "bg-brand-primary text-slate-950 border-brand-primary shadow-sm"
+                  : "bg-brand-bg text-gray-400 border-brand-border hover:text-white"
+              )}
+            >
+              Semana 1 (1 a 7)
+            </button>
+
+            <button
+              onClick={() => setTimeScope('week2')}
+              className={cn(
+                "px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all border shrink-0",
+                timeScope === 'week2'
+                  ? "bg-brand-primary text-slate-950 border-brand-primary shadow-sm"
+                  : "bg-brand-bg text-gray-400 border-brand-border hover:text-white"
+              )}
+            >
+              Semana 2 (8 a 14)
+            </button>
+
+            <button
+              onClick={() => setTimeScope('week3')}
+              className={cn(
+                "px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all border shrink-0",
+                timeScope === 'week3'
+                  ? "bg-brand-primary text-slate-950 border-brand-primary shadow-sm"
+                  : "bg-brand-bg text-gray-400 border-brand-border hover:text-white"
+              )}
+            >
+              Semana 3 (15 a 21)
+            </button>
+
+            <button
+              onClick={() => setTimeScope('week4')}
+              className={cn(
+                "px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all border shrink-0",
+                timeScope === 'week4'
+                  ? "bg-brand-primary text-slate-950 border-brand-primary shadow-sm"
+                  : "bg-brand-bg text-gray-400 border-brand-border hover:text-white"
+              )}
+            >
+              Semana 4 (22 a 28)
+            </button>
+
+            {monthDays.length > 28 && (
+              <button
+                onClick={() => setTimeScope('week5')}
+                className={cn(
+                  "px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all border shrink-0",
+                  timeScope === 'week5'
+                    ? "bg-brand-primary text-slate-950 border-brand-primary shadow-sm"
+                    : "bg-brand-bg text-gray-400 border-brand-border hover:text-white"
+                )}
+              >
+                Semana 5 (29 a {monthDays.length})
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
