@@ -1,0 +1,64 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/usuarios_admin/$(request.auth.token.email));
+    }
+
+    // 1. settings/deadlines and other settings
+    match /settings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // 2. usuarios_admin
+    match /usuarios_admin/{email} {
+      allow get: if isSignedIn() && (request.auth.token.email.lower() == email.lower() || isAdmin());
+      allow list, write: if isAdmin();
+    }
+
+    // 3. employees
+    match /employees/{employeeId} {
+      allow create, delete: if isAdmin();
+      
+      // All signed-in users can read employees to view schedules and colleagues
+      allow get, list: if isSignedIn();
+
+      // Admins can update any field. Employees can only update their own availabilities, userId, workDays, and photoUrl.
+      allow update: if isSignedIn() && (
+        isAdmin() || (
+          (resource.data.email.lower() == request.auth.token.email.lower() || ('userId' in resource.data && resource.data.userId == request.auth.uid)) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['availabilities', 'userId', 'workDays', 'photoUrl'])
+        )
+      );
+    }
+
+    // 4. cancellations
+    match /cancellations/{cancellationId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // 5. access_logs
+    match /access_logs/{logId} {
+      allow create: if isSignedIn();
+      allow read: if isAdmin();
+    }
+
+    // 6. custom_notifications
+    match /custom_notifications/{notifId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+  }
+}
