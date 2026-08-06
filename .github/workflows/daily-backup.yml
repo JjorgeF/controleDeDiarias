@@ -1,0 +1,33 @@
+name: Daily Firestore Backup to Google Drive
+
+on:
+  schedule:
+    # Executa todos os dias às 03:00 UTC (00:00 Horário de Brasília)
+    - cron: '0 3 * * *'
+  # Permite disparar o backup manualmente a qualquer momento pela aba 'Actions' no GitHub
+  workflow_dispatch:
+
+jobs:
+  backup:
+    name: Backup Firestore to Google Drive
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependências
+        run: |
+          npm ci || npm install
+
+      - name: Executar Script de Backup
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GOOGLE_DRIVE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_DRIVE_SERVICE_ACCOUNT }}
+          GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
+        run: node scripts/backup-to-drive.js
