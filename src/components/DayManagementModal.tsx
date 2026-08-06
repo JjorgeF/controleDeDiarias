@@ -3,7 +3,7 @@ import { X, Search, UserPlus, UserMinus, Clock, Copy, ClipboardPaste, Users, Plu
 import { Employee, WorkDay, DayType, DayConfig, PartyConfig } from '../types';
 import { format, isSunday, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { cn } from '../lib/utils';
+import { cn, formatCurrency } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import ShiftSelector from './ShiftSelector';
 
@@ -228,7 +228,7 @@ export default function DayManagementModal({
 
   const updateExtraHours = (employee: Employee, hours: number) => {
     const newDays = employee.workDays.map(d => 
-      d.date === selectedDayStr && d.type === 'common' && !d.isCancelled ? { ...d, extraHours: hours } : d
+      d.date === selectedDayStr && !d.isCancelled ? { ...d, extraHours: hours } : d
     );
     onUpdateDays(employee.id, newDays);
   };
@@ -650,18 +650,25 @@ export default function DayManagementModal({
                                   />
                                 </div>
                               )}
+                              {!!workDay?.extraHours && (
+                                <div className="mt-1.5">
+                                  <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                    +{workDay.extraHours}h extra ({formatCurrency(workDay.extraHours * (workDay.extraHourRateAtTime !== undefined ? workDay.extraHourRateAtTime : emp.extraHourRate))})
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </div>
 
                           <div className="flex items-center gap-1 shrink-0">
-                            {isCommon && (
+                            {(isCommon || isParty) && (
                               <button 
                                 onClick={() => setExpandedEmployeeId(isExpanded ? null : emp.id)}
                                 className={cn(
                                   "p-1.5 rounded-lg transition-colors",
                                   isExpanded ? "text-brand-primary bg-brand-primary/20" : "text-gray-500 hover:text-brand-primary hover:bg-brand-primary/10"
                                 )}
-                                title="Horas Extras (CCSP)"
+                                title="Horas Extras"
                               >
                                 <Clock size={16} />
                               </button>
@@ -676,19 +683,36 @@ export default function DayManagementModal({
                           </div>
                         </div>
                         
-                        {isExpanded && isCommon && (
-                          <div className="flex items-center gap-3 pt-2.5 mt-2 border-t border-brand-primary/10 animate-in fade-in slide-in-from-top-2">
-                            <label className="text-[10px] font-black text-gray-500 uppercase">Horas Extras (CCSP):</label>
+                        {isExpanded && (isCommon || isParty) && (
+                          <div className="flex flex-wrap items-center gap-3 pt-2.5 mt-2 border-t border-brand-primary/10 animate-in fade-in slide-in-from-top-2">
+                            <label className="text-[10px] font-black text-gray-500 uppercase">Horas Extras:</label>
                             <input 
                               type="number"
                               min="0"
                               step="0.5"
                               autoFocus
-                              value={emp.workDays.find(d => d.date === selectedDayStr && d.type === 'common')?.extraHours || ''}
+                              value={emp.workDays.find(d => d.date === selectedDayStr && !d.isCancelled)?.extraHours || ''}
                               onChange={(e) => updateExtraHours(emp, Number(e.target.value))}
                               placeholder="0"
                               className="w-20 bg-brand-bg border border-brand-primary/20 rounded-lg py-1 px-2.5 text-xs focus:outline-none focus:border-brand-primary"
                             />
+                            {(() => {
+                              const currentWD = emp.workDays.find(d => d.date === selectedDayStr && !d.isCancelled);
+                              const extraH = currentWD?.extraHours || 0;
+                              const rate = currentWD?.extraHourRateAtTime !== undefined ? currentWD.extraHourRateAtTime : emp.extraHourRate;
+                              if (extraH > 0) {
+                                return (
+                                  <span className="text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                                    = {formatCurrency(extraH * rate)} ({formatCurrency(rate)}/h)
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span className="text-[10px] text-gray-500 italic">
+                                  (Taxa: {formatCurrency(rate)}/h)
+                                </span>
+                              );
+                            })()}
                           </div>
                         )}
                       </div>
@@ -708,10 +732,28 @@ export default function DayManagementModal({
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
                   {/* Explicitly Available */}
                   <div>
-                    <h4 className="text-xs font-black text-emerald-400 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
-                      <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                      Disponíveis para este dia ({availableMarked.length})
-                    </h4>
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-xs font-black text-emerald-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                        <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                        Disponíveis para este dia ({availableMarked.length})
+                      </h4>
+                      {(() => {
+                        const extraCount = availableMarked.filter(emp => {
+                          const lockedKeys = dayConfig.extraordinaryLockedAvailabilities?.[emp.id] || [];
+                          const hasLockedMap = !!dayConfig.extraordinaryLockedAvailabilities;
+                          const empAvails = (emp.availabilities || []).filter(a => a === selectedDayStr || a.startsWith(`${selectedDayStr}_`));
+                          return empAvails.length > 0 && (hasLockedMap ? empAvails.some(a => !lockedKeys.includes(a)) : (!!dayConfig.isExtraordinaryOpen));
+                        }).length;
+
+                        if (extraCount === 0) return null;
+                        return (
+                          <span className="text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm animate-pulse">
+                            <Zap size={11} className="fill-amber-400 text-amber-400" />
+                            {extraCount} na Abertura Extra
+                          </span>
+                        );
+                      })()}
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {availableMarked.map(emp => {
                         const isDispCommon = (dayConfig.isCommon !== false) && 
@@ -727,10 +769,22 @@ export default function DayManagementModal({
 
                         const activePartyButtons = normalizedParties.filter(party => hasSpecificPartyAvail(party.id));
 
+                        const lockedKeys = dayConfig.extraordinaryLockedAvailabilities?.[emp.id] || [];
+                        const hasLockedMap = !!dayConfig.extraordinaryLockedAvailabilities;
+                        const empAvails = (emp.availabilities || []).filter(a => a === selectedDayStr || a.startsWith(`${selectedDayStr}_`));
+                        const isExtraAvail = empAvails.length > 0 && (
+                          hasLockedMap ? empAvails.some(a => !lockedKeys.includes(a)) : (!!dayConfig.isExtraordinaryOpen)
+                        );
+
                         return (
                           <div 
                             key={emp.id} 
-                            className="flex items-center justify-between bg-emerald-950/20 border border-emerald-500/30 p-2.5 rounded-xl gap-2 transition-all hover:border-emerald-500/50"
+                            className={cn(
+                              "flex items-center justify-between p-2.5 rounded-xl gap-2 transition-all",
+                              isExtraAvail 
+                                ? "bg-amber-950/40 border-2 border-amber-500/60 shadow-md" 
+                                : "bg-emerald-950/20 border border-emerald-500/30 hover:border-emerald-500/50"
+                            )}
                           >
                             <div className="flex items-center gap-2.5 min-w-0 flex-1">
                               <div className="w-7 h-7 rounded-full bg-emerald-500/20 shrink-0 overflow-hidden flex items-center justify-center text-[10px] font-bold text-emerald-400 border border-emerald-500/30 shadow-sm">
@@ -761,6 +815,12 @@ export default function DayManagementModal({
                                         ✓ Festa
                                       </span>
                                     )
+                                  )}
+                                  {isExtraAvail && (
+                                    <span className="text-[9px] font-black bg-amber-500/25 text-amber-300 border border-amber-500/50 px-1.5 py-0.2 rounded flex items-center gap-0.5 animate-pulse shadow-2xs" title="Disponibilidade enviada durante Abertura Extra">
+                                      <Zap size={10} className="fill-amber-400 text-amber-400 shrink-0" />
+                                      Abertura Extra
+                                    </span>
                                   )}
                                 </div>
                               </div>

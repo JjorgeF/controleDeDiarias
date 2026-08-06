@@ -94,6 +94,12 @@ const EmployeeCard: React.FC<EmployeeCardProps> = ({
     return acc + dayBase + extra;
   }, 0);
 
+  const totalExtraHours = monthWorkDays.reduce((acc, day) => acc + (day.extraHours || 0), 0);
+  const totalExtraEarnings = monthWorkDays.reduce((acc, day) => {
+    const extraRate = day.extraHourRateAtTime !== undefined ? day.extraHourRateAtTime : employee.extraHourRate;
+    return acc + (day.extraHours || 0) * extraRate;
+  }, 0);
+
   const monthPromotion = (employee.promotions || []).find(promo => {
     const promoDate = parseISO(promo.date);
     return isSameMonth(promoDate, currentMonth);
@@ -223,8 +229,13 @@ const EmployeeCard: React.FC<EmployeeCardProps> = ({
           </div>
           
           <div className="text-center">
-            <p className="text-[10px] text-brand-muted uppercase font-bold mb-1">
-              {monthWorkDays.length} dias trabalhados
+            <p className="text-[10px] text-brand-muted uppercase font-bold mb-1 flex items-center justify-center gap-1.5 flex-wrap">
+              <span>{monthWorkDays.length} dias trabalhados</span>
+              {totalExtraHours > 0 && (
+                <span className="text-amber-600 dark:text-amber-400 font-extrabold normal-case">
+                  (+{totalExtraHours}h extra = {formatCurrency(totalExtraEarnings)})
+                </span>
+              )}
             </p>
             <p className="text-2xl font-black text-brand-primary">
               {formatCurrency(totalEarnings)}

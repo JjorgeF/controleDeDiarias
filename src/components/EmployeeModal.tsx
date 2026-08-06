@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { X, AlertCircle, Trash2, ArrowRight, Calendar, Sparkles, Camera, User } from 'lucide-react';
+import { X, AlertCircle, Trash2, ArrowRight, Calendar, Sparkles, Camera, User, UserX, UserCheck, Power } from 'lucide-react';
 import { Employee, EmployeeLevel } from '../types';
 import { recalculateEmployeeTimeline, LEVEL_RATES } from '../utils/promotionUtils';
 import { compressProfileImage } from '../utils/imageCompressor';
@@ -9,14 +9,26 @@ interface EmployeeModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (employee: Partial<Employee>) => Promise<{ success: boolean; error?: string }>;
-  onDelete?: (id: string) => void;
+  onInactivate?: (id: string) => Promise<void>;
+  onReactivate?: (id: string) => Promise<void>;
+  onDelete?: (id: string) => Promise<void>;
   employee?: Employee;
 }
 
 const LEVELS: EmployeeLevel[] = ['Trainee', 'Aprendiz', 'Coordenador(a)', 'Recreador(a)', 'Recreador(a) Experiente', 'Motorista'];
 
-export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, employee }: EmployeeModalProps) {
+export default function EmployeeModal({ 
+  isOpen, 
+  onClose, 
+  onSave, 
+  onInactivate,
+  onReactivate,
+  onDelete, 
+  employee 
+}: EmployeeModalProps) {
   const [isDeleting, setIsDeleting] = React.useState(false);
+  const [isInactivating, setIsInactivating] = React.useState(false);
+  const [isReactivating, setIsReactivating] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [imageToCrop, setImageToCrop] = React.useState<string | null>(null);
   const [isCropperOpen, setIsCropperOpen] = React.useState(false);
@@ -336,7 +348,7 @@ export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, emplo
             </div>
           )}
 
-          <div className="flex flex-col gap-3 pt-4">
+          <div className="flex flex-col gap-3 pt-4 border-t border-brand-border/40">
             <div className="flex gap-3">
               <button
                 type="button"
@@ -353,34 +365,89 @@ export default function EmployeeModal({ isOpen, onClose, onSave, onDelete, emplo
               </button>
             </div>
             
-            {employee && onDelete && (
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!isDeleting) {
-                    setIsDeleting(true);
-                    // Reset after 3 seconds if not clicked again
-                    setTimeout(() => setIsDeleting(false), 3000);
-                    return;
-                  }
-                  
-                  console.log("EmployeeModal: Confirmed delete for employee:", employee.id);
-                  try {
-                    await onDelete(employee.id);
-                    onClose();
-                  } catch (err) {
-                    console.error("EmployeeModal: Error during onDelete:", err);
-                    setIsDeleting(false);
-                  }
-                }}
-                className={`w-full text-xs font-bold py-2 rounded-lg transition-all border ${
-                  isDeleting 
-                    ? "bg-red-600 text-white border-red-700 animate-pulse" 
-                    : "bg-red-500/10 hover:bg-red-500/20 text-red-500 border-red-500/20"
-                }`}
-              >
-                {isDeleting ? "CLIQUE NOVAMENTE PARA CONFIRMAR EXCLUSÃO" : "Excluir Funcionário"}
-              </button>
+            {employee && (
+              <div className="flex flex-col gap-2 pt-1">
+                {/* Active Employee -> Show Inactivate option */}
+                {employee.status !== 'inactive' ? (
+                  onInactivate && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!isInactivating) {
+                          setIsInactivating(true);
+                          setTimeout(() => setIsInactivating(false), 4000);
+                          return;
+                        }
+                        try {
+                          await onInactivate(employee.id);
+                          onClose();
+                        } catch (err) {
+                          console.error("Error during inactivate:", err);
+                          setIsInactivating(false);
+                        }
+                      }}
+                      className={`w-full text-xs font-bold py-2.5 rounded-lg transition-all border flex items-center justify-center gap-1.5 ${
+                        isInactivating 
+                          ? "bg-amber-600 text-white border-amber-700 animate-pulse shadow-md" 
+                          : "bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/30"
+                      }`}
+                    >
+                      <UserX size={15} />
+                      <span>{isInactivating ? "CONFIRMAR DESATIVAÇÃO (Ir para lista de desativados)" : "Desativar Funcionário (Inativar)"}</span>
+                    </button>
+                  )
+                ) : (
+                  /* Inactive Employee -> Show Reactivate option */
+                  onReactivate && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await onReactivate(employee.id);
+                          onClose();
+                        } catch (err) {
+                          console.error("Error during reactivate:", err);
+                        }
+                      }}
+                      className="w-full text-xs font-bold py-2.5 rounded-lg transition-all border bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/40 flex items-center justify-center gap-1.5 shadow-xs"
+                    >
+                      <UserCheck size={15} />
+                      <span>Reativar Funcionário (Retornar para Ativos)</span>
+                    </button>
+                  )
+                )}
+
+                {/* Permanent Delete Option */}
+                {onDelete && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!isDeleting) {
+                        setIsDeleting(true);
+                        setTimeout(() => setIsDeleting(false), 4000);
+                        return;
+                      }
+                      
+                      console.log("EmployeeModal: Confirmed permanent delete for employee:", employee.id);
+                      try {
+                        await onDelete(employee.id);
+                        onClose();
+                      } catch (err) {
+                        console.error("EmployeeModal: Error during onDelete:", err);
+                        setIsDeleting(false);
+                      }
+                    }}
+                    className={`w-full text-[11px] font-medium py-1.5 rounded-lg transition-all border flex items-center justify-center gap-1 ${
+                      isDeleting 
+                        ? "bg-red-600 text-white border-red-700 font-bold animate-pulse" 
+                        : "bg-red-500/5 hover:bg-red-500/15 text-red-400/80 hover:text-red-300 border-red-500/20"
+                    }`}
+                  >
+                    <Trash2 size={13} />
+                    <span>{isDeleting ? "CLIQUE NOVAMENTE PARA APAGAR DEFINITIVAMENTE DA BASE" : "Excluir Definitivamente da Base"}</span>
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </form>

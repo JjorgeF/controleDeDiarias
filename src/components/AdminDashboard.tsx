@@ -7,6 +7,7 @@ import {
   onSnapshot, 
   getDocs,
   doc,
+  setDoc,
   Timestamp
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -28,7 +29,14 @@ import {
   ChevronLeft,
   ChevronRight,
   Crown,
-  Trophy
+  Trophy,
+  Database,
+  Download,
+  Upload,
+  FileJson,
+  FileSpreadsheet,
+  HardDrive,
+  Check
 } from 'lucide-react';
 import { format, parseISO, formatDistanceToNow, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -56,6 +64,154 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
   const [rankMetric, setRankMetric] = useState<'confirmed' | 'availabilities' | 'cancellations'>('confirmed');
   const [rankPeriod, setRankPeriod] = useState<'monthly' | 'allTime'>('monthly');
   const [logSearchQuery, setLogSearchQuery] = useState('');
+  
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [backupMsg, setBackupMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleExportJSON = async () => {
+    setIsExporting(true);
+    setBackupMsg(null);
+    try {
+      if (!db) throw new Error("Firestore não inicializado.");
+      
+      const empSnap = await getDocs(collection(db, 'employees'));
+      const employeesData = empSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      const dayConfigSnap = await getDocs(collection(db, 'dayConfigs'));
+      const dayConfigsData = dayConfigSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      const cancelSnap = await getDocs(collection(db, 'cancellations'));
+      const cancellationsData = cancelSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      const backupPayload = {
+        exportDate: new Date().toISOString(),
+        appName: "Escala Bartenders CCSP",
+        counts: {
+          employees: employeesData.length,
+          dayConfigs: dayConfigsData.length,
+          cancellations: cancellationsData.length
+        },
+        data: {
+          employees: employeesData,
+          dayConfigs: dayConfigsData,
+          cancellations: cancellationsData
+        }
+      };
+
+      const jsonStr = JSON.stringify(backupPayload, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `backup_escala_bartenders_${format(new Date(), 'yyyy-MM-dd_HHmm')}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setBackupMsg({ type: 'success', text: `Backup JSON gerado com sucesso! (${employeesData.length} funcionários salvos)` });
+    } catch (err: any) {
+      console.error("Erro ao gerar backup JSON:", err);
+      setBackupMsg({ type: 'error', text: `Falha ao exportar backup: ${err.message}` });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportCSV = () => {
+    try {
+      const headers = ["ID", "Nome", "Nome Artistico", "Email", "Telefone", "Nivel", "Status", "Diaria CCSP", "Diaria Festa", "Hora Extra", "Data Inicio"];
+      const rows = employees.map(emp => [
+        `"${emp.id}"`,
+        `"${emp.name || ''}"`,
+        `"${emp.artisticName || ''}"`,
+        `"${emp.email || ''}"`,
+        `"${emp.phone || ''}"`,
+        `"${emp.level || ''}"`,
+        `"${emp.status || 'active'}"`,
+        emp.dailyRate || 0,
+        emp.partyRate || 0,
+        emp.extraHourRate || 0,
+        `"${emp.startDate || ''}"`
+      ]);
+
+      const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `funcionarios_escala_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setBackupMsg({ type: 'success', text: "Relatório CSV exportado com sucesso para Excel!" });
+    } catch (err: any) {
+      setBackupMsg({ type: 'error', text: "Erro ao gerar CSV: " + err.message });
+    }
+  };
+
+  const handleImportJSON = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!window.confirm("ATENÇÃO: Restaurar um arquivo de backup irá gravar os dados salvos de volta no banco de dados Firestore. Deseja prosseguir?")) {
+      e.target.value = '';
+      return;
+    }
+
+    setIsImporting(true);
+    setBackupMsg(null);
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const content = event.target?.result as string;
+        const parsed = JSON.parse(content);
+
+        if (!parsed.data || !Array.isArray(parsed.data.employees)) {
+          throw new Error("Formato de arquivo de backup inválido. Certifique-se de usar um arquivo .json de backup gerado por este sistema.");
+        }
+
+        if (!db) throw new Error("Firestore não conectado.");
+
+        let restoredEmpCount = 0;
+        let restoredConfigCount = 0;
+
+        for (const emp of parsed.data.employees) {
+          if (emp.id) {
+            const { id, ...dataToSave } = emp;
+            await setDoc(doc(db, 'employees', id), dataToSave, { merge: true });
+            restoredEmpCount++;
+          }
+        }
+
+        if (Array.isArray(parsed.data.dayConfigs)) {
+          for (const cfg of parsed.data.dayConfigs) {
+            if (cfg.id) {
+              const { id, ...cfgData } = cfg;
+              await setDoc(doc(db, 'dayConfigs', id), cfgData, { merge: true });
+              restoredConfigCount++;
+            }
+          }
+        }
+
+        setBackupMsg({ 
+          type: 'success', 
+          text: `Backup restaurado com sucesso! (${restoredEmpCount} funcionários e ${restoredConfigCount} configurações de dias atualizadas)` 
+        });
+      } catch (err: any) {
+        console.error("Erro na restauração:", err);
+        setBackupMsg({ type: 'error', text: `Erro ao importar backup: ${err.message}` });
+      } finally {
+        setIsImporting(false);
+        e.target.value = '';
+      }
+    };
+    reader.readAsText(file);
+  };
 
   const currentMonthKey = format(currentMonth, 'yyyy-MM');
 
@@ -982,6 +1138,105 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                 <p className="text-xs text-gray-500 font-bold">Nenhum log de acesso encontrado.</p>
               </div>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* Backup and Restore Section */}
+      <div className="bg-brand-card border border-brand-border rounded-2xl p-6 shadow-md space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-brand-border/60">
+          <div className="flex items-center gap-2.5">
+            <Database className="text-emerald-400" size={22} />
+            <div>
+              <h3 className="text-lg font-bold text-brand-text uppercase tracking-wider font-playful">
+                Backup & Restauração da Base de Dados
+              </h3>
+              <p className="text-xs text-brand-muted font-medium">
+                Baixe cópias físicas/online dos seus dados ou restaure backups em formato JSON/CSV a qualquer momento.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {backupMsg && (
+          <div className={cn(
+            "p-3 rounded-xl text-xs font-bold border flex items-center gap-2",
+            backupMsg.type === 'success' 
+              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+              : "bg-red-500/10 border-red-500/30 text-red-300"
+          )}>
+            {backupMsg.type === 'success' ? <Check size={16} /> : <AlertCircle size={16} />}
+            <span>{backupMsg.text}</span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Download JSON Backup */}
+          <div className="bg-brand-bg/50 border border-brand-border/80 rounded-xl p-4 flex flex-col justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
+                <FileJson size={18} />
+                <span>Backup Completo (JSON)</span>
+              </div>
+              <p className="text-[11px] text-brand-muted">
+                Exporta todos os funcionários, configurações de dias e históricos de cancelamento em um arquivo .json seguro.
+              </p>
+            </div>
+
+            <button
+              onClick={handleExportJSON}
+              disabled={isExporting}
+              className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-brand-bg font-bold py-2 px-3 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+            >
+              <Download size={14} />
+              <span>{isExporting ? "Gerando Backup..." : "Exportar Backup JSON"}</span>
+            </button>
+          </div>
+
+          {/* Download CSV Report */}
+          <div className="bg-brand-bg/50 border border-brand-border/80 rounded-xl p-4 flex flex-col justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-blue-400 font-bold text-sm">
+                <FileSpreadsheet size={18} />
+                <span>Relatório para Excel (CSV)</span>
+              </div>
+              <p className="text-[11px] text-brand-muted">
+                Gera uma planilha física para visualização em Excel ou Google Planilhas com a lista de funcionários e diárias.
+              </p>
+            </div>
+
+            <button
+              onClick={handleExportCSV}
+              className="w-full bg-blue-500 hover:bg-blue-600 text-brand-bg font-bold py-2 px-3 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+            >
+              <Download size={14} />
+              <span>Exportar Planilha CSV</span>
+            </button>
+          </div>
+
+          {/* Import/Restore Backup */}
+          <div className="bg-brand-bg/50 border border-brand-border/80 rounded-xl p-4 flex flex-col justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-purple-400 font-bold text-sm">
+                <Upload size={18} />
+                <span>Restaurar de Cópia (JSON)</span>
+              </div>
+              <p className="text-[11px] text-brand-muted">
+                Selecione um arquivo de backup JSON salvo anteriormente para regravar os dados no Firestore em caso de emergência.
+              </p>
+            </div>
+
+            <label className="w-full bg-purple-500 hover:bg-purple-600 text-brand-bg font-bold py-2 px-3 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer">
+              <Upload size={14} />
+              <span>{isImporting ? "Restaurando Dados..." : "Selecionar e Restaurar JSON"}</span>
+              <input 
+                type="file" 
+                accept=".json" 
+                onChange={handleImportJSON} 
+                disabled={isImporting}
+                className="hidden" 
+              />
+            </label>
           </div>
         </div>
       </div>

@@ -13,7 +13,8 @@ import {
   Plus,
   Sparkles,
   Send,
-  History
+  History,
+  Zap
 } from 'lucide-react';
 import { AppNotification, NotificationType, CustomNotificationDoc } from '../types';
 import { format, parseISO } from 'date-fns';
@@ -99,6 +100,8 @@ export default function NotificationCenter({
     switch (type) {
       case 'cancellation':
         return <AlertTriangle className="text-red-500 shrink-0" size={18} />;
+      case 'extraordinary_avail':
+        return <Zap className="text-amber-400 fill-amber-400 shrink-0 animate-pulse" size={18} />;
       case 'deadline_warning':
         return <Clock className="text-yellow-500 shrink-0" size={18} />;
       case 'deadline_expired':
@@ -368,14 +371,14 @@ export default function NotificationCenter({
                     </div>
 
                     {/* Actions inside notification item */}
-                    {notif.type === 'cancellation' && onNavigateToCalendar && (
+                    {(notif.type === 'cancellation' || notif.type === 'extraordinary_avail') && onNavigateToCalendar && (
                       <div className="flex justify-end pt-1">
                         <button
                           onClick={() => {
                             onNavigateToCalendar();
                             setIsOpen(false);
                           }}
-                          className="text-[11px] font-bold text-brand-primary hover:underline flex items-center gap-1"
+                          className="text-[11px] font-bold text-amber-500 hover:text-amber-400 dark:text-amber-400 hover:underline flex items-center gap-1"
                         >
                           Ver no Calendário
                           <ExternalLink size={12} />

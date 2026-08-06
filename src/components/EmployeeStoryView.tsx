@@ -173,8 +173,8 @@ export default function EmployeeStoryView({
     return [...(employee.promotions || [])].sort((a, b) => a.date.localeCompare(b.date));
   }, [employee.promotions]);
 
-  // Estimate total earnings
-  const totalEarnings = React.useMemo(() => {
+  // Estimate total earnings & extra hours breakdown
+  const { totalEarnings, totalExtraHours, totalExtraEarnings } = React.useMemo(() => {
     return completedWorkDays.reduce((acc, day) => {
       let dayBase = 0;
       if (day.type === 'common') {
@@ -183,9 +183,14 @@ export default function EmployeeStoryView({
         dayBase = day.partyRateAtTime !== undefined ? day.partyRateAtTime : employee.partyRate;
       }
       const extraRate = day.extraHourRateAtTime !== undefined ? day.extraHourRateAtTime : employee.extraHourRate;
-      const extra = (day.extraHours || 0) * extraRate;
-      return acc + dayBase + extra;
-    }, 0);
+      const extraH = day.extraHours || 0;
+      const extra = extraH * extraRate;
+      
+      acc.totalEarnings += dayBase + extra;
+      acc.totalExtraHours += extraH;
+      acc.totalExtraEarnings += extra;
+      return acc;
+    }, { totalEarnings: 0, totalExtraHours: 0, totalExtraEarnings: 0 });
   }, [completedWorkDays, employee]);
 
   // Group completed work days by month (YYYY-MM)
@@ -443,7 +448,7 @@ export default function EmployeeStoryView({
           <div>
             <span className="text-2xl md:text-3xl font-black text-brand-text">R$ {employee.dailyRate}</span>
             <p className="text-[11px] font-medium text-gray-400 mt-1">
-              Festa: R$ {employee.partyRate}
+              Festa: R$ {employee.partyRate} • Extra: R$ {employee.extraHourRate}/h
             </p>
           </div>
         </motion.div>
@@ -466,7 +471,7 @@ export default function EmployeeStoryView({
               R$ {totalEarnings.toLocaleString('pt-BR')}
             </span>
             <p className="text-[11px] font-medium text-gray-400 mt-1">
-              Histórico acumulado
+              {totalExtraHours > 0 ? `Inclui +${totalExtraHours}h extra (R$ ${totalExtraEarnings.toLocaleString('pt-BR')})` : 'Histórico acumulado'}
             </p>
           </div>
         </motion.div>
