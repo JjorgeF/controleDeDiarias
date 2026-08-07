@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Search, UserPlus, UserMinus, Clock, Copy, ClipboardPaste, Users, Plus, Trash2, PartyPopper, ChevronDown, ChevronUp, Zap, Lock } from 'lucide-react';
+import { X, Search, UserPlus, UserMinus, Clock, Copy, ClipboardPaste, Users, Plus, Trash2, PartyPopper, ChevronDown, ChevronUp, Zap, Lock, ShieldCheck } from 'lucide-react';
 import { Employee, WorkDay, DayType, DayConfig, PartyConfig } from '../types';
 import { format, isSunday, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -73,6 +73,26 @@ export default function DayManagementModal({
       time: ''
     };
     const updatedParties = [...normalizedParties, newParty];
+    onUpdateDayConfig(selectedDayStr, {
+      ...dayConfig,
+      isParty: true,
+      parties: updatedParties
+    });
+    setIsEventsExpanded(true);
+  };
+
+  const handleAddCoordination = () => {
+    const existing = normalizedParties.find(p => (p.name || '').toLowerCase().includes('coordena'));
+    if (existing) {
+      setIsEventsExpanded(true);
+      return;
+    }
+    const newCoord: PartyConfig = {
+      id: 'p_coord_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 5),
+      name: 'Coordenação',
+      time: ''
+    };
+    const updatedParties = [...normalizedParties, newCoord];
     onUpdateDayConfig(selectedDayStr, {
       ...dayConfig,
       isParty: true,
@@ -367,10 +387,19 @@ export default function DayManagementModal({
                       CCSP
                     </span>
                   )}
-                  {normalizedParties.length > 0 && (
+                  {normalizedParties.filter(p => !(p.name || '').toLowerCase().includes('coordena')).length > 0 && (
                     <span className="text-[10px] font-bold text-purple-300 bg-purple-950/40 border border-purple-500/30 px-2 py-0.5 rounded-md flex items-center gap-1">
                       <span>🎉</span>
-                      <span>{normalizedParties.length} {normalizedParties.length === 1 ? 'Festa' : 'Festas'}</span>
+                      <span>
+                        {normalizedParties.filter(p => !(p.name || '').toLowerCase().includes('coordena')).length}{' '}
+                        {normalizedParties.filter(p => !(p.name || '').toLowerCase().includes('coordena')).length === 1 ? 'Festa' : 'Festas'}
+                      </span>
+                    </span>
+                  )}
+                  {normalizedParties.some(p => (p.name || '').toLowerCase().includes('coordena')) && (
+                    <span className="text-[10px] font-bold text-cyan-300 bg-cyan-950/40 border border-cyan-500/30 px-2 py-0.5 rounded-md flex items-center gap-1">
+                      <ShieldCheck size={11} className="text-cyan-300" />
+                      <span>Coordenação</span>
                     </span>
                   )}
                   {dayConfig.isExtraordinaryOpen && (
@@ -404,13 +433,40 @@ export default function DayManagementModal({
                         <span className="font-bold">CCSP</span>
                       </label>
 
-                      <button
-                        onClick={handleAddParty}
-                        className="bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all active:scale-95"
-                      >
-                        <Plus size={14} />
-                        <span>Festa</span>
-                      </button>
+                      {(() => {
+                        const hasRegularParties = normalizedParties.some(p => !(p.name || '').toLowerCase().includes('coordena'));
+                        const hasCoordination = normalizedParties.some(p => (p.name || '').toLowerCase().includes('coordena'));
+
+                        return (
+                          <>
+                            <button
+                              onClick={handleAddParty}
+                              className={cn(
+                                "px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 border",
+                                hasRegularParties
+                                  ? "bg-purple-600/30 text-purple-200 border-purple-500/80 ring-1 ring-purple-500/30 shadow-sm shadow-purple-500/20"
+                                  : "bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border-purple-500/40"
+                              )}
+                            >
+                              <Plus size={14} />
+                              <span>Festa</span>
+                            </button>
+
+                            <button
+                              onClick={handleAddCoordination}
+                              className={cn(
+                                "px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 border",
+                                hasCoordination
+                                  ? "bg-cyan-600/30 text-cyan-200 border-cyan-500/80 ring-1 ring-cyan-500/30 shadow-sm shadow-cyan-500/20"
+                                  : "bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border-cyan-500/40"
+                              )}
+                            >
+                              <Plus size={14} />
+                              <span>Coordenação</span>
+                            </button>
+                          </>
+                        );
+                      })()}
 
                       <label 
                         className={cn(
@@ -493,6 +549,7 @@ export default function DayManagementModal({
                       <div className="space-y-2 pt-1">
                         {normalizedParties.map((party, idx) => {
                           const { start, end } = parsePartyTime(party.time);
+                          const isCoord = (party.name || '').toLowerCase().includes('coordena');
 
                           const handleTimeUpdate = (newStart: string, newEnd: string) => {
                             let formatted = '';
@@ -509,21 +566,42 @@ export default function DayManagementModal({
                           };
 
                           return (
-                            <div key={party.id || idx} className="flex flex-col sm:flex-row sm:items-center gap-2 bg-purple-950/25 border border-purple-500/30 rounded-xl p-2.5 animate-in fade-in">
+                            <div 
+                              key={party.id || idx} 
+                              className={cn(
+                                "flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl p-2.5 animate-in fade-in border",
+                                isCoord
+                                  ? "bg-cyan-950/40 border-cyan-500/40"
+                                  : "bg-purple-950/25 border-purple-500/30"
+                              )}
+                            >
                               <div className="flex items-center gap-1.5 flex-1 min-w-[150px]">
-                                <span className="text-sm select-none">🎉</span>
+                                {isCoord ? (
+                                  <ShieldCheck size={18} className="text-cyan-300 shrink-0" />
+                                ) : (
+                                  <span className="text-sm select-none">🎉</span>
+                                )}
                                 <input 
                                   type="text"
-                                  placeholder="Nome da Festa"
+                                  placeholder={isCoord ? "Coordenação" : "Nome da Festa"}
                                   value={party.name}
                                   onChange={(e) => handleUpdateParty(party.id, 'name', e.target.value)}
-                                  className="w-full bg-brand-bg border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-white font-bold placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                                  className={cn(
+                                    "w-full bg-brand-bg border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-white font-bold placeholder-gray-500 focus:outline-none",
+                                    isCoord ? "focus:border-cyan-400 text-cyan-100" : "focus:border-purple-500 text-white"
+                                  )}
                                 />
                               </div>
 
                               <div className="flex items-center justify-between sm:justify-start gap-2">
-                                <div className="flex items-center gap-1 bg-brand-bg border border-brand-border rounded-lg px-2 py-1 text-xs text-white font-semibold focus-within:border-purple-500">
-                                  <span className="text-[10px] text-purple-400 font-bold uppercase shrink-0 mr-0.5">Horário:</span>
+                                <div className={cn(
+                                  "flex items-center gap-1 bg-brand-bg border border-brand-border rounded-lg px-2 py-1 text-xs text-white font-semibold",
+                                  isCoord ? "focus-within:border-cyan-400" : "focus-within:border-purple-500"
+                                )}>
+                                  <span className={cn(
+                                    "text-[10px] font-bold uppercase shrink-0 mr-0.5",
+                                    isCoord ? "text-cyan-300" : "text-purple-400"
+                                  )}>Horário:</span>
                                   <input 
                                     type="text"
                                     placeholder="12:00"
@@ -577,13 +655,31 @@ export default function DayManagementModal({
                     const isParty = workDay?.type === 'party';
                     const currentPartyId = workDay?.partyId;
                     const currentPartyName = workDay?.partyName;
+                    const isCoordination = isParty && (currentPartyName || '').toLowerCase().includes('coordena');
                     const isExpanded = expandedEmployeeId === emp.id;
                     
                     return (
-                      <div key={emp.id} className="bg-brand-primary/5 border border-brand-primary/20 px-3 py-2.5 rounded-xl transition-all hover:border-brand-primary/40 group">
+                      <div 
+                        key={emp.id} 
+                        className={cn(
+                          "px-3 py-2.5 rounded-xl transition-all border group",
+                          isCoordination
+                            ? "bg-cyan-950/20 border-cyan-500/30 hover:border-cyan-500/50"
+                            : isParty
+                              ? "bg-purple-950/20 border-purple-500/30 hover:border-purple-500/50"
+                              : "bg-brand-primary/5 border-brand-primary/20 hover:border-brand-primary/40"
+                        )}
+                      >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="cursor-pointer min-w-0 flex-1 flex items-center gap-2.5" onClick={() => setExpandedEmployeeId(isExpanded ? null : emp.id)}>
-                            <div className="w-8 h-8 rounded-full bg-brand-primary/20 shrink-0 overflow-hidden flex items-center justify-center text-xs font-bold text-brand-primary border border-brand-primary/30 shadow-sm">
+                            <div className={cn(
+                              "w-8 h-8 rounded-full shrink-0 overflow-hidden flex items-center justify-center text-xs font-bold border shadow-sm",
+                              isCoordination
+                                ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
+                                : isParty
+                                  ? "bg-purple-500/20 text-purple-300 border-purple-500/40"
+                                  : "bg-brand-primary/20 text-brand-primary border-brand-primary/30"
+                            )}>
                               {emp.photoUrl ? (
                                 <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
                               ) : (
@@ -618,6 +714,7 @@ export default function DayManagementModal({
                                 {normalizedParties.map((party) => {
                                   const isAssignedToThisParty = isParty && 
                                     (currentPartyId === party.id || (!currentPartyId && party.id === 'default_party') || currentPartyName === party.name);
+                                  const isCoord = (party.name || '').toLowerCase().includes('coordena');
 
                                   return (
                                     <button
@@ -627,14 +724,18 @@ export default function DayManagementModal({
                                         assignEmployee(emp, 'party', party);
                                       }}
                                       className={cn(
-                                        "text-[9px] font-black px-2.5 py-1 rounded-lg transition-all uppercase tracking-wider flex items-center gap-1 max-w-[200px] truncate",
+                                        "text-[9px] font-black px-2.5 py-1 rounded-lg transition-all uppercase tracking-wider flex items-center gap-1 max-w-[200px] truncate border",
                                         isAssignedToThisParty 
-                                          ? "bg-purple-600 text-white shadow-md ring-1 ring-purple-400" 
-                                          : "bg-brand-bg border border-brand-border text-gray-400 hover:border-purple-500/50 hover:text-purple-300"
+                                          ? isCoord
+                                            ? "bg-cyan-500 text-slate-950 font-bold border-cyan-400 shadow-md ring-1 ring-cyan-300"
+                                            : "bg-purple-600 text-white border-purple-500 shadow-md ring-1 ring-purple-400" 
+                                          : isCoord
+                                            ? "bg-cyan-950/40 border-cyan-500/50 text-cyan-300 hover:border-cyan-400 hover:bg-cyan-900/60"
+                                            : "bg-brand-bg border-brand-border text-gray-400 hover:border-purple-500/50 hover:text-purple-300"
                                       )}
                                       title={`Escalar para ${party.name}${party.time ? ` (${party.time})` : ''}`}
                                     >
-                                      <span>🎉</span>
+                                      {isCoord ? <ShieldCheck size={11} className={cn("shrink-0", isAssignedToThisParty ? "text-slate-950" : "text-cyan-300")} /> : <span>🎉</span>}
                                       <span className="truncate">{party.name}</span>
                                     </button>
                                   );
@@ -805,11 +906,23 @@ export default function DayManagementModal({
                                     </span>
                                   )}
                                   {normalizedParties.length > 0 ? (
-                                    activePartyButtons.map(p => (
-                                      <span key={p.id} className="text-[9px] font-extrabold bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.2 rounded flex items-center gap-0.5 truncate max-w-[120px]" title={`Disponível para ${p.name}`}>
-                                        ✓ {p.name}
-                                      </span>
-                                    ))
+                                    activePartyButtons.map(p => {
+                                      const isCoord = (p.name || '').toLowerCase().includes('coordena');
+                                      return (
+                                        <span 
+                                          key={p.id} 
+                                          className={cn(
+                                            "text-[9px] font-extrabold border px-1.5 py-0.2 rounded flex items-center gap-0.5 truncate max-w-[120px]",
+                                            isCoord
+                                              ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/30"
+                                              : "bg-purple-500/20 text-purple-300 border-purple-500/30"
+                                          )} 
+                                          title={`Disponível para ${p.name}`}
+                                        >
+                                          {isCoord ? <ShieldCheck size={10} className="text-cyan-300 shrink-0" /> : '✓'} {p.name}
+                                        </span>
+                                      );
+                                    })
                                   ) : (
                                     hasAnyPartyAvail && (
                                       <span className="text-[9px] font-extrabold bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.2 rounded flex items-center gap-0.5">
@@ -840,17 +953,25 @@ export default function DayManagementModal({
                               )}
 
                               {normalizedParties.length > 0 ? (
-                                activePartyButtons.map(party => (
-                                  <button 
-                                    key={party.id}
-                                    onClick={() => assignEmployee(emp, 'party', party)}
-                                    className="text-[10px] font-black bg-purple-500/10 hover:bg-purple-500 text-purple-300 hover:text-white px-2 py-1 rounded-lg border border-purple-500/30 transition-all flex items-center gap-1 uppercase max-w-[130px] truncate"
-                                    title={`Escalar para ${party.name} (Optado pelo recreador)`}
-                                  >
-                                    <UserPlus size={12} />
-                                    <span className="truncate">{party.name}</span>
-                                  </button>
-                                ))
+                                activePartyButtons.map(party => {
+                                  const isCoord = (party.name || '').toLowerCase().includes('coordena');
+                                  return (
+                                    <button 
+                                      key={party.id}
+                                      onClick={() => assignEmployee(emp, 'party', party)}
+                                      className={cn(
+                                        "text-[10px] font-black px-2 py-1 rounded-lg transition-all flex items-center gap-1 uppercase max-w-[130px] truncate border",
+                                        isCoord
+                                          ? "bg-cyan-500/20 hover:bg-cyan-500 text-cyan-300 hover:text-slate-950 border-cyan-500/40"
+                                          : "bg-purple-500/10 hover:bg-purple-500 text-purple-300 hover:text-white border-purple-500/30"
+                                      )}
+                                      title={`Escalar para ${party.name} (Optado pelo recreador)`}
+                                    >
+                                      {isCoord ? <ShieldCheck size={12} className="shrink-0" /> : <UserPlus size={12} className="shrink-0" />}
+                                      <span className="truncate">{party.name}</span>
+                                    </button>
+                                  );
+                                })
                               ) : (
                                 hasAnyPartyAvail && dayConfig.isParty && (
                                   <button 
@@ -910,17 +1031,25 @@ export default function DayManagementModal({
                               </button>
                             )}
 
-                            {normalizedParties.map(party => (
-                              <button 
-                                key={party.id}
-                                onClick={() => assignEmployee(emp, 'party', party)}
-                                className="text-[10px] font-black bg-brand-bg border border-brand-border hover:bg-purple-500/10 hover:border-purple-500 hover:text-purple-400 text-gray-400 px-2 py-1 rounded-lg transition-all flex items-center gap-1 uppercase max-w-[130px] truncate"
-                                title={`Escalar para ${party.name}`}
-                              >
-                                <UserPlus size={12} />
-                                <span className="truncate">{party.name}</span>
-                              </button>
-                            ))}
+                            {normalizedParties.map(party => {
+                              const isCoord = (party.name || '').toLowerCase().includes('coordena');
+                              return (
+                                <button 
+                                  key={party.id}
+                                  onClick={() => assignEmployee(emp, 'party', party)}
+                                  className={cn(
+                                    "text-[10px] font-black bg-brand-bg border rounded-lg px-2 py-1 transition-all flex items-center gap-1 uppercase max-w-[130px] truncate",
+                                    isCoord
+                                      ? "border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-400 hover:text-cyan-200"
+                                      : "border-brand-border text-gray-400 hover:bg-purple-500/10 hover:border-purple-500 hover:text-purple-400"
+                                  )}
+                                  title={`Escalar para ${party.name}`}
+                                >
+                                  {isCoord ? <ShieldCheck size={12} className="shrink-0 text-cyan-300" /> : <UserPlus size={12} />}
+                                  <span className="truncate">{party.name}</span>
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
                       ))}
