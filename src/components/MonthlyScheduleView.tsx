@@ -654,23 +654,6 @@ export default function MonthlyScheduleView({
                       )}
                     </div>
 
-                  {/* Day Parties Summary */}
-                  {config?.parties && config.parties.length > 0 && (
-                    <div className="bg-purple-950/20 border-b border-purple-500/20 p-2 text-[11px] space-y-1">
-                      {config.parties.map((p, idx) => (
-                        <div key={p.id || idx} className="flex items-center justify-between text-purple-200">
-                          <span className="font-bold truncate flex items-center gap-1">
-                            <span>🎉</span> {p.name}
-                          </span>
-                          {p.time && (
-                            <span className="text-[10px] text-purple-300/80 font-mono shrink-0 ml-1">
-                              ({p.time})
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
 
                   {/* Body: List of Assigned Employees Grouped by Shift */}
                   <div className="p-2.5 space-y-3 flex-1 min-h-[100px]">
@@ -718,8 +701,8 @@ export default function MonthlyScheduleView({
                         };
 
                         const sortedGroups = Object.entries(groupedMap).sort(([_keyA, a], [_keyB, b]) => {
-                          if (a.isParty && !b.isParty) return -1;
-                          if (!a.isParty && b.isParty) return 1;
+                          if (a.isParty && !b.isParty) return 1;
+                          if (!a.isParty && b.isParty) return -1;
 
                           const rankA = getShiftRank(a.label);
                           const rankB = getShiftRank(b.label);
@@ -728,7 +711,19 @@ export default function MonthlyScheduleView({
                           return a.label.localeCompare(b.label);
                         });
 
-                        return sortedGroups.map(([groupKey, group]) => {
+                        const assignedPartyNames = new Set(
+                          dayItems
+                            .filter(item => item.workDay.type === 'party')
+                            .map(item => (item.workDay.partyName || '').toLowerCase().trim())
+                        );
+
+                        const unassignedParties = (config?.parties || []).filter(
+                          p => !assignedPartyNames.has((p.name || '').toLowerCase().trim())
+                        );
+
+                        return (
+                          <>
+                            {sortedGroups.map(([groupKey, group]) => {
                           const headerText = group.isParty
                             ? `🎉 ${group.partyName || 'Festa'}${group.label && group.label !== 'Festa' ? ` (${group.label})` : ''}`
                             : group.label;
@@ -817,7 +812,25 @@ export default function MonthlyScheduleView({
                               </div>
                             </div>
                           );
-                        });
+                        })}
+
+                            {unassignedParties.length > 0 && (
+                              <div className="space-y-1.5 pt-1">
+                                {unassignedParties.map((p, idx) => (
+                                  <div key={p.id || idx} className="flex items-center justify-between text-[10px] font-extrabold px-2.5 py-1 rounded-lg border bg-purple-950/30 text-purple-200 border-purple-500/30">
+                                    <span className="truncate flex items-center gap-1.5">
+                                      <PartyPopper size={12} className="text-purple-300 shrink-0" />
+                                      <span className="truncate font-black">🎉 {p.name} {p.time ? `(${p.time})` : ''}</span>
+                                    </span>
+                                    <span className="text-[9px] font-bold text-purple-300/60 shrink-0 ml-1">
+                                      0 escalados
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        );
                       })()
                     )}
                   </div>
