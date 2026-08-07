@@ -132,6 +132,7 @@ export default function DayManagementModal({
   const filteredAvailable = React.useMemo(() => {
     if (!selectedDayStr) return [];
     return employees.filter(emp => 
+      emp.status !== 'inactive' &&
       !emp.workDays.some(d => d.date === selectedDayStr && !d.isCancelled) &&
       (emp.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
        (emp.artisticName && emp.artisticName.toLowerCase().includes(searchQuery.toLowerCase())))
