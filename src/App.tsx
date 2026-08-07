@@ -1,1627 +1,1149 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
-  collection, 
-  onSnapshot, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  doc, 
-  query, 
-  where,
-  getDoc,
-  getDocs,
-  setDoc
-} from 'firebase/firestore';
-import { onAuthStateChanged, User, signInWithPopup, getRedirectResult } from 'firebase/auth';
-import { auth, db, googleProvider, isFirebaseConfigured, handleFirestoreError, OperationType } from './lib/firebase';
-import { Employee, ViewMode, WorkDay, CancellationLog, Promotion, AppNotification, CustomNotificationDoc, DayConfig } from './types';
-import { recalculateEmployeeTimeline } from './utils/promotionUtils';
-import Header from './components/Header';
-import EmployeeCard from './components/EmployeeCard';
-import EmployeeList from './components/EmployeeList';
-import CalendarView from './components/CalendarView';
-import AdminDashboard from './components/AdminDashboard';
-import EmployeeModal from './components/EmployeeModal';
-import ManageDaysModal from './components/ManageDaysModal';
-import SendNotificationModal from './components/SendNotificationModal';
-import SimulationBanner from './components/SimulationBanner';
-import EmployeeStoryView from './components/EmployeeStoryView';
-import MonthlyScheduleView from './components/MonthlyScheduleView';
-import InAppBrowserGuide, { isInAppBrowser } from './components/InAppBrowserGuide';
-import { PWAInstallPrompt } from './components/PWAInstallPrompt';
-import Logo from './components/Logo';
-import { LogIn, AlertTriangle, Calendar, Award, X, Table, UserPlus, Plus } from 'lucide-react';
-import * as XLSX from 'xlsx';
-import { format, isSameMonth, parseISO, eachDayOfInterval, startOfMonth, endOfMonth, isToday } from 'date-fns';
+  Calendar as CalendarIcon, 
+  ChevronLeft, 
+  ChevronRight, 
+  Search, 
+  Star, 
+  Sparkles, 
+  Table, 
+  LayoutGrid, 
+  List, 
+  Users, 
+  Clock, 
+  PartyPopper, 
+  Building2, 
+  Printer, 
+  FileSpreadsheet, 
+  Filter, 
+  Zap, 
+  CheckCircle2, 
+  X,
+  UserCheck
+} from 'lucide-react';
+import { Employee, DayConfig, WorkDay } from '../types';
+import { format, isSameMonth, parseISO, eachDayOfInterval, startOfMonth, endOfMonth, isToday, isWeekend, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { cn } from '../lib/utils';
+import * as XLSX from 'xlsx';
 
-export default function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [adminCheckLoading, setAdminCheckLoading] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [employeesLoading, setEmployeesLoading] = useState(true);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [viewMode, setViewMode] = useState<ViewMode>('calendar');
+interface MonthlyScheduleViewProps {
+  employees: Employee[];
+  currentMonth: Date;
+  setCurrentMonth: (date: Date) => void;
+  currentEmployee?: Employee | null;
+  isAdmin?: boolean;
+  dayConfigs?: Record<string, DayConfig>;
+}
+
+type LayoutMode = 'grid' | 'timeline';
+
+export default function MonthlyScheduleView({
+  employees,
+  currentMonth,
+  setCurrentMonth,
+  currentEmployee,
+  isAdmin = false,
+  dayConfigs = {}
+}: MonthlyScheduleViewProps) {
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>('grid');
+  const [timeScope, setTimeScope] = useState<'month' | 'week1' | 'week2' | 'week3' | 'week4' | 'week5'>('month');
   const [searchQuery, setSearchQuery] = useState('');
-  const [isDarkMode, setIsDarkMode] = useState(true);
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [deadlines, setDeadlines] = useState<Record<string, string>>({}); // Key: "yyyy-MM", Value: "yyyy-MM-ddTHH:mm"
-  const [dayConfigs, setDayConfigs] = useState<Record<string, DayConfig>>({});
-  const [sidebarTab, setSidebarTab] = useState<'availabilities' | 'cancellations'>('availabilities');
-  
-  // Estado para simulação de papéis (Role simulation)
-  const [simulationActive, setSimulationActive] = useState(false);
-  const [simulatedEmployeeId, setSimulatedEmployeeId] = useState<string>('');
+  const [onlyMyDays, setOnlyMyDays] = useState(false);
+  const [selectedHighlightId, setSelectedHighlightId] = useState<string>(currentEmployee?.id || '');
+  const [eventFilter, setEventFilter] = useState<'all' | 'common' | 'party'>('all');
+  const [selectedDayModal, setSelectedDayModal] = useState<string | null>(null);
 
-  // Flag de controle: ativa no modo desenvolvimento local ou via variável customizada VITE_ENABLE_SIMULATION no .env
-  const isSimulationEnabled = import.meta.env.VITE_ENABLE_SIMULATION?.toLowerCase() === 'true' || import.meta.env.DEV;
-
-  const isViewingAsAdmin = isAdmin && (!isSimulationEnabled || !simulationActive);
-
-  // Modals & Navigation state
-  const [employeeActiveTab, setEmployeeActiveTab] = useState<'schedule' | 'master_schedule' | 'story'>('schedule');
-  const [selectedStoryEmployee, setSelectedStoryEmployee] = useState<Employee | null>(null);
-  const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
-  const [isManageDaysModalOpen, setIsManageDaysModalOpen] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | undefined>(undefined);
-  const [authError, setAuthError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (auth) {
-      getRedirectResult(auth).catch((err) => {
-        console.warn("Segurança de redirecionamento do Firebase Auth capturada:", err);
-      });
+  // Sync selectedHighlightId with currentEmployee if available and not manually overridden
+  const effectiveHighlightEmployee = useMemo(() => {
+    if (selectedHighlightId) {
+      return employees.find(e => e.id === selectedHighlightId) || currentEmployee || null;
     }
-  }, []);
+    return currentEmployee || null;
+  }, [employees, selectedHighlightId, currentEmployee]);
 
-  useEffect(() => {
-    if (!db || !user) return;
-    const unsub = onSnapshot(doc(db, 'settings', 'deadlines'), (snapshot) => {
-      if (snapshot.exists()) {
-        setDeadlines(snapshot.data() as Record<string, string>);
-      } else {
-        setDeadlines({});
-      }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'settings/deadlines');
-    });
-    return () => unsub();
-  }, [db, user]);
+  // Days of the current selected month
+  const monthDays = useMemo(() => {
+    const start = startOfMonth(currentMonth);
+    const end = endOfMonth(currentMonth);
+    return eachDayOfInterval({ start, end });
+  }, [currentMonth]);
 
-  useEffect(() => {
-    if (!db || !user) return;
-    const unsub = onSnapshot(doc(db, 'settings', 'dayConfigs'), (snapshot) => {
-      if (snapshot.exists()) {
-        setDayConfigs(snapshot.data() as Record<string, DayConfig>);
-      } else {
-        setDayConfigs({});
-      }
-    }, (error) => {
-      console.error("Error loading dayConfigs:", error);
-    });
-    return () => unsub();
-  }, [db, user]);
+  // Days filtered by selected time scope (Entire Month or specific Week 1..5)
+  const displayedDays = useMemo(() => {
+    if (timeScope === 'month') return monthDays;
+    if (timeScope === 'week1') return monthDays.slice(0, 7);
+    if (timeScope === 'week2') return monthDays.slice(7, 14);
+    if (timeScope === 'week3') return monthDays.slice(14, 21);
+    if (timeScope === 'week4') return monthDays.slice(21, 28);
+    if (timeScope === 'week5') return monthDays.slice(28);
+    return monthDays;
+  }, [monthDays, timeScope]);
 
+  // Previous & Next month navigation
+  const handlePrevMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+  };
 
+  const handleNextMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+  };
 
-  useEffect(() => {
-    // Apply theme class to html element
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [isDarkMode]);
+  const handleCurrentMonth = () => {
+    setCurrentMonth(new Date());
+  };
 
-  // Dynamic custom logo & PWA manifest updater
-  useEffect(() => {
-    const checkCustomLogo = async () => {
-      const formats = ['png', 'svg', 'webp', 'jpg', 'jpeg'];
-      for (const format of formats) {
-        try {
-          const logoUrl = `/brand/logo-custom.${format}`;
-          const response = await fetch(logoUrl, { method: 'HEAD' });
-          if (response.ok) {
-            // Check if the file is empty (e.g. 0 bytes placeholder)
-            const contentLength = response.headers.get('content-length');
-            if (contentLength === '0') {
-              continue;
-            }
+  // Helper to map workDays for each day
+  // Returns map: dateStr -> Array of { employee, workDay } containing ALL scheduled employees
+  const dailyScheduleMap: Record<string, { employee: Employee; workDay: WorkDay }[]> = useMemo(() => {
+    const map: Record<string, { employee: Employee; workDay: WorkDay }[]> = {};
 
-            // Found a custom logo! Update favicon & apple-touch-icon
-            const favicon = document.querySelector('link[rel="icon"]');
-            if (favicon) {
-              favicon.setAttribute('href', logoUrl);
-              favicon.setAttribute('type', format === 'svg' ? 'image/svg+xml' : `image/${format}`);
-            }
-            
-            const appleTouch = document.querySelector('link[rel="apple-touch-icon"]');
-            if (appleTouch) {
-              appleTouch.setAttribute('href', logoUrl);
-            }
-            
-            // Update manifest to append query parameter so Service Worker can serve custom icon
-            const manifestLink = document.querySelector('link[rel="manifest"]');
-            if (manifestLink) {
-              manifestLink.setAttribute('href', `/manifest.json?logo=logo-custom.${format}`);
-            }
-            break;
-          }
-        } catch (e) {
-          // Ignore
-        }
-      }
-    };
-    checkCustomLogo();
-  }, []);
-
-  useEffect(() => {
-    if (!auth) {
-      setAdminCheckLoading(false);
-      setLoading(false);
-      return;
-    }
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setAdminCheckLoading(true);
-      setUser(user);
-      
-      if (user && user.email && db) {
-        try {
-          // Verifica se o documento com o email do usuário existe na coleção usuarios_admin
-          const adminDoc = await getDoc(doc(db, 'usuarios_admin', user.email));
-          setIsAdmin(adminDoc.exists());
-
-          // Registra o log de acesso se ainda não tiver registrado nesta sessão do navegador
-          const sessionLoggedKey = `logged_${user.email}_${new Date().toISOString().split('T')[0]}`;
-          if (!sessionStorage.getItem(sessionLoggedKey)) {
-            try {
-              const logData = {
-                type: 'access_log',
-                email: user.email,
-                name: user.displayName || user.email.split('@')[0],
-                timestamp: new Date().toISOString()
-              };
-
-              // Tentativa 1: Escreve na coleção 'cancellations' (que permite isSignedIn)
-              try {
-                const logDocId = `access_log_${user.email.replace(/[^a-zA-Z0-9]/g, '_')}`;
-                const logRef = doc(db, 'cancellations', logDocId);
-                await setDoc(logRef, logData);
-                console.log("Log de acesso salvo na coleção 'cancellations' com sucesso.");
-                sessionStorage.setItem(sessionLoggedKey, 'true');
-              } catch (err: any) {
-                console.warn("Falha ao salvar log em 'cancellations', tentando fallback:", err);
-
-                // Fallback:
-                if (adminDoc.exists()) {
-                  // Se for admin, grava em settings/access_logs
-                  const settingsLogRef = doc(db, 'settings', 'access_logs');
-                  const logId = `log_${user.email.replace(/[^a-zA-Z0-9]/g, '_')}`;
-                  await setDoc(settingsLogRef, {
-                    [logId]: {
-                      email: user.email,
-                      name: user.displayName || user.email.split('@')[0],
-                      timestamp: new Date().toISOString()
-                    }
-                  }, { merge: true });
-                  console.log("Log de acesso do admin salvo em settings/access_logs.");
-                  sessionStorage.setItem(sessionLoggedKey, 'true');
-                } else {
-                  // Se for funcionário, grava em seu próprio registro na lista de availabilities
-                  const qEmp = query(collection(db, 'employees'), where('email', '==', user.email.trim().toLowerCase()));
-                  const querySnapshot = await getDocs(qEmp);
-                  if (!querySnapshot.empty) {
-                    const empDoc = querySnapshot.docs[0];
-                    const empData = empDoc.data() as Employee;
-                    const currentAvails = empData.availabilities || [];
-                    const loginToken = `login_${new Date().toISOString()}`;
-                    
-                    // Mantém apenas o ÚLTIMO log de login no array de availabilities para não poluir
-                    const cleanAvails = currentAvails.filter(av => !av.startsWith('login_'));
-                    
-                    await updateDoc(doc(db, 'employees', empDoc.id), {
-                      availabilities: [...cleanAvails, loginToken]
-                    });
-                    console.log("Log de acesso do funcionário salvo em availabilities:", loginToken);
-                    sessionStorage.setItem(sessionLoggedKey, 'true');
-                  }
-                }
-              }
-            } catch (logErr) {
-              console.error("Erro geral ao salvar log de acesso:", logErr);
-            }
-          }
-        } catch (error) {
-          console.error("Erro ao verificar status de admin:", error);
-          setIsAdmin(false);
-          handleFirestoreError(error, OperationType.GET, 'usuarios_admin/' + user.email);
-        }
-      } else {
-        setIsAdmin(false);
-      }
-      
-      setAdminCheckLoading(false);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!user || !db || adminCheckLoading) {
-      setEmployees([]);
-      setEmployeesLoading(false);
-      return;
-    }
-
-    setEmployeesLoading(true);
-
-    const userEmailRaw = (user.email || '').trim();
-    const userEmailLower = userEmailRaw.toLowerCase();
-    const emailOptions = Array.from(new Set([userEmailRaw, userEmailLower])).filter(Boolean);
-
-    // Todos os usuários (admins e colaboradores) carregam a lista completa para visualização da escala geral e colegas de trabalho
-    const q = query(collection(db, 'employees'));
-
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      let emps = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Employee[];
-
-      emps.sort((a, b) => {
-        const nameA = a.artisticName || a.name || '';
-        const nameB = b.artisticName || b.name || '';
-        return nameA.localeCompare(nameB, 'pt-BR', { sensitivity: 'base' });
-      });
-      
-      setEmployees(emps);
-      setEmployeesLoading(false);
-
-      // Auto-vincular o UID do usuário autenticado se ele for funcionário e o campo userId estiver vazio
-      if (!isAdmin && emps.length > 0 && user) {
-        const myEmailLower = (user.email || '').trim().toLowerCase();
-        const myEmp = emps.find(emp => (myEmailLower && (emp.email || '').trim().toLowerCase() === myEmailLower) || (emp.userId && emp.userId === user.uid));
-        if (myEmp && (!myEmp.userId || myEmp.userId !== user.uid)) {
-          try {
-            const empRef = doc(db, 'employees', myEmp.id);
-            await updateDoc(empRef, { userId: user.uid });
-            console.log("userId vinculado com sucesso para o funcionário:", myEmp.name);
-          } catch (err) {
-            console.warn("Não foi possível auto-vincular o userId:", err);
-          }
-        }
-      }
-    }, (error) => {
-      setEmployeesLoading(false);
-      handleFirestoreError(error, OperationType.LIST, 'employees');
+    monthDays.forEach(day => {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      map[dateStr] = [];
     });
 
-    return () => unsubscribe();
-  }, [user, isAdmin, adminCheckLoading, db]);
-
-  const activeEmployees = useMemo(() => {
-    return employees.filter(emp => emp.status !== 'inactive');
-  }, [employees]);
-
-  const inactiveEmployees = useMemo(() => {
-    return employees.filter(emp => emp.status === 'inactive');
-  }, [employees]);
-
-  // Auto-purge inactive employees older than 180 days (6 months)
-  useEffect(() => {
-    if (!isAdmin || !db || employeesLoading || employees.length === 0) return;
-    const SIX_MONTHS_MS = 180 * 24 * 60 * 60 * 1000;
-    const now = Date.now();
-    const expired = employees.filter(emp => {
-      if (emp.status !== 'inactive' || !emp.inactivatedAt) return false;
-      const inactTime = new Date(emp.inactivatedAt).getTime();
-      return (now - inactTime) >= SIX_MONTHS_MS;
-    });
-
-    if (expired.length > 0) {
-      console.log(`Auto-purging ${expired.length} expired inactive employee(s) (>6 months)...`);
-      expired.forEach(async (emp) => {
-        try {
-          await deleteDoc(doc(db, 'employees', emp.id));
-          console.log(`Successfully auto-deleted expired employee: ${emp.id} (${emp.name})`);
-        } catch (err) {
-          console.error(`Failed to auto-delete expired employee ${emp.id}:`, err);
-        }
-      });
-    }
-  }, [isAdmin, db, employeesLoading, employees]);
-
-  const filteredEmployees = useMemo(() => {
-    return activeEmployees
-      .filter(emp => 
-        emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        emp.artisticName.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-      .sort((a, b) => {
-        const nameA = a.artisticName || a.name || '';
-        const nameB = b.artisticName || b.name || '';
-        return nameA.localeCompare(nameB, 'pt-BR', { sensitivity: 'base' });
-      });
-  }, [activeEmployees, searchQuery]);
-
-  const cancellations = useMemo(() => {
-    const list: CancellationLog[] = [];
     employees.forEach(emp => {
       (emp.workDays || []).forEach(wd => {
-        if (wd.isCancelled && !wd.cancellationDismissed) {
-          list.push({
-            id: `${emp.id}_${wd.date}`,
-            employeeId: emp.id,
-            employeeName: emp.artisticName || emp.name,
-            date: wd.date,
-            type: wd.type as 'common' | 'party',
-            cancelledAt: wd.cancelledAt || new Date().toISOString(),
-            viewedByAdmins: !!wd.cancellationViewed
-          });
+        if (!wd.isCancelled && map[wd.date]) {
+          map[wd.date].push({ employee: emp, workDay: wd });
         }
       });
     });
-    return list.sort((a, b) => new Date(b.cancelledAt).getTime() - new Date(a.cancelledAt).getTime());
-  }, [employees]);
 
-  const unreadCancellations = useMemo(() => {
-    return cancellations.filter(c => !c.viewedByAdmins);
-  }, [cancellations]);
+    // Sort employees inside each day by highlighting user first, then by artisticName
+    Object.keys(map).forEach(dateStr => {
+      map[dateStr].sort((a, b) => {
+        // Highlighting user first if matches
+        const aIsHighlighted = effectiveHighlightEmployee && a.employee.id === effectiveHighlightEmployee.id;
+        const bIsHighlighted = effectiveHighlightEmployee && b.employee.id === effectiveHighlightEmployee.id;
+        if (aIsHighlighted && !bIsHighlighted) return -1;
+        if (!aIsHighlighted && bIsHighlighted) return 1;
 
-  const [customNotificationsDocs, setCustomNotificationsDocs] = useState<CustomNotificationDoc[]>([]);
-  const [isSendNotificationModalOpen, setIsSendNotificationModalOpen] = useState(false);
-
-  useEffect(() => {
-    if (!db || !user) {
-      setCustomNotificationsDocs([]);
-      return;
-    }
-
-    const unsub = onSnapshot(doc(db, 'settings', 'custom_notifications'), async (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        const allItems: CustomNotificationDoc[] = data?.items || [];
-        
-        // Mantém apenas notificações criadas no dia de hoje (limpeza automática no final do dia)
-        const todayItems = allItems.filter(item => {
-          try {
-            return isToday(parseISO(item.createdAt));
-          } catch {
-            return true;
-          }
-        });
-
-        setCustomNotificationsDocs(todayItems);
-
-        // Se existirem notificações antigas de dias anteriores, limpa silenciosamente no Firestore em segundo plano
-        if (isViewingAsAdmin && allItems.length !== todayItems.length) {
-          try {
-            await setDoc(doc(db, 'settings', 'custom_notifications'), { items: todayItems }, { merge: true });
-          } catch (e) {
-            console.warn('Aviso ao purgar notificações antigas do Firestore:', e);
-          }
-        }
-      } else {
-        setCustomNotificationsDocs([]);
-      }
-    }, (err) => {
-      console.warn('Aviso ao escutar notificações personalizadas:', err);
-      setCustomNotificationsDocs([]);
+        const nameA = a.employee.artisticName || a.employee.name;
+        const nameB = b.employee.artisticName || b.employee.name;
+        return nameA.localeCompare(nameB, 'pt-BR');
+      });
     });
 
-    return () => unsub();
-  }, [db, user, isViewingAsAdmin]);
+    return map;
+  }, [monthDays, employees, effectiveHighlightEmployee]);
 
-  const activeUserKey = isViewingAsAdmin
-    ? 'admin'
-    : (simulationActive ? `emp_${simulatedEmployeeId}` : (user?.email || user?.uid || 'user'));
+  // Metrics calculation
+  const metrics = useMemo(() => {
+    const activeDaysSet = new Set<string>();
+    const scheduledEmployeesSet = new Set<string>();
+    let totalShiftsCount = 0;
+    let myDaysCount = 0;
 
-  const [readNotificationIds, setReadNotificationIds] = useState<string[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(`read_notifications_${activeUserKey}`) || '[]');
-    } catch {
-      return [];
-    }
-  });
-
-  const [dismissedNotificationIds, setDismissedNotificationIds] = useState<string[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(`dismissed_notifications_${activeUserKey}`) || '[]');
-    } catch {
-      return [];
-    }
-  });
-
-  useEffect(() => {
-    try {
-      const read = JSON.parse(localStorage.getItem(`read_notifications_${activeUserKey}`) || '[]');
-      setReadNotificationIds(read);
-
-      const dism = JSON.parse(localStorage.getItem(`dismissed_notifications_${activeUserKey}`) || '[]');
-      setDismissedNotificationIds(dism);
-    } catch (e) {
-      console.error(e);
-    }
-  }, [activeUserKey]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(`read_notifications_${activeUserKey}`, JSON.stringify(readNotificationIds));
-    } catch {}
-  }, [readNotificationIds, activeUserKey]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(`dismissed_notifications_${activeUserKey}`, JSON.stringify(dismissedNotificationIds));
-    } catch {}
-  }, [dismissedNotificationIds, activeUserKey]);
-
-  const allNotifications = useMemo(() => {
-    const list: AppNotification[] = [];
-
-    // 1. Cancellation notifications (for admins)
-    if (isViewingAsAdmin) {
-      cancellations.forEach(c => {
-        const notifId = `cancellation_${c.id}`;
-        if (!dismissedNotificationIds.includes(notifId)) {
-          list.push({
-            id: notifId,
-            type: 'cancellation',
-            title: `Cancelamento: ${c.employeeName}`,
-            message: `Solicitou o cancelamento da escala do dia ${format(parseISO(c.date), 'dd/MM/yyyy')} (${c.type === 'party' ? 'Festa 🥳' : 'Diária CCSP'}).`,
-            date: c.cancelledAt,
-            isRead: c.viewedByAdmins || readNotificationIds.includes(notifId),
-            employeeId: c.employeeId,
-            targetDate: c.date
-          });
+    Object.entries(dailyScheduleMap).forEach(([dateStr, items]) => {
+      if (items.length > 0) {
+        activeDaysSet.add(dateStr);
+      }
+      items.forEach(item => {
+        scheduledEmployeesSet.add(item.employee.id);
+        totalShiftsCount++;
+        if (effectiveHighlightEmployee && item.employee.id === effectiveHighlightEmployee.id) {
+          myDaysCount++;
         }
       });
-
-      // 1.5 Extraordinary Availability notifications (for admins)
-      Object.entries(dayConfigs || {}).forEach(([dateStr, cfg]) => {
-        const dayCfg = cfg as DayConfig;
-        if (!dayCfg) return;
-        const lockedMap = dayCfg.extraordinaryLockedAvailabilities;
-        const isExtraOpen = !!dayCfg.isExtraordinaryOpen;
-        if (!lockedMap && !isExtraOpen) return;
-
-        employees.forEach(emp => {
-          const empAvails = (emp.availabilities || []).filter(a => a === dateStr || a.startsWith(`${dateStr}_`));
-          if (empAvails.length === 0) return;
-
-          const lockedKeys = lockedMap?.[emp.id] || [];
-          const extraKeys = lockedMap
-            ? empAvails.filter(k => !lockedKeys.includes(k) && (k !== dateStr || !lockedKeys.includes(`${dateStr}_common`)))
-            : (isExtraOpen ? empAvails : []);
-
-          extraKeys.forEach(extraKey => {
-            const notifId = `extraordinary_avail_${emp.id}_${dateStr}_${extraKey}`;
-            if (!dismissedNotificationIds.includes(notifId)) {
-              let detail = 'Disponibilidade';
-              if (extraKey === dateStr || extraKey.includes('_common')) {
-                detail = 'Diária CCSP';
-              } else if (extraKey.includes('_party')) {
-                const partyId = extraKey.replace(`${dateStr}_party_`, '');
-                const party = dayCfg.parties?.find(p => p.id === partyId);
-                detail = party ? `Festa (${party.name})` : 'Festa';
-              }
-
-              let formattedDate = dateStr;
-              try {
-                formattedDate = format(parseISO(dateStr), 'dd/MM/yyyy');
-              } catch {}
-
-              list.push({
-                id: notifId,
-                type: 'extraordinary_avail',
-                title: `⚡ Abertura Extra: ${emp.artisticName || emp.name}`,
-                message: `${emp.artisticName || emp.name} enviou disponibilidade (${detail}) para o dia ${formattedDate} após a Abertura Extra.`,
-                date: new Date().toISOString(),
-                isRead: readNotificationIds.includes(notifId),
-                employeeId: emp.id,
-                targetDate: dateStr
-              });
-            }
-          });
-        });
-      });
-    }
-
-    // 2. Deadline notifications
-    const currentMonthKey = format(currentMonth, 'yyyy-MM');
-    const currentDeadline = deadlines?.[currentMonthKey];
-    if (currentDeadline) {
-      const deadlineDate = new Date(currentDeadline);
-      const isExpired = new Date() > deadlineDate;
-      const deadlineNotifId = `deadline_${currentMonthKey}_${isExpired ? 'expired' : 'active'}`;
-
-      if (!dismissedNotificationIds.includes(deadlineNotifId)) {
-        list.push({
-          id: deadlineNotifId,
-          type: isExpired ? 'deadline_expired' : 'deadline_warning',
-          title: isExpired ? 'Prazo de Disponibilidades Encerrado' : 'Prazo de Disponibilidades Ativo',
-          message: isExpired
-            ? `O prazo para envio de disponibilidades de ${format(currentMonth, 'MMMM', { locale: ptBR })} encerrou em ${format(deadlineDate, "dd/MM/yyyy 'às' HH:mm")}.`
-            : `Defina suas disponibilidades de ${format(currentMonth, 'MMMM', { locale: ptBR })} até ${format(deadlineDate, "dd/MM/yyyy 'às' HH:mm")}.`,
-          date: new Date().toISOString(),
-          isRead: readNotificationIds.includes(deadlineNotifId)
-        });
-      }
-    }
-
-    // 3. Custom broadcast or targeted notifications
-    const myRecord = simulationActive
-      ? employees.find(e => e.id === simulatedEmployeeId)
-      : employees[0];
-
-    customNotificationsDocs.forEach(cNotif => {
-      const notifId = `custom_${cNotif.id}`;
-      if (dismissedNotificationIds.includes(notifId)) return;
-
-      const isTargetedToMe = !isViewingAsAdmin && (
-        cNotif.targetType === 'all' || 
-        (myRecord && cNotif.targetEmployeeId === myRecord.id)
-      );
-
-      if (isViewingAsAdmin || isTargetedToMe) {
-        let displayTitle = cNotif.title;
-        if (isViewingAsAdmin && cNotif.targetType === 'specific' && cNotif.targetEmployeeName) {
-          displayTitle = `${cNotif.title} (Para: ${cNotif.targetEmployeeName})`;
-        }
-
-        list.push({
-          id: notifId,
-          type: 'custom',
-          title: displayTitle,
-          message: cNotif.message,
-          date: cNotif.createdAt,
-          isRead: isViewingAsAdmin ? true : readNotificationIds.includes(notifId),
-          employeeId: cNotif.targetEmployeeId
-        });
-      }
     });
 
-    return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [cancellations, deadlines, currentMonth, isViewingAsAdmin, readNotificationIds, dismissedNotificationIds, customNotificationsDocs, employees, dayConfigs, simulationActive, simulatedEmployeeId]);
+    return {
+      activeDaysCount: activeDaysSet.size,
+      totalEmployeesCount: scheduledEmployeesSet.size,
+      totalShiftsCount,
+      myDaysCount
+    };
+  }, [dailyScheduleMap, effectiveHighlightEmployee]);
 
-  const unreadNotificationsCount = useMemo(() => {
-    return allNotifications.filter(n => !n.isRead).length;
-  }, [allNotifications]);
+  // Filtered days list matching search query, event filter, and "onlyMyDays"
+  const filteredMonthDays = useMemo(() => {
+    return displayedDays.filter(day => {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      const items = dailyScheduleMap[dateStr] || [];
 
-  const handleSendCustomNotification = async (data: {
-    title: string;
-    message: string;
-    targetType: 'all' | 'specific';
-    targetEmployeeId?: string;
-    targetEmployeeName?: string;
-  }) => {
-    if (!user || !db || !isViewingAsAdmin) {
-      return { success: false, error: 'Apenas administradores podem enviar notificações.' };
-    }
-
-    try {
-      const newNotif: CustomNotificationDoc = {
-        id: Date.now().toString() + '_' + Math.random().toString(36).substring(2, 7),
-        title: data.title,
-        message: data.message,
-        targetType: data.targetType,
-        ...(data.targetType === 'specific' && data.targetEmployeeId ? { targetEmployeeId: data.targetEmployeeId } : {}),
-        ...(data.targetType === 'specific' && data.targetEmployeeName ? { targetEmployeeName: data.targetEmployeeName } : {}),
-        createdAt: new Date().toISOString(),
-        createdBy: user.email || 'Admin'
-      };
-
-      const docRef = doc(db, 'settings', 'custom_notifications');
-      const docSnap = await getDoc(docRef);
-      let items: CustomNotificationDoc[] = [];
-      if (docSnap.exists()) {
-        items = docSnap.data().items || [];
-      }
-      // Adiciona no início e limita aos 25 mais recentes para otimizar custo e armazenamento no Firestore
-      items.unshift(newNotif);
-      if (items.length > 25) {
-        items = items.slice(0, 25);
+      // 1. If "onlyMyDays" is active, check if effectiveHighlightEmployee is scheduled on this day
+      if (onlyMyDays && effectiveHighlightEmployee) {
+        const isEmployeeInDay = items.some(item => item.employee.id === effectiveHighlightEmployee.id);
+        if (!isEmployeeInDay) return false;
       }
 
-      await setDoc(docRef, { items }, { merge: true });
-      return { success: true };
-    } catch (err: any) {
-      console.error('Erro ao enviar notificação personalizada:', err);
-      return { success: false, error: err.message || 'Erro ao salvar notificação.' };
-    }
-  };
-
-  const handleMarkNotificationRead = async (notifId: string) => {
-    setReadNotificationIds(prev => Array.from(new Set([...prev, notifId])));
-    if (notifId.startsWith('cancellation_')) {
-      const cancellationId = notifId.replace('cancellation_', '');
-      await handleMarkCancellationRead(cancellationId);
-    }
-  };
-
-  const handleMarkAllNotificationsRead = async () => {
-    const unreadIds = allNotifications.filter(n => !n.isRead).map(n => n.id);
-    setReadNotificationIds(prev => Array.from(new Set([...prev, ...unreadIds])));
-
-    const unreadCancellationNotifs = allNotifications.filter(n => !n.isRead && n.type === 'cancellation');
-    for (const notif of unreadCancellationNotifs) {
-      const cancellationId = notif.id.replace('cancellation_', '');
-      await handleMarkCancellationRead(cancellationId);
-    }
-  };
-
-  const handleDismissNotification = async (notifId: string) => {
-    setDismissedNotificationIds(prev => Array.from(new Set([...prev, notifId])));
-  };
-
-  const handleDeleteCustomNotification = async (customNotifId: string) => {
-    if (!db) return;
-    try {
-      const docRef = doc(db, 'settings', 'custom_notifications');
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const items: CustomNotificationDoc[] = docSnap.data().items || [];
-        const updated = items.filter(i => i.id !== customNotifId);
-        await setDoc(docRef, { items: updated }, { merge: true });
+      // 2. Check event filter
+      if (eventFilter === 'common') {
+        const hasCommon = items.some(item => item.workDay.type === 'common');
+        if (!hasCommon) return false;
+      } else if (eventFilter === 'party') {
+        const hasParty = items.some(item => item.workDay.type === 'party');
+        if (!hasParty) return false;
       }
-    } catch (err) {
-      console.error('Erro ao excluir notificação do histórico:', err);
-    }
-  };
 
-  const handleUpdatePhoto = async (employeeId: string, photoUrl: string) => {
-    if (!db) return;
-    try {
-      const empRef = doc(db, 'employees', employeeId);
-      await updateDoc(empRef, { photoUrl });
-
-      setEmployees(prev => prev.map(emp => emp.id === employeeId ? { ...emp, photoUrl } : emp));
-      if (selectedStoryEmployee?.id === employeeId) {
-        setSelectedStoryEmployee(prev => prev ? { ...prev, photoUrl } : null);
-      }
-    } catch (error: any) {
-      console.error("Erro ao atualizar foto de perfil:", error);
-      handleFirestoreError(error, OperationType.UPDATE, 'employees');
-    }
-  };
-
-  // Native browser & mobile device notification trigger
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-      const unreadList = allNotifications.filter(n => !n.isRead);
-      if (unreadList.length > 0) {
-        const lastUnread = unreadList[0];
-        const lastNotified = localStorage.getItem('last_notified_id');
-        if (lastNotified !== lastUnread.id) {
-          const emitDeviceNotification = async () => {
-            try {
-              // Prefer Service Worker showNotification for mobile notification bar support
-              if ('serviceWorker' in navigator) {
-                const reg = await navigator.serviceWorker.ready;
-                if (reg && reg.showNotification) {
-                  await reg.showNotification(lastUnread.title, {
-                    body: lastUnread.message,
-                    icon: '/logo.svg',
-                    badge: '/logo.svg',
-                    vibrate: [200, 100, 200],
-                    tag: lastUnread.id,
-                  } as NotificationOptions & { vibrate?: number[] });
-                  localStorage.setItem('last_notified_id', lastUnread.id);
-                  return;
-                }
-              }
-              // Fallback to standard Notification API
-              new Notification(lastUnread.title, {
-                body: lastUnread.message,
-                icon: '/logo.svg'
-              });
-              localStorage.setItem('last_notified_id', lastUnread.id);
-            } catch (e) {
-              console.error('Erro ao emitir notificação nativa:', e);
-            }
-          };
-          emitDeviceNotification();
-        }
-      }
-    }
-  }, [allNotifications]);
-
-  const handleSaveEmployee = async (data: Partial<Employee>): Promise<{ success: boolean; error?: string }> => {
-    if (!user || !db) return { success: false, error: "Usuário não autenticado." };
-
-    const sanitizedData = { ...data };
-    if (sanitizedData.email) {
-      sanitizedData.email = sanitizedData.email.trim().toLowerCase();
-    }
-
-    // Validation: Unique Artistic Name
-    if (sanitizedData.artisticName) {
-      const isArtisticNameTaken = employees.some(emp => 
-        emp.artisticName.trim().toLowerCase() === sanitizedData.artisticName?.trim().toLowerCase() && 
-        emp.id !== selectedEmployee?.id
-      );
-
-      if (isArtisticNameTaken) {
-        return { 
-          success: false, 
-          error: `O nome artístico "${sanitizedData.artisticName}" já está em uso. Por favor, escolha outro.` 
-        };
-      }
-    }
-
-    try {
-      if (selectedEmployee) {
-        const empRef = doc(db, 'employees', selectedEmployee.id);
-        
-        // Detect if level, rates or extra rates changed
-        const levelChanged = sanitizedData.level && sanitizedData.level !== selectedEmployee.level;
-        const dailyRateChanged = sanitizedData.dailyRate !== undefined && sanitizedData.dailyRate !== selectedEmployee.dailyRate;
-        const partyRateChanged = sanitizedData.partyRate !== undefined && sanitizedData.partyRate !== selectedEmployee.partyRate;
-        const extraHourRateChanged = sanitizedData.extraHourRate !== undefined && sanitizedData.extraHourRate !== selectedEmployee.extraHourRate;
-
-        let currentPromotions: Promotion[] = sanitizedData.promotions || selectedEmployee.promotions || [];
-
-        if (levelChanged || dailyRateChanged || partyRateChanged || extraHourRateChanged) {
-          const effectiveDate = sanitizedData.promotionEffectiveDate || format(new Date(), 'yyyy-MM-dd');
-          
-          const newPromotion: Promotion = {
-            id: Math.random().toString(36).substring(2, 9),
-            date: effectiveDate,
-            previousLevel: selectedEmployee.level,
-            newLevel: sanitizedData.level || selectedEmployee.level,
-            previousDailyRate: selectedEmployee.dailyRate,
-            newDailyRate: sanitizedData.dailyRate !== undefined ? sanitizedData.dailyRate : selectedEmployee.dailyRate,
-            previousPartyRate: selectedEmployee.partyRate,
-            newPartyRate: sanitizedData.partyRate !== undefined ? sanitizedData.partyRate : selectedEmployee.partyRate,
-          };
-
-          currentPromotions = [...currentPromotions, newPromotion];
-        }
-
-        // Recalculate full timeline to ensure level, rates, and workDays are completely consistent
-        const recalculated = recalculateEmployeeTimeline(
-          { ...selectedEmployee, ...sanitizedData },
-          currentPromotions
+      // 3. Check search query (matches if ANY employee, party name or shift on that day matches)
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchesAny = items.some(item => 
+          item.employee.name.toLowerCase().includes(q) ||
+          item.employee.artisticName.toLowerCase().includes(q) ||
+          (item.workDay.partyName && item.workDay.partyName.toLowerCase().includes(q)) ||
+          (item.workDay.shift && item.workDay.shift.toLowerCase().includes(q))
         );
-
-        sanitizedData.promotions = recalculated.promotions;
-        sanitizedData.level = recalculated.level;
-        sanitizedData.dailyRate = recalculated.dailyRate;
-        sanitizedData.partyRate = recalculated.partyRate;
-        sanitizedData.workDays = recalculated.workDays;
-
-        delete sanitizedData.promotionEffectiveDate;
-        await updateDoc(empRef, sanitizedData);
-      } else {
-        // Ao criar novo, o userId pode ser vazio se for um convite por email
-        // Se o email for do próprio admin, vincula a ele, senão deixa para o funcionário vincular no primeiro login
-        const isSelf = sanitizedData.email === user.email?.trim().toLowerCase();
-        await addDoc(collection(db, 'employees'), {
-          ...sanitizedData,
-          userId: isSelf ? user.uid : '',
-          workDays: []
-        });
+        if (!matchesAny) return false;
       }
-      return { success: true };
-    } catch (error: any) {
-      console.error("Error saving employee:", error);
-      handleFirestoreError(error, selectedEmployee ? OperationType.UPDATE : OperationType.CREATE, selectedEmployee ? `employees/${selectedEmployee.id}` : 'employees');
-      return { 
-        success: false, 
-        error: "Erro ao salvar funcionário. Verifique sua conexão." 
-      };
-    }
-  };
 
-  const handleInactivateEmployee = useCallback(async (id: string) => {
-    if (!id || !db) return;
-    try {
-      const docRef = doc(db, 'employees', id);
-      await updateDoc(docRef, {
-        status: 'inactive',
-        inactivatedAt: new Date().toISOString()
-      });
-      console.log("Employee inactivated successfully:", id);
-    } catch (error: any) {
-      console.error("handleInactivateEmployee error:", error);
-      handleFirestoreError(error, OperationType.UPDATE, `employees/${id}`);
-      alert("Erro ao desativar funcionário: " + (error.message || "Erro desconhecido."));
-      throw error;
-    }
-  }, [db]);
-
-  const handleReactivateEmployee = useCallback(async (id: string) => {
-    if (!id || !db) return;
-    try {
-      const docRef = doc(db, 'employees', id);
-      await updateDoc(docRef, {
-        status: 'active',
-        inactivatedAt: null
-      });
-      console.log("Employee reactivated successfully:", id);
-    } catch (error: any) {
-      console.error("handleReactivateEmployee error:", error);
-      handleFirestoreError(error, OperationType.UPDATE, `employees/${id}`);
-      alert("Erro ao reativar funcionário: " + (error.message || "Erro desconhecido."));
-      throw error;
-    }
-  }, [db]);
-
-  const handlePurgeExpiredInactives = useCallback(async () => {
-    if (!db) return;
-    const SIX_MONTHS_MS = 180 * 24 * 60 * 60 * 1000;
-    const now = Date.now();
-
-    const expired = employees.filter(emp => {
-      if (emp.status !== 'inactive' || !emp.inactivatedAt) return false;
-      const inactTime = new Date(emp.inactivatedAt).getTime();
-      return (now - inactTime) >= SIX_MONTHS_MS;
+      return true;
     });
+  }, [displayedDays, onlyMyDays, effectiveHighlightEmployee, eventFilter, searchQuery, dailyScheduleMap]);
 
-    if (expired.length === 0) {
-      alert("Nenhum funcionário desativado há mais de 6 meses encontrado.");
-      return;
-    }
-
-    if (!window.confirm(`Deseja excluir definitivamente ${expired.length} funcionário(s) desativado(s) há mais de 6 meses? Esta ação não pode ser desfeita.`)) {
-      return;
-    }
-
-    try {
-      for (const emp of expired) {
-        await deleteDoc(doc(db, 'employees', emp.id));
-      }
-      alert(`${expired.length} funcionário(s) desativado(s) há mais de 6 meses excluído(s) com sucesso da base de dados.`);
-    } catch (error: any) {
-      console.error("handlePurgeExpiredInactives error:", error);
-      alert("Erro ao excluir desativados expirados: " + error.message);
-    }
-  }, [db, employees]);
-
-  const handleDeleteEmployee = useCallback(async (id: string) => {
-    if (!id) {
-      console.error("handleDeleteEmployee: ID is missing");
-      return;
-    }
-    
-    console.log("handleDeleteEmployee: Attempting to delete employee with ID:", id);
-
-    try {
-      if (!db) {
-        throw new Error("Banco de dados não inicializado. Verifique sua configuração do Firebase.");
-      }
-      
-      const docRef = doc(db, 'employees', id);
-      await deleteDoc(docRef);
-      console.log("handleDeleteEmployee: Employee deleted successfully from Firestore:", id);
-    } catch (error: any) {
-      console.error("handleDeleteEmployee: Error deleting employee:", error);
-      handleFirestoreError(error, OperationType.DELETE, `employees/${id}`);
-      alert("Erro ao excluir funcionário: " + (error.message || "Erro desconhecido. Verifique sua conexão e permissões."));
-      throw error;
-    }
-  }, [db]);
-
+  // Excel Export
   const handleExportExcel = () => {
-    const monthName = format(currentMonth, 'MMMM_yyyy', { locale: ptBR });
-    const monthStart = startOfMonth(currentMonth);
-    const monthEnd = endOfMonth(monthStart);
-    const daysInMonth = eachDayOfInterval({
-      start: monthStart,
-      end: monthEnd,
-    });
+    const rows: any[] = [];
 
-    const data = employees.map(emp => {
-      const monthDays = emp.workDays.filter(d => isSameMonth(parseISO(d.date), currentMonth) && !d.isCancelled);
-      
-      const earnings = monthDays.reduce((acc, day) => {
-        let dayBase = 0;
-        if (day.type === 'common') {
-          dayBase = day.dailyRateAtTime !== undefined ? day.dailyRateAtTime : emp.dailyRate;
-        } else if (day.type === 'party') {
-          dayBase = day.partyRateAtTime !== undefined ? day.partyRateAtTime : emp.partyRate;
-        }
-        const extraRate = day.extraHourRateAtTime !== undefined ? day.extraHourRateAtTime : emp.extraHourRate;
-        const extra = (day.extraHours || 0) * extraRate;
-        return acc + dayBase + extra;
-      }, 0);
+    monthDays.forEach(day => {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      const formattedDate = format(day, "dd/MM/yyyy (EEEE)", { locale: ptBR });
+      const config = dayConfigs[dateStr];
+      const items = dailyScheduleMap[dateStr] || [];
 
-      const row: any = {
-        'Nome': emp.name,
-        'Nome Artístico': emp.artisticName,
-        'Nível': emp.level,
-        'Dias Trabalhados': monthDays.length,
-        'Total a Receber': earnings,
-      };
-
-      daysInMonth.forEach(day => {
-        const dayStr = format(day, 'yyyy-MM-dd');
-        const workDay = monthDays.find(d => d.date === dayStr);
-        const dayLabel = format(day, 'dd/MM');
-        
-        if (workDay) {
-          let typeLabel = workDay.type === 'common' ? 'CCSP' : 'Festa';
-          if (workDay.extraHours) typeLabel += ` (+${workDay.extraHours}h)`;
-          row[dayLabel] = typeLabel;
-        } else {
-          row[dayLabel] = '-';
-        }
-      });
-
-      return row;
-    });
-
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Relatório Mensal");
-    
-    const maxWidths = data.reduce((acc: any, row: any) => {
-      Object.keys(row).forEach((key, i) => {
-        const val = String(row[key]);
-        acc[key] = Math.max(acc[key] || 0, val.length, key.length);
-      });
-      return acc;
-    }, {});
-    
-    worksheet['!cols'] = Object.keys(maxWidths).map(key => ({ wch: maxWidths[key] + 2 }));
-
-    XLSX.writeFile(workbook, `Relatorio_${monthName}.xlsx`);
-  };
-
-  const handleUpdateDays = async (employeeId: string, days: WorkDay[]) => {
-    if (!user || !db) return;
-    try {
-      const empRef = doc(db, 'employees', employeeId);
-      await updateDoc(empRef, { workDays: days });
-    } catch (error) {
-      console.error("Error updating work days:", error);
-      handleFirestoreError(error, OperationType.UPDATE, `employees/${employeeId}`);
-    }
-  };
-
-  const handleUpdateAvailabilities = async (employeeId: string, availabilities: string[]) => {
-    if (!user || !db) return;
-    try {
-      const empRef = doc(db, 'employees', employeeId);
-      await updateDoc(empRef, { availabilities });
-    } catch (error: any) {
-      console.error("Error updating availabilities:", error);
-      alert("Erro ao salvar suas disponibilidades: " + (error.message || "Verifique sua conexão e permissões do banco de dados."));
-      handleFirestoreError(error, OperationType.UPDATE, `employees/${employeeId}`);
-    }
-  };
-
-  const handleUpdateDeadline = async (monthKey: string, deadlineIso: string) => {
-    if (!db) return;
-    try {
-      const docRef = doc(db, 'settings', 'deadlines');
-      await setDoc(docRef, { [monthKey]: deadlineIso }, { merge: true });
-    } catch (error) {
-      console.error("Error updating deadline:", error);
-      handleFirestoreError(error, OperationType.WRITE, 'settings/deadlines');
-    }
-  };
-
-  const handleUpdateDayConfig = async (dateStr: string, config: DayConfig) => {
-    if (!db) return;
-    try {
-      const cleanConfig: Record<string, any> = {};
-      Object.entries(config).forEach(([key, value]) => {
-        if (value !== undefined) {
-          cleanConfig[key] = value;
-        }
-      });
-      const docRef = doc(db, 'settings', 'dayConfigs');
-      await setDoc(docRef, { [dateStr]: cleanConfig }, { merge: true });
-    } catch (error) {
-      console.error("Error updating day config:", error);
-      handleFirestoreError(error, OperationType.WRITE, 'settings/dayConfigs');
-    }
-  };
-
-  const handleCancelWorkDay = async (employeeId: string, dateStr: string, type: 'common' | 'party', employeeName: string) => {
-    if (!user || !db) return;
-    try {
-      const empRef = doc(db, 'employees', employeeId);
-      const empSnap = await getDoc(empRef);
-      if (empSnap.exists()) {
-        const empData = empSnap.data() as Employee;
-        const updatedWorkDays = (empData.workDays || []).map(d => {
-          if (d.date === dateStr) {
-            return {
-              ...d,
-              isCancelled: true,
-              cancelledAt: new Date().toISOString(),
-              cancellationViewed: false
-            };
-          }
-          return d;
+      if (items.length === 0) {
+        rows.push({
+          Data: formattedDate,
+          'Tipo de Dia': config?.isCommon ? 'CCSP' : 'Sem Escala',
+          'Recreador / Funcionário': '-',
+          'Nível': '-',
+          'Turno / Horário': '-',
+          'Evento / Festa': '-'
         });
-
-        // Remove the availability for this date so the employee doesn't show as available anymore after cancelling
-        const currentAvailabilities = empData.availabilities || [];
-        const updatedAvailabilities = currentAvailabilities.filter(av => 
-          av !== dateStr && av !== `${dateStr}_common` && av !== `${dateStr}_party`
-        );
-
-        await updateDoc(empRef, { 
-          workDays: updatedWorkDays,
-          availabilities: updatedAvailabilities
-        });
-      }
-    } catch (error: any) {
-      console.error("Error cancelling workday:", error);
-      alert("Erro ao cancelar escala: " + (error.message || String(error)));
-    }
-  };
-
-  const handleMarkCancellationRead = async (cancellationId: string) => {
-    if (!db) return;
-    try {
-      const [employeeId, dateStr] = cancellationId.split('_');
-      if (employeeId && dateStr) {
-        const empRef = doc(db, 'employees', employeeId);
-        const empSnap = await getDoc(empRef);
-        if (empSnap.exists()) {
-          const empData = empSnap.data() as Employee;
-          const updatedWorkDays = (empData.workDays || []).map(d => {
-            if (d.date === dateStr) {
-              return { ...d, cancellationViewed: true };
-            }
-            return d;
-          });
-          await updateDoc(empRef, { workDays: updatedWorkDays });
-        }
-      }
-    } catch (error) {
-      console.error("Error marking cancellation as read:", error);
-    }
-  };
-
-  const handleDismissCancellation = async (cancellationId: string) => {
-    if (!db) return;
-    try {
-      const [employeeId, dateStr] = cancellationId.split('_');
-      if (employeeId && dateStr) {
-        const empRef = doc(db, 'employees', employeeId);
-        const empSnap = await getDoc(empRef);
-        if (empSnap.exists()) {
-          const empData = empSnap.data() as Employee;
-          const updatedWorkDays = (empData.workDays || []).map(d => {
-            if (d.date === dateStr) {
-              return { ...d, cancellationDismissed: true };
-            }
-            return d;
-          });
-          await updateDoc(empRef, { workDays: updatedWorkDays });
-        }
-      }
-    } catch (error) {
-      console.error("Error dismissing cancellation:", error);
-    }
-  };
-
-  const handleLogin = async () => {
-    if (!auth) return;
-    setAuthError(null);
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (error: any) {
-      const isCancelError = error && (
-        error.code === 'auth/cancelled-popup-request' || 
-        error.code === 'auth/popup-closed-by-user' ||
-        error.message?.includes('cancelled-popup-request') ||
-        error.message?.includes('popup-closed-by-user')
-      );
-      if (isCancelError) {
-        console.log("Login cancelado pelo usuário ou janela fechada.");
       } else {
-        console.error("Login error:", error);
-        if (isInAppBrowser()) {
-          setAuthError("O login do Google foi bloqueado pelo navegador do WhatsApp/Instagram. Por favor, copie o link acima e abra direto no Safari ou Chrome.");
-        } else {
-          setAuthError("Não foi possível conectar com o Google (" + (error.message || "Erro de conexão") + "). Tente abrir no Chrome ou Safari.");
-        }
+        items.forEach(item => {
+          rows.push({
+            Data: formattedDate,
+            'Tipo de Dia': item.workDay.type === 'party' ? 'Festa' : 'CCSP',
+            'Recreador / Funcionário': item.employee.artisticName || item.employee.name,
+            'Nível': item.employee.level,
+            'Turno / Horário': item.workDay.shift || (item.workDay.type === 'party' ? 'Festa' : 'CCSP Padrão'),
+            'Evento / Festa': item.workDay.partyName || '-'
+          });
+        });
       }
-    }
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, `Escala_${format(currentMonth, 'MM-yyyy')}`);
+    XLSX.writeFile(workbook, `Escala_Liga_Positiva_${format(currentMonth, 'yyyy_MM')}.xlsx`);
   };
 
-  if (!isFirebaseConfigured) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-brand-bg p-4">
-        <div className="bg-brand-card border border-red-500/30 p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
-          <AlertTriangle className="mx-auto text-red-500 mb-4" size={48} />
-          <h1 className="text-2xl font-bold text-white mb-2">Configuração Necessária</h1>
-          <p className="text-gray-400 mb-6">As chaves do Firebase não foram configuradas. Por favor, adicione as variáveis de ambiente nos Secrets do AI Studio.</p>
-          <div className="text-left bg-black/30 p-4 rounded-lg text-xs font-mono text-gray-300 space-y-1">
-            <p>VITE_FIREBASE_API_KEY</p>
-            <p>VITE_FIREBASE_AUTH_DOMAIN</p>
-            <p>VITE_FIREBASE_PROJECT_ID</p>
-            <p>...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const handlePrint = () => {
+    window.print();
+  };
 
-  if (loading || adminCheckLoading || (user && employeesLoading)) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-brand-bg">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-brand-primary"></div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-brand-bg p-4">
-        <div className="bg-brand-card border border-brand-border p-6 md:p-8 rounded-2xl shadow-2xl max-w-md w-full text-center flex flex-col items-center">
-          <div className="mb-6 flex justify-center">
-            <Logo size={96} />
-          </div>
-          <h1 className="text-2xl md:text-4xl font-black text-brand-primary mb-2">
-            Liga Positiva{isSimulationEnabled ? ' Dev2' : ''}
-          </h1>
-          <p className="text-gray-400 mb-6">Administração de Recreadores</p>
-          
-          {/* Guia de Navegador In-App (WhatsApp/Instagram) */}
-          <InAppBrowserGuide />
-
-          {authError && (
-            <div className="w-full my-3 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-300 text-left flex items-start gap-2">
-              <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
-              <span>{authError}</span>
-            </div>
-          )}
-
-          <button 
-            onClick={handleLogin}
-            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-900 font-bold py-4 px-6 rounded-xl transition-all transform hover:scale-[1.02] active:scale-[0.98] mt-2 shadow-lg"
-          >
-            <LogIn size={20} />
-            Entrar com Google
-          </button>
-          
-          <p className="mt-4 text-xs text-gray-500">Todo e qualquer problema contate o administrador (Cacheado)</p>
-          <p className="mt-1 text-xs text-gray-500">
-            Ao entrar, você concorda com nossos termos de serviço.
-          </p>
-        </div>
-        <PWAInstallPrompt />
-      </div>
-    );
-  }
-
-  // Interface do Funcionário (Não Admin)
-  if (!isViewingAsAdmin) {
-    const userEmailLower = (user?.email || '').trim().toLowerCase();
-    const myEmployeeRecord = simulationActive
-      ? employees.find(emp => emp.id === simulatedEmployeeId)
-      : (employees.find(emp => 
-          (userEmailLower && (emp.email || '').trim().toLowerCase() === userEmailLower) || 
-          (user?.uid && emp.userId === user.uid)
-        ) || employees[0]);
-
-    return (
-      <div className="min-h-screen bg-brand-bg pb-12">
-        {isSimulationEnabled && isAdmin && (
-          <SimulationBanner 
-            employees={employees}
-            simulationActive={simulationActive}
-            setSimulationActive={setSimulationActive}
-            simulatedEmployeeId={simulatedEmployeeId}
-            setSimulatedEmployeeId={setSimulatedEmployeeId}
-            realUserEmail={user.email}
-          />
-        )}
-        <Header 
-          viewMode="grid"
-          setViewMode={() => {}}
-          onAddEmployee={() => {}}
-          searchQuery=""
-          setSearchQuery={() => {}}
-          isDarkMode={isDarkMode}
-          toggleTheme={() => setIsDarkMode(!isDarkMode)}
-          onExportExcel={() => {}}
-          hideControls={true}
-          isAdmin={false}
-          notifications={allNotifications}
-          unreadNotificationsCount={unreadNotificationsCount}
-          onMarkNotificationRead={handleMarkNotificationRead}
-          onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
-          onDismissNotification={handleDismissNotification}
-          onOpenSendNotificationModal={() => setIsSendNotificationModalOpen(true)}
-          customNotificationsDocs={customNotificationsDocs}
-          onDeleteCustomNotification={handleDeleteCustomNotification}
-          onNavigateToCalendar={() => {
-            setSidebarTab('cancellations');
-            setViewMode('calendar');
-          }}
-        />
-
-        <main className={`w-full mx-auto px-2 md:px-4 py-4 md:py-8 ${employeeActiveTab === 'master_schedule' ? 'max-w-7xl' : 'max-w-4xl'}`}>
-          {myEmployeeRecord ? (
-            <div className="space-y-6">
-              {/* Navegação de Abas da Interface do Funcionário (Alinhadas Lado a Lado) */}
-              <div className="grid grid-cols-3 gap-1.5 sm:gap-3 border-b border-brand-border pb-3 w-full">
-                <button
-                  type="button"
-                  onClick={() => setEmployeeActiveTab('schedule')}
-                  className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all text-center whitespace-nowrap ${
-                    employeeActiveTab === 'schedule'
-                      ? 'bg-brand-primary text-slate-900 shadow-md ring-1 ring-brand-primary/50'
-                      : 'bg-brand-card hover:bg-brand-primary/10 text-gray-700 dark:text-gray-300 hover:text-brand-text border border-brand-border'
-                  }`}
-                >
-                  <Calendar size={18} className="shrink-0" />
-                  <span className="truncate">
-                    <span className="inline md:hidden">Meu Calendário</span>
-                    <span className="hidden md:inline">Meu Calendário & Disponibilidade</span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEmployeeActiveTab('master_schedule')}
-                  className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all text-center whitespace-nowrap ${
-                    employeeActiveTab === 'master_schedule'
-                      ? 'bg-brand-primary text-slate-900 shadow-md ring-1 ring-brand-primary/50'
-                      : 'bg-brand-card hover:bg-brand-primary/10 text-gray-700 dark:text-gray-300 hover:text-brand-text border border-brand-border'
-                  }`}
-                >
-                  <Table size={18} className="shrink-0" />
-                  <span className="truncate">
-                    <span className="inline md:hidden">Escala Geral</span>
-                    <span className="hidden md:inline">Escala Geral Mensal</span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEmployeeActiveTab('story')}
-                  className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all text-center whitespace-nowrap ${
-                    employeeActiveTab === 'story'
-                      ? 'bg-brand-primary text-slate-900 shadow-md ring-1 ring-brand-primary/50'
-                      : 'bg-brand-card hover:bg-brand-primary/10 text-gray-700 dark:text-gray-300 hover:text-brand-text border border-brand-border'
-                  }`}
-                >
-                  <Award size={18} className="shrink-0" />
-                  <span className="truncate">Minha História</span>
-                </button>
-              </div>
-
-              {employeeActiveTab === 'schedule' ? (
-                <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start">
-                  <div className="w-full md:w-1/3">
-                    <EmployeeCard 
-                      employee={myEmployeeRecord}
-                      onEdit={() => {}}
-                      onManageDays={() => {}}
-                      onViewStory={() => setEmployeeActiveTab('story')}
-                      currentMonth={currentMonth}
-                      isReadOnly={true}
-                    />
-                  </div>
-                  <div className="w-full md:w-2/3 space-y-4">
-                    <h2 className="text-lg md:text-xl font-black text-brand-text mb-2">Meu Calendário de Trabalho / Disponibilidade</h2>
-                    <CalendarView 
-                      employees={[myEmployeeRecord]} // Pass the simulated employee as the single record
-                      allEmployees={employees} // Pass all employees to list co-workers
-                      onUpdateDays={() => {}}
-                      currentMonth={currentMonth}
-                      setCurrentMonth={setCurrentMonth}
-                      isReadOnly={false}
-                      isAdmin={false}
-                      deadlines={deadlines}
-                      onUpdateAvailabilities={handleUpdateAvailabilities}
-                      dayConfigs={dayConfigs}
-                      onUpdateDayConfig={handleUpdateDayConfig}
-                      onCancelWorkDay={handleCancelWorkDay}
-                      cancellations={cancellations}
-                      onDismissCancellation={handleDismissCancellation}
-                      onMarkCancellationRead={handleMarkCancellationRead}
-                      sidebarTab={sidebarTab}
-                      onSidebarTabChange={setSidebarTab}
-                    />
-                  </div>
-                </div>
-              ) : employeeActiveTab === 'master_schedule' ? (
-                <MonthlyScheduleView 
-                  employees={activeEmployees}
-                  currentMonth={currentMonth}
-                  setCurrentMonth={setCurrentMonth}
-                  currentEmployee={myEmployeeRecord}
-                  isAdmin={false}
-                  dayConfigs={dayConfigs}
-                />
-              ) : (
-                <EmployeeStoryView 
-                  employee={myEmployeeRecord}
-                  isAdmin={isAdmin}
-                  onEditEmployee={() => {
-                    setSelectedEmployee(myEmployeeRecord);
-                    setIsEmployeeModalOpen(true);
-                  }}
-                  onUpdatePhoto={(photoUrl) => handleUpdatePhoto(myEmployeeRecord.id, photoUrl)}
-                  canEditPhoto={true}
-                />
-              )}
-            </div>
-          ) : (
-            <div className="py-20 text-center">
-              <p className="text-gray-400 text-lg">Você ainda não foi vinculado a um registro de funcionário.</p>
-              <p className="text-sm text-gray-500 mt-2">Entre em contato com o Cacheado e informe seu e-mail: {simulationActive ? '[Simulado Sem Registro]' : user.email}</p>
-            </div>
-          )}
-        </main>
-        <SendNotificationModal
-          isOpen={isSendNotificationModalOpen}
-          onClose={() => setIsSendNotificationModalOpen(false)}
-          onSend={handleSendCustomNotification}
-          employees={activeEmployees}
-        />
-        <PWAInstallPrompt />
-      </div>
-    );
-  }
-
-  // Interface do Admin
   return (
-    <div className="min-h-screen bg-brand-bg pb-12">
-      {isSimulationEnabled && isAdmin && (
-        <SimulationBanner 
-          employees={activeEmployees}
-          simulationActive={simulationActive}
-          setSimulationActive={setSimulationActive}
-          simulatedEmployeeId={simulatedEmployeeId}
-          setSimulatedEmployeeId={setSimulatedEmployeeId}
-          realUserEmail={user.email}
-        />
-      )}
-      <Header 
-        viewMode={viewMode}
-        setViewMode={setViewMode}
-        onAddEmployee={() => {
-          setSelectedEmployee(undefined);
-          setIsEmployeeModalOpen(true);
-        }}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        isDarkMode={isDarkMode}
-        toggleTheme={() => setIsDarkMode(!isDarkMode)}
-        onExportExcel={handleExportExcel}
-        isAdmin={isViewingAsAdmin}
-        notifications={allNotifications}
-        unreadNotificationsCount={unreadNotificationsCount}
-        onMarkNotificationRead={handleMarkNotificationRead}
-        onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
-        onDismissNotification={handleDismissNotification}
-        onOpenSendNotificationModal={() => setIsSendNotificationModalOpen(true)}
-        customNotificationsDocs={customNotificationsDocs}
-        onDeleteCustomNotification={handleDeleteCustomNotification}
-        onNavigateToCalendar={() => {
-          setSidebarTab('cancellations');
-          setViewMode('calendar');
-          setTimeout(() => {
-            document.getElementById('sidebar-panel')?.scrollIntoView({ behavior: 'smooth' });
-          }, 100);
-        }}
-      />
+    <div className="space-y-6">
+      {/* Top Header Card */}
+      <div className="bg-gradient-to-r from-brand-card via-brand-card to-purple-950/30 border border-brand-border rounded-2xl p-4 md:p-6 shadow-xl relative overflow-hidden">
+        {/* Decorative background glow */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-brand-primary/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
+        
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 relative z-10">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                {effectiveHighlightEmployee && (
+                  <span className="text-xs font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                    <Star size={12} className="fill-amber-400 text-amber-400" />
+                    Destaque: {effectiveHighlightEmployee.artisticName || effectiveHighlightEmployee.name}
+                  </span>
+                )}
+              </div>
+              <h1 className="text-xl md:text-3xl font-black text-white flex items-center gap-2">
+                <CalendarIcon className="text-brand-primary shrink-0" size={28} />
+                <span>Escala Mensal Geral</span>
+              </h1>
+              <p className="text-xs md:text-sm text-gray-300 mt-1 max-w-2xl">
+                Acompanhe a escala de trabalho de toda a equipe no mês.
+              </p>
+            </div>
 
-      <main className="w-full mx-auto px-2 md:px-4 py-4 md:py-8 max-w-7xl">
-        {isViewingAsAdmin && unreadCancellations.length > 0 && (
-          <div className="bg-red-500/10 border border-red-500/30 text-red-200 p-4 rounded-xl mb-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg animate-pulse">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="text-red-400 shrink-0" size={24} />
+            {/* Month Selector Controls */}
+            <div className="flex items-center gap-2 bg-brand-bg/80 border border-brand-border p-1.5 rounded-2xl shrink-0 self-stretch sm:self-auto justify-between">
+              <button
+                onClick={handlePrevMonth}
+                className="p-2 hover:bg-brand-card rounded-xl text-gray-300 hover:text-white transition-all active:scale-95"
+                title="Mês Anterior"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              
+              <button
+                onClick={handleCurrentMonth}
+                className="px-3 py-1.5 rounded-xl text-xs md:text-sm font-black text-white hover:text-brand-primary transition-colors text-center"
+                title="Voltar para o Mês Atual"
+              >
+                {format(currentMonth, "MMMM 'de' yyyy", { locale: ptBR }).toUpperCase()}
+              </button>
+
+              <button
+                onClick={handleNextMonth}
+                className="p-2 hover:bg-brand-card rounded-xl text-gray-300 hover:text-white transition-all active:scale-95"
+                title="Próximo Mês"
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
+          </div>
+
+          {/* Stats Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-6 border-t border-brand-border/60">
+            <div className="bg-brand-bg/50 border border-brand-border/80 p-3 rounded-xl flex items-center gap-3">
+              <div className="p-2.5 bg-blue-500/10 text-blue-400 rounded-xl border border-blue-500/20 shrink-0">
+                <CalendarIcon size={20} />
+              </div>
               <div>
-                <p className="text-sm font-black">Atenção! Existem novos cancelamentos de escala:</p>
-                <p className="text-xs text-red-300 font-bold mt-0.5">
-                  {unreadCancellations.map(c => `${c.employeeName} (Dia ${format(parseISO(c.date), 'dd/MM')})`).join(', ')}
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dias com Escala</p>
+                <p className="text-lg md:text-xl font-black text-white">{metrics.activeDaysCount} <span className="text-xs font-normal text-gray-400">/ {monthDays.length}</span></p>
+              </div>
+            </div>
+
+            <div className="bg-brand-bg/50 border border-brand-border/80 p-3 rounded-xl flex items-center gap-3">
+              <div className="p-2.5 bg-purple-500/10 text-purple-400 rounded-xl border border-purple-500/20 shrink-0">
+                <Users size={20} />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL DE RECREADORES</p>
+                <p className="text-lg md:text-xl font-black text-white">{metrics.totalEmployeesCount} <span className="text-xs font-normal text-gray-400">no mês</span></p>
+              </div>
+            </div>
+
+            <div className="bg-brand-bg/50 border border-brand-border/80 p-3 rounded-xl flex items-center gap-3">
+              <div className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20 shrink-0">
+                <Clock size={20} />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total de Turnos</p>
+                <p className="text-lg md:text-xl font-black text-white">{metrics.totalShiftsCount} <span className="text-xs font-normal text-gray-400">turnos</span></p>
+              </div>
+            </div>
+
+            <div className={cn(
+              "p-3 rounded-xl flex items-center gap-3 transition-all border",
+              metrics.myDaysCount > 0 
+                ? "bg-amber-500/15 border-amber-500/40 text-amber-200 shadow-sm"
+                : "bg-brand-bg/50 border-brand-border/80"
+            )}>
+              <div className={cn(
+                "p-2.5 rounded-xl border shrink-0",
+                metrics.myDaysCount > 0 ? "bg-amber-500/20 text-amber-300 border-amber-500/30" : "bg-gray-500/10 text-gray-400 border-gray-500/20"
+              )}>
+                <Star size={20} className={metrics.myDaysCount > 0 ? "fill-amber-400 text-amber-400" : ""} />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                  {effectiveHighlightEmployee?.id === currentEmployee?.id ? "Sua Presença" : "Sua Presença / Destaque"}
+                </p>
+                <p className="text-lg md:text-xl font-black text-white">
+                  {metrics.myDaysCount} <span className="text-xs font-normal text-gray-400">{metrics.myDaysCount === 1 ? 'dia escalado' : 'dias escalados'}</span>
                 </p>
               </div>
             </div>
-            <button 
-              onClick={() => {
-                setSidebarTab('cancellations');
-                setViewMode('calendar');
-                setTimeout(() => {
-                  document.getElementById('sidebar-panel')?.scrollIntoView({ behavior: 'smooth' });
-                }, 100);
-              }}
-              className="bg-red-500 hover:bg-red-600 text-white font-bold text-xs py-2 px-4 rounded-lg transition-colors flex items-center gap-1.5 shrink-0 shadow-md animate-bounce"
-            >
-              Ver Quadro de Cancelamentos
-            </button>
-          </div>
-        )}
-
-        {viewMode === 'grid' && (
-          <div className="space-y-6">
-            {isViewingAsAdmin && (
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-brand-card/90 backdrop-blur-md p-4 rounded-2xl border border-brand-border shadow-md">
-                <div>
-                  <h2 className="text-lg font-black text-brand-text flex items-center gap-2">
-                    <span>Equipe de Recreação</span>
-                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary border border-brand-primary/20">
-                      {filteredEmployees.length} {filteredEmployees.length === 1 ? 'recreador' : 'recreadores'}
-                    </span>
-                  </h2>
-                  <p className="text-xs text-brand-muted mt-0.5">Gerencie cartões, taxas, diárias e atalhos individuais</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedEmployee(undefined);
-                    setIsEmployeeModalOpen(true);
-                  }}
-                  className="bg-brand-primary hover:bg-brand-primary-hover text-slate-950 font-black px-4 py-2.5 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-xs md:text-sm shrink-0 active:scale-95"
-                >
-                  <UserPlus size={18} />
-                  <span>Adicionar Recreador</span>
-                </button>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {isViewingAsAdmin && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedEmployee(undefined);
-                    setIsEmployeeModalOpen(true);
-                  }}
-                  className="border-2 border-dashed border-brand-border hover:border-brand-primary/60 bg-brand-card/30 hover:bg-brand-card/80 rounded-2xl p-6 flex flex-col items-center justify-center gap-3 text-brand-muted hover:text-brand-primary transition-all group min-h-[260px] shadow-sm"
-                >
-                  <div className="w-14 h-14 rounded-full bg-brand-primary/10 group-hover:bg-brand-primary/20 border border-brand-primary/30 flex items-center justify-center text-brand-primary transition-all group-hover:scale-110">
-                    <UserPlus size={26} />
-                  </div>
-                  <div className="text-center">
-                    <p className="font-extrabold text-sm text-brand-text group-hover:text-brand-primary">Adicionar Recreador</p>
-                    <p className="text-xs text-brand-muted mt-1">Cadastrar novo membro na equipe</p>
-                  </div>
-                </button>
-              )}
-
-              {filteredEmployees.map(emp => (
-                <EmployeeCard 
-                  key={emp.id}
-                  employee={emp}
-                  onEdit={(e) => {
-                    setSelectedEmployee(e);
-                    setIsEmployeeModalOpen(true);
-                  }}
-                  onManageDays={(e) => {
-                    setSelectedEmployee(e);
-                    setIsManageDaysModalOpen(true);
-                  }}
-                  onViewStory={(e) => setSelectedStoryEmployee(e)}
-                  currentMonth={currentMonth}
-                />
-              ))}
-              {filteredEmployees.length === 0 && !isViewingAsAdmin && (
-                <div className="col-span-full py-20 text-center">
-                  <p className="text-gray-500 text-lg">Nenhum funcionário encontrado.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {viewMode === 'list' && (
-          <EmployeeList 
-            employees={employees}
-            onEdit={(e) => {
-              setSelectedEmployee(e);
-              setIsEmployeeModalOpen(true);
-            }}
-            onManageDays={(e) => {
-              setSelectedEmployee(e);
-              setIsManageDaysModalOpen(true);
-            }}
-            onViewStory={(e) => setSelectedStoryEmployee(e)}
-            onInactivate={handleInactivateEmployee}
-            onReactivate={handleReactivateEmployee}
-            onDelete={handleDeleteEmployee}
-            onPurgeExpired={handlePurgeExpiredInactives}
-            currentMonth={currentMonth}
-            setCurrentMonth={setCurrentMonth}
-          />
-        )}
-
-        {viewMode === 'calendar' && (
-          <CalendarView 
-            employees={activeEmployees}
-            onUpdateDays={handleUpdateDays}
-            currentMonth={currentMonth}
-            setCurrentMonth={setCurrentMonth}
-            isAdmin={true}
-            deadlines={deadlines}
-            onUpdateDeadline={handleUpdateDeadline}
-            dayConfigs={dayConfigs}
-            onUpdateDayConfig={handleUpdateDayConfig}
-            onCancelWorkDay={handleCancelWorkDay}
-            cancellations={cancellations}
-            onDismissCancellation={handleDismissCancellation}
-            onMarkCancellationRead={handleMarkCancellationRead}
-            sidebarTab={sidebarTab}
-            onSidebarTabChange={setSidebarTab}
-          />
-        )}
-
-        {viewMode === 'dashboard' && isViewingAsAdmin && (
-          <AdminDashboard 
-            employees={activeEmployees}
-            currentMonth={currentMonth}
-            setCurrentMonth={setCurrentMonth}
-            dayConfigs={dayConfigs}
-          />
-        )}
-
-        {viewMode === 'master_schedule' && (
-          <MonthlyScheduleView 
-            employees={activeEmployees}
-            currentMonth={currentMonth}
-            setCurrentMonth={setCurrentMonth}
-            currentEmployee={simulationActive ? activeEmployees.find(e => e.id === simulatedEmployeeId) : null}
-            isAdmin={isViewingAsAdmin}
-            dayConfigs={dayConfigs}
-          />
-        )}
-      </main>
-
-      <EmployeeModal 
-        isOpen={isEmployeeModalOpen}
-        onClose={() => setIsEmployeeModalOpen(false)}
-        onSave={handleSaveEmployee}
-        onInactivate={handleInactivateEmployee}
-        onReactivate={handleReactivateEmployee}
-        onDelete={handleDeleteEmployee}
-        employee={selectedEmployee}
-      />
-
-      {selectedEmployee && (
-        <ManageDaysModal 
-          isOpen={isManageDaysModalOpen}
-          onClose={() => setIsManageDaysModalOpen(false)}
-          employee={selectedEmployee}
-          onUpdateDays={handleUpdateDays}
-        />
-      )}
-
-      {/* Modal de História do Funcionário */}
-      {selectedStoryEmployee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md overflow-y-auto">
-          <div className="bg-brand-card border border-brand-border w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden my-8 p-6 relative max-h-[90vh] overflow-y-auto">
-            <button 
-              onClick={() => setSelectedStoryEmployee(null)}
-              className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white bg-black/40 rounded-full z-20 hover:bg-black/60 transition-colors"
-              title="Fechar"
-            >
-              <X size={20} />
-            </button>
-            <EmployeeStoryView 
-              employee={selectedStoryEmployee} 
-              isAdmin={isViewingAsAdmin}
-              onEditEmployee={() => {
-                const emp = selectedStoryEmployee;
-                setSelectedStoryEmployee(null);
-                setSelectedEmployee(emp);
-                setIsEmployeeModalOpen(true);
-              }}
-              onUpdatePhoto={(photoUrl) => handleUpdatePhoto(selectedStoryEmployee.id, photoUrl)}
-              canEditPhoto={true}
-            />
           </div>
         </div>
+
+      {/* Filter and View Controls Bar */}
+      <div className="bg-brand-card border border-brand-border p-3 sm:p-4 rounded-2xl flex flex-col gap-3 shadow-md">
+        {/* Top Row: Search Input */}
+        <div className="relative w-full">
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input 
+            type="text"
+            placeholder="Buscar por recreador, evento ou turno..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-brand-bg border border-brand-border rounded-xl pl-10 pr-9 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-primary transition-all"
+          />
+          {searchQuery && (
+            <button 
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white p-1"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* Middle Row: Filters (Structured Grid on Mobile, Flex on Desktop) */}
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap items-center gap-2 flex-1">
+            {/* Highlight Selection Dropdown */}
+            <div className="flex items-center gap-1.5 bg-brand-bg border border-brand-border px-3 py-2 rounded-xl">
+              <UserCheck size={14} className="text-amber-400 shrink-0" />
+              <span className="text-[11px] font-bold text-gray-400 shrink-0">Destacar:</span>
+              <select
+                value={selectedHighlightId}
+                onChange={(e) => setSelectedHighlightId(e.target.value)}
+                className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer w-full truncate"
+              >
+                {currentEmployee && (
+                  <option value={currentEmployee.id} className="bg-brand-card text-white">
+                    ⭐ Você ({currentEmployee.artisticName || currentEmployee.name})
+                  </option>
+                )}
+                <option value="" className="bg-brand-card text-white">Nenhum destaque</option>
+                {employees
+                  .filter(e => e.id !== currentEmployee?.id)
+                  .map(emp => (
+                    <option key={emp.id} value={emp.id} className="bg-brand-card text-white">
+                      {emp.artisticName || emp.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            {/* Filter Event Type */}
+            <div className="flex items-center bg-brand-bg border border-brand-border px-3 py-2 rounded-xl">
+              <select
+                value={eventFilter}
+                onChange={(e) => setEventFilter(e.target.value as any)}
+                className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer w-full"
+              >
+                <option value="all" className="bg-brand-card">Todos os Eventos</option>
+                <option value="common" className="bg-brand-card">Apenas CCSP</option>
+                <option value="party" className="bg-brand-card">Apenas Festas</option>
+              </select>
+            </div>
+
+            {/* Checkbox: Only My Days */}
+            {effectiveHighlightEmployee && (
+              <label className={cn(
+                "flex items-center justify-center sm:justify-start gap-2 cursor-pointer text-xs font-bold px-3 py-2 rounded-xl border transition-all select-none sm:col-span-2 lg:col-span-1",
+                onlyMyDays 
+                  ? "bg-amber-500/20 border-amber-500/60 text-amber-300" 
+                  : "bg-brand-bg border-brand-border text-gray-400 hover:text-white"
+              )}>
+                <input 
+                  type="checkbox"
+                  checked={onlyMyDays}
+                  onChange={(e) => setOnlyMyDays(e.target.checked)}
+                  className="rounded border-brand-border text-amber-500 focus:ring-amber-500 w-3.5 h-3.5 cursor-pointer"
+                />
+                <Star size={13} className={onlyMyDays ? "fill-amber-400 text-amber-400" : ""} />
+                <span className="truncate">Apenas {effectiveHighlightEmployee.id === currentEmployee?.id ? 'Minhas Escalas' : 'Escalas do Destaque'}</span>
+              </label>
+            )}
+          </div>
+
+          {/* Right Action Controls: Layout Modes & Export */}
+          <div className="flex items-center justify-between lg:justify-end gap-2 pt-1 lg:pt-0 border-t lg:border-t-0 border-brand-border/40 shrink-0">
+            {/* View Modes */}
+            <div className="flex items-center bg-brand-bg border border-brand-border rounded-xl p-1 gap-1">
+              <button
+                onClick={() => setLayoutMode('grid')}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                  layoutMode === 'grid' ? "bg-brand-primary text-slate-950 shadow-sm" : "text-gray-400 hover:text-white"
+                )}
+                title="Visão em Cards por Dia"
+              >
+                <LayoutGrid size={14} />
+                <span>Diário</span>
+              </button>
+
+              <button
+                onClick={() => setLayoutMode('timeline')}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                  layoutMode === 'timeline' ? "bg-brand-primary text-slate-950 shadow-sm" : "text-gray-400 hover:text-white"
+                )}
+                title="Visão Cronológica"
+              >
+                <List size={14} />
+                <span>Lista</span>
+              </button>
+            </div>
+
+            {/* Excel Export Button */}
+            <button
+              onClick={handleExportExcel}
+              className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 shadow-sm"
+              title="Exportar Escala em Excel"
+            >
+              <FileSpreadsheet size={15} />
+              <span className="hidden sm:inline">Exportar Excel</span>
+              <span className="sm:hidden">Excel</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Bottom Row: Weekly Scope Tabs Selector */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-2 border-t border-brand-border/60 text-xs">
+          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0 flex items-center gap-1">
+            <Filter size={12} className="text-brand-primary" /> Visualização:
+          </span>
+
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 no-scrollbar -mx-3 px-3 sm:mx-0 sm:px-0 touch-pan-x">
+            <button
+              onClick={() => setTimeScope('month')}
+              className={cn(
+                "px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all border shrink-0",
+                timeScope === 'month'
+                  ? "bg-brand-primary text-slate-950 border-brand-primary shadow-sm"
+                  : "bg-brand-bg text-gray-400 border-brand-border hover:text-white"
+              )}
+            >
+              🗓️ Mês Inteiro ({monthDays.length} dias)
+            </button>
+
+            <button
+              onClick={() => setTimeScope('week1')}
+              className={cn(
+                "px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all border shrink-0",
+                timeScope === 'week1'
+                  ? "bg-brand-primary text-slate-950 border-brand-primary shadow-sm"
+                  : "bg-brand-bg text-gray-400 border-brand-border hover:text-white"
+              )}
+            >
+              Semana 1 (1 a 7)
+            </button>
+
+            <button
+              onClick={() => setTimeScope('week2')}
+              className={cn(
+                "px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all border shrink-0",
+                timeScope === 'week2'
+                  ? "bg-brand-primary text-slate-950 border-brand-primary shadow-sm"
+                  : "bg-brand-bg text-gray-400 border-brand-border hover:text-white"
+              )}
+            >
+              Semana 2 (8 a 14)
+            </button>
+
+            <button
+              onClick={() => setTimeScope('week3')}
+              className={cn(
+                "px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all border shrink-0",
+                timeScope === 'week3'
+                  ? "bg-brand-primary text-slate-950 border-brand-primary shadow-sm"
+                  : "bg-brand-bg text-gray-400 border-brand-border hover:text-white"
+              )}
+            >
+              Semana 3 (15 a 21)
+            </button>
+
+            <button
+              onClick={() => setTimeScope('week4')}
+              className={cn(
+                "px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all border shrink-0",
+                timeScope === 'week4'
+                  ? "bg-brand-primary text-slate-950 border-brand-primary shadow-sm"
+                  : "bg-brand-bg text-gray-400 border-brand-border hover:text-white"
+              )}
+            >
+              Semana 4 (22 a 28)
+            </button>
+
+            {monthDays.length > 28 && (
+              <button
+                onClick={() => setTimeScope('week5')}
+                className={cn(
+                  "px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all border shrink-0",
+                  timeScope === 'week5'
+                    ? "bg-brand-primary text-slate-950 border-brand-primary shadow-sm"
+                    : "bg-brand-bg text-gray-400 border-brand-border hover:text-white"
+                )}
+              >
+                Semana 5 (29 a {monthDays.length})
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ----------------- VIEW MODE 1: DAILY CARDS GRID ----------------- */}
+      {layoutMode === 'grid' && (
+        <AnimatePresence mode="wait">
+          <motion.div 
+            key={`grid_${timeScope}_${eventFilter}_${onlyMyDays}_${effectiveHighlightEmployee?.id || 'all'}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+          >
+            {filteredMonthDays.map((day, index) => {
+              const dateStr = format(day, 'yyyy-MM-dd');
+              const dayItems = dailyScheduleMap[dateStr] || [];
+              const config = dayConfigs[dateStr];
+              const isCurrentToday = isToday(day);
+              const isWeekendDay = isWeekend(day);
+
+              // Check if highlight employee is working on this day
+              const myWorkItem = effectiveHighlightEmployee 
+                ? dayItems.find(item => item.employee.id === effectiveHighlightEmployee.id)
+                : null;
+              const isMyDay = !!myWorkItem;
+
+              return (
+                <motion.div 
+                  key={dateStr}
+                  initial={{ opacity: 0, y: 16, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.25, delay: Math.min(index * 0.03, 0.4), ease: 'easeOut' }}
+                  whileHover={{ y: -4, transition: { duration: 0.18 } }}
+                  className={cn(
+                    "rounded-2xl transition-all duration-200 flex flex-col relative group shadow-md hover:shadow-xl",
+                    isMyDay
+                      ? "bg-logo-gradient animate-logo-border p-[1.5px] shadow-sm shadow-purple-500/10"
+                      : isCurrentToday
+                      ? "bg-brand-card border border-brand-primary ring-1 ring-brand-primary/40"
+                      : "bg-brand-card border border-brand-border hover:border-brand-primary/50"
+                  )}
+                >
+                  <div className="w-full h-full bg-brand-card rounded-[14.5px] flex flex-col overflow-hidden">
+                    {/* Header of Day Card */}
+                    <div className={cn(
+                      "p-3 border-b flex items-center justify-between gap-2",
+                      isMyDay ? "bg-purple-950/10 border-purple-500/20" : "bg-brand-bg/60 border-brand-border/60"
+                    )}>
+                      <div className="flex items-center gap-2">
+                        <div className={cn(
+                          "min-w-[46px] px-1.5 py-1 h-11 rounded-xl flex flex-col items-center justify-center font-black shrink-0 border text-center shadow-sm",
+                          isCurrentToday
+                            ? "bg-brand-primary text-slate-950 border-brand-primary"
+                            : isMyDay
+                            ? "bg-amber-500 text-slate-950 border-amber-400"
+                            : isWeekendDay
+                            ? "bg-purple-950/60 text-purple-200 border-purple-500/40"
+                            : "bg-brand-bg text-white border-brand-border"
+                        )}>
+                          <span className="text-sm leading-none font-black tracking-tight">{format(day, 'dd')}</span>
+                          <span className="text-[8.5px] uppercase font-extrabold leading-tight mt-0.5 opacity-90 truncate max-w-full tracking-wider">
+                            {format(day, 'eee', { locale: ptBR }).replace('.', '')}
+                          </span>
+                        </div>
+
+                        <div>
+                          <h3 className="text-xs font-black text-white capitalize">
+                            {format(day, "EEEE, d 'de' MMMM", { locale: ptBR })}
+                          </h3>
+                          <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                            {config?.isCommon && (
+                              <span className="text-[9px] font-black text-brand-primary bg-brand-primary/15 border border-brand-primary/30 px-1.5 py-0.2 rounded-md">
+                                CCSP
+                              </span>
+                            )}
+                            {config?.parties && config.parties.length > 0 && (
+                              <span className="text-[9px] font-black text-purple-300 bg-purple-950/50 border border-purple-500/30 px-1.5 py-0.2 rounded-md flex items-center gap-1">
+                                <PartyPopper size={10} className="animate-bounce" />
+                                <span>{config.parties.length} {config.parties.length === 1 ? 'Festa' : 'Festas'}</span>
+                              </span>
+                            )}
+                            {config?.isExtraordinaryOpen && (
+                              <span className="text-[9px] font-black text-amber-300 bg-amber-500/20 border border-amber-500/40 px-1.5 py-0.2 rounded-md flex items-center gap-1">
+                                <Zap size={10} className="fill-amber-400" />
+                                <span>Abertura Extra</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Highlight Badge */}
+                      {isMyDay && (
+                        <span className="text-[10px] font-black text-slate-950 bg-amber-400 px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm shrink-0">
+                          <Star size={10} className="fill-slate-950" />
+                          <span>{effectiveHighlightEmployee?.id === currentEmployee?.id ? 'VOCÊ' : 'DESTAQUE'}</span>
+                        </span>
+                      )}
+                    </div>
+
+                  {/* Day Parties Summary */}
+                  {config?.parties && config.parties.length > 0 && (
+                    <div className="bg-purple-950/20 border-b border-purple-500/20 p-2 text-[11px] space-y-1">
+                      {config.parties.map((p, idx) => (
+                        <div key={p.id || idx} className="flex items-center justify-between text-purple-200">
+                          <span className="font-bold truncate flex items-center gap-1">
+                            <span>🎉</span> {p.name}
+                          </span>
+                          {p.time && (
+                            <span className="text-[10px] text-purple-300/80 font-mono shrink-0 ml-1">
+                              ({p.time})
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Body: List of Assigned Employees Grouped by Shift */}
+                  <div className="p-2.5 space-y-3 flex-1 min-h-[100px]">
+                    {dayItems.length === 0 ? (
+                      <div className="py-6 text-center text-gray-500 text-xs">
+                        Nenhum recreador escalado
+                      </div>
+                    ) : (
+                      (() => {
+                        // Group dayItems by shift / schedule / party
+                        const groupedMap: Record<string, {
+                          label: string;
+                          isParty: boolean;
+                          partyName?: string;
+                          items: typeof dayItems;
+                        }> = {};
+
+                        dayItems.forEach(item => {
+                          const isParty = item.workDay.type === 'party';
+                          const shiftTime = item.workDay.shift || (isParty ? 'Festa' : 'CCSP (Horário Padrão)');
+                          const groupKey = isParty 
+                            ? `party_${item.workDay.partyName || 'festa'}_${shiftTime}` 
+                            : `shift_${shiftTime}`;
+
+                          if (!groupedMap[groupKey]) {
+                            groupedMap[groupKey] = {
+                              label: shiftTime,
+                              isParty,
+                              partyName: item.workDay.partyName,
+                              items: []
+                            };
+                          }
+                          groupedMap[groupKey].items.push(item);
+                        });
+
+                        const getShiftRank = (labelStr: string) => {
+                          const norm = (labelStr || '').toLowerCase();
+                          if (norm.includes('brinquedoteca 1') || norm === 'brinquedoteca (9h - 18h)') return 10;
+                          if (norm.includes('brinquedoteca 2')) return 11;
+                          if (norm.includes('brinquedoteca')) return 12;
+                          if (norm.includes('5 a 10')) return 20;
+                          if (norm.includes('+11')) return 30;
+                          if (norm.includes('externo')) return 40;
+                          return 100;
+                        };
+
+                        const sortedGroups = Object.entries(groupedMap).sort(([_keyA, a], [_keyB, b]) => {
+                          if (a.isParty && !b.isParty) return -1;
+                          if (!a.isParty && b.isParty) return 1;
+
+                          const rankA = getShiftRank(a.label);
+                          const rankB = getShiftRank(b.label);
+                          if (rankA !== rankB) return rankA - rankB;
+
+                          return a.label.localeCompare(b.label);
+                        });
+
+                        return sortedGroups.map(([groupKey, group]) => {
+                          const headerText = group.isParty
+                            ? `🎉 ${group.partyName || 'Festa'}${group.label && group.label !== 'Festa' ? ` (${group.label})` : ''}`
+                            : group.label;
+
+                          return (
+                            <div key={groupKey} className="space-y-1.5">
+                              <div className={cn(
+                                "flex items-center justify-between text-[10px] font-extrabold px-2.5 py-1 rounded-lg border transition-all shadow-sm",
+                                group.isParty
+                                  ? "bg-purple-900/80 text-purple-100 border-purple-500/60 ring-1 ring-purple-500/20"
+                                  : "bg-brand-primary/10 text-brand-primary border-brand-primary/20"
+                              )}>
+                                <span className="truncate flex items-center gap-1.5">
+                                  {group.isParty ? (
+                                    <PartyPopper size={12} className="shrink-0 text-purple-300" />
+                                  ) : (
+                                    <Clock size={11} className="shrink-0 text-brand-primary" />
+                                  )}
+                                  <span className="truncate font-black">{headerText}</span>
+                                </span>
+                                <span className={cn("text-[9px] font-bold ml-1.5 shrink-0", group.isParty ? "text-purple-200/90" : "text-gray-400")}>
+                                  {group.items.length} {group.items.length === 1 ? 'pessoa' : 'pessoas'}
+                                </span>
+                              </div>
+
+                              <div className="space-y-1">
+                                {group.items.map(({ employee, workDay }) => {
+                                  const isThisHighlighted = effectiveHighlightEmployee && employee.id === effectiveHighlightEmployee.id;
+
+                                  return (
+                                    <div 
+                                      key={`${employee.id}_${workDay.date}_${workDay.type}`}
+                                      className={cn(
+                                        "flex items-center justify-between gap-2 p-1.5 rounded-xl transition-all border text-xs",
+                                        isThisHighlighted
+                                          ? "bg-amber-500/20 border-amber-500/60 text-white font-bold ring-1 ring-amber-500/40 shadow-sm"
+                                          : group.isParty
+                                            ? "bg-purple-950/40 border-purple-500/30 hover:border-purple-500/60 text-gray-200"
+                                            : "bg-brand-bg/70 border-brand-border/60 hover:border-brand-primary/30 text-gray-200"
+                                      )}
+                                    >
+                                      {/* Recreador Info */}
+                                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                                        <div className="relative shrink-0">
+                                          {employee.photoUrl ? (
+                                            <img 
+                                              src={employee.photoUrl} 
+                                              alt={employee.artisticName || employee.name} 
+                                              className="w-7 h-7 rounded-full object-cover border border-brand-border"
+                                            />
+                                          ) : (
+                                            <div className="w-7 h-7 rounded-full bg-brand-primary/20 text-brand-primary font-black flex items-center justify-center text-[10px] border border-brand-primary/30">
+                                              {(employee.artisticName || employee.name).charAt(0).toUpperCase()}
+                                            </div>
+                                          )}
+                                          {isThisHighlighted && (
+                                            <div className="absolute -top-1 -right-1 bg-amber-400 text-slate-950 p-0.5 rounded-full">
+                                              <Star size={8} className="fill-slate-950" />
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        <div className="truncate min-w-0">
+                                          <p className={cn("truncate font-bold leading-tight text-xs flex items-center gap-1", isThisHighlighted ? "text-amber-200" : "text-white")}>
+                                            <span className="truncate">{employee.artisticName || employee.name}</span>
+                                            {employee.status === 'inactive' && (
+                                              <span className="text-[9px] font-black text-red-400 bg-red-500/10 border border-red-500/20 px-1 py-0.2 rounded shrink-0">
+                                                Inativo
+                                              </span>
+                                            )}
+                                          </p>
+                                          <p className="text-[10px] text-gray-400 truncate leading-tight">
+                                            {employee.level}
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      {!group.isParty && workDay.partyName && (
+                                        <span className="text-[10px] font-extrabold text-purple-200 bg-purple-900/80 border border-purple-500/50 px-2 py-0.5 rounded-md truncate max-w-[120px] shrink-0 shadow-sm">
+                                          {workDay.partyName}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()
+                    )}
+                  </div>
+
+                  {/* Footer Count */}
+                  <div className="px-3 py-1.5 bg-brand-bg/40 border-t border-brand-border/40 text-[10px] font-bold text-gray-400 flex items-center justify-between">
+                    <span>{dayItems.length} {dayItems.length === 1 ? 'escalado' : 'escalados'}</span>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </motion.div>
+      </AnimatePresence>
+    )}
+
+      {/* ----------------- VIEW MODE 2: TIMELINE LIST ----------------- */}
+      {layoutMode === 'timeline' && (
+        <AnimatePresence mode="wait">
+          <motion.div 
+            key={`timeline_${timeScope}_${eventFilter}_${onlyMyDays}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="space-y-3"
+          >
+            {filteredMonthDays.map((day, index) => {
+              const dateStr = format(day, 'yyyy-MM-dd');
+              const dayItems = dailyScheduleMap[dateStr] || [];
+              const config = dayConfigs[dateStr];
+              const isMyDay = effectiveHighlightEmployee && dayItems.some(i => i.employee.id === effectiveHighlightEmployee.id);
+
+              if (dayItems.length === 0 && !config?.parties?.length && !config?.isCommon) {
+                return null;
+              }
+
+              return (
+                <motion.div 
+                  key={dateStr}
+                  initial={{ opacity: 0, x: -16 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.25, delay: Math.min(index * 0.025, 0.35) }}
+                  whileHover={{ x: 4, transition: { duration: 0.15 } }}
+                  className={cn(
+                    "rounded-2xl transition-all shadow-md relative overflow-hidden",
+                    isMyDay
+                      ? "bg-logo-gradient animate-logo-border p-[1.5px] shadow-sm shadow-purple-500/10"
+                      : "bg-brand-card border border-brand-border"
+                  )}
+                >
+                  <div className="w-full h-full rounded-[14.5px] p-4 bg-brand-card">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-brand-border/60">
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "text-center px-3 py-1.5 rounded-xl border",
+                          isMyDay ? "bg-amber-500 text-slate-950 border-amber-400 font-bold shadow-sm" : "bg-brand-bg border-brand-border"
+                        )}>
+                          <span className={cn("text-xs font-bold uppercase block", isMyDay ? "text-slate-900" : "text-gray-400")}>{format(day, 'eee', { locale: ptBR })}</span>
+                          <span className={cn("text-lg font-black leading-none", isMyDay ? "text-slate-950" : "text-white")}>{format(day, 'dd/MM')}</span>
+                        </div>
+
+                        <div>
+                          <h3 className="text-sm font-black text-white capitalize">
+                            {format(day, "EEEE, d 'de' MMMM", { locale: ptBR })}
+                          </h3>
+                          <div className="flex flex-wrap items-center gap-2 mt-1">
+                            {config?.isCommon && (
+                              <span className="text-[10px] font-black text-brand-primary bg-brand-primary/10 border border-brand-primary/30 px-2 py-0.5 rounded-md">
+                                Dia CCSP
+                              </span>
+                            )}
+                            {config?.parties?.map((p, idx) => (
+                              <span key={p.id || idx} className="text-[10px] font-black text-purple-300 bg-purple-950/50 border border-purple-500/30 px-2 py-0.5 rounded-md">
+                                🎉 {p.name} {p.time && `(${p.time})`}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-gray-400 bg-brand-bg px-3 py-1.5 rounded-xl border border-brand-border">
+                          {dayItems.length} {dayItems.length === 1 ? 'recreador' : 'recreadores'}
+                        </span>
+                        {isMyDay && (
+                          <span className="text-xs font-black text-slate-950 bg-amber-400 px-3 py-1.5 rounded-xl flex items-center gap-1 shadow-sm shrink-0">
+                            <Star size={14} className="fill-slate-950" />
+                            <span>Você trabalha neste dia</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* List of Employees */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-3">
+                      {dayItems.map(({ employee, workDay }) => {
+                        const isThisHighlighted = effectiveHighlightEmployee && employee.id === effectiveHighlightEmployee.id;
+
+                        const isParty = workDay.type === 'party';
+                        let resolvedPartyName = workDay.partyName;
+                        if (isParty && (!resolvedPartyName || resolvedPartyName === 'Festa')) {
+                          const matchedParty = workDay.partyId 
+                            ? config?.parties?.find(p => p.id === workDay.partyId)
+                            : config?.parties?.find(p => p.name === workDay.partyName);
+                          if (matchedParty) {
+                            resolvedPartyName = matchedParty.name;
+                          } else if (config?.parties && config.parties.length > 0) {
+                            resolvedPartyName = config.parties[0].name;
+                          }
+                        }
+
+                        const displayLabel = isParty
+                          ? (resolvedPartyName ? `Festa: ${resolvedPartyName}` : (workDay.shift || 'Festa'))
+                          : (workDay.shift || 'CCSP');
+
+                        return (
+                          <div 
+                            key={employee.id}
+                            className={cn(
+                              "flex items-center justify-between p-2.5 rounded-xl border text-xs",
+                              isThisHighlighted
+                                ? "bg-amber-500/20 border-amber-500/60 text-white font-bold ring-1 ring-amber-500/40"
+                                : "bg-brand-bg/60 border-brand-border/60 text-gray-200"
+                            )}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              {employee.photoUrl ? (
+                                <img src={employee.photoUrl} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
+                              ) : (
+                                <div className="w-8 h-8 rounded-full bg-brand-primary/20 text-brand-primary font-black flex items-center justify-center shrink-0">
+                                  {(employee.artisticName || employee.name).charAt(0)}
+                                </div>
+                              )}
+                              <div className="truncate">
+                                <p className="font-bold text-white truncate">{employee.artisticName || employee.name}</p>
+                                <p className="text-[10px] text-gray-400 truncate">{employee.level}</p>
+                              </div>
+                            </div>
+
+                            <span className={cn(
+                              "text-[10px] font-bold px-2 py-1 rounded-lg border shrink-0 ml-2 truncate max-w-[150px]",
+                              isParty
+                                ? "bg-purple-950/80 text-purple-200 border-purple-500/40"
+                                : "bg-brand-bg border-brand-border text-brand-primary"
+                            )}>
+                              {displayLabel}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        </AnimatePresence>
       )}
 
-      <SendNotificationModal
-        isOpen={isSendNotificationModalOpen}
-        onClose={() => setIsSendNotificationModalOpen(false)}
-        onSend={handleSendCustomNotification}
-        employees={employees}
-      />
-      
-      <PWAInstallPrompt />
+      {/* ----------------- DAY DETAILS MODAL ----------------- */}
+      {selectedDayModal && (() => {
+        const modalDate = parseISO(selectedDayModal);
+        const modalItems = dailyScheduleMap[selectedDayModal] || [];
+        const modalConfig = dayConfigs[selectedDayModal];
+
+        return (
+          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-brand-card border border-brand-border rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
+              {/* Modal Header */}
+              <div className="p-4 bg-brand-bg border-b border-brand-border flex items-center justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-brand-primary text-slate-950 font-black flex flex-col items-center justify-center shrink-0 shadow-md">
+                    <span className="text-base leading-none">{format(modalDate, 'dd')}</span>
+                    <span className="text-[10px] uppercase leading-none mt-0.5 opacity-90">{format(modalDate, 'eee', { locale: ptBR })}</span>
+                  </div>
+                  <div>
+                    <h2 className="text-base font-black text-white capitalize">
+                      {format(modalDate, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                    </h2>
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                      {modalConfig?.isCommon && (
+                        <span className="text-[10px] font-extrabold text-brand-primary bg-brand-primary/10 border border-brand-primary/30 px-2 py-0.5 rounded-md">
+                          Dia CCSP
+                        </span>
+                      )}
+                      {modalConfig?.parties && modalConfig.parties.length > 0 && (
+                        <span className="text-[10px] font-extrabold text-purple-300 bg-purple-950/60 border border-purple-500/40 px-2 py-0.5 rounded-md flex items-center gap-1">
+                          <PartyPopper size={11} />
+                          <span>{modalConfig.parties.length} {modalConfig.parties.length === 1 ? 'Festa' : 'Festas'}</span>
+                        </span>
+                      )}
+                      {modalConfig?.isExtraordinaryOpen && (
+                        <span className="text-[10px] font-extrabold text-amber-300 bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded-md flex items-center gap-1">
+                          <Zap size={11} className="fill-amber-400" />
+                          <span>Abertura Extra</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => setSelectedDayModal(null)}
+                  className="p-2 rounded-xl bg-brand-bg border border-brand-border text-gray-400 hover:text-white transition-all"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Day Events Info */}
+              {modalConfig?.parties && modalConfig.parties.length > 0 && (
+                <div className="p-3 bg-purple-950/30 border-b border-purple-500/20 space-y-1.5">
+                  <p className="text-[11px] font-black text-purple-300 uppercase tracking-wider flex items-center gap-1">
+                    <PartyPopper size={12} /> Festas & Eventos Agendados
+                  </p>
+                  {modalConfig.parties.map((p, idx) => (
+                    <div key={p.id || idx} className="flex items-center justify-between text-xs text-purple-200 bg-purple-900/30 p-2 rounded-xl border border-purple-500/20">
+                      <span className="font-bold truncate flex items-center gap-1.5">
+                        <span>🎉</span> {p.name}
+                      </span>
+                      {p.time && (
+                        <span className="text-xs font-mono font-bold text-purple-300 bg-purple-950 px-2 py-0.5 rounded-md border border-purple-500/30 shrink-0 ml-2">
+                          {p.time}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Body: List of Employees */}
+              <div className="p-4 space-y-2 max-h-[350px] overflow-y-auto">
+                <div className="flex items-center justify-between pb-2 border-b border-brand-border/40">
+                  <span className="text-xs font-black text-gray-400 uppercase tracking-wider">
+                    Equipe Escalada ({modalItems.length})
+                  </span>
+                </div>
+
+                {modalItems.length === 0 ? (
+                  <div className="py-8 text-center text-gray-500 text-xs">
+                    Nenhum recreador escalado para este dia.
+                  </div>
+                ) : (
+                  modalItems.map(({ employee, workDay }) => {
+                    const isHighlighted = effectiveHighlightEmployee && employee.id === effectiveHighlightEmployee.id;
+
+                    return (
+                      <div 
+                        key={`${employee.id}_${workDay.type}`}
+                        className={cn(
+                          "flex items-center justify-between p-3 rounded-xl border transition-all text-xs",
+                          isHighlighted
+                            ? "bg-amber-500/20 border-amber-500/60 text-white font-bold ring-1 ring-amber-500/40"
+                            : "bg-brand-bg/80 border-brand-border text-gray-200"
+                        )}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          {employee.photoUrl ? (
+                            <img src={employee.photoUrl} alt="" className="w-9 h-9 rounded-full object-cover shrink-0 border border-brand-border" />
+                          ) : (
+                            <div className="w-9 h-9 rounded-full bg-brand-primary/20 text-brand-primary text-xs font-black flex items-center justify-center shrink-0 border border-brand-primary/30">
+                              {(employee.artisticName || employee.name).charAt(0)}
+                            </div>
+                          )}
+                          <div className="truncate">
+                            <p className="font-bold text-white flex items-center gap-1.5 text-sm">
+                              <span>{employee.artisticName || employee.name}</span>
+                              {isHighlighted && (
+                                <Star size={12} className="fill-amber-400 text-amber-400 shrink-0" />
+                              )}
+                            </p>
+                            <p className="text-xs text-gray-400">{employee.level}</p>
+                          </div>
+                        </div>
+
+                        {(() => {
+                          const isModalParty = workDay.type === 'party';
+                          let modalPartyName = workDay.partyName;
+                          if (isModalParty && (!modalPartyName || modalPartyName === 'Festa')) {
+                            const matchedParty = workDay.partyId 
+                              ? modalConfig?.parties?.find(p => p.id === workDay.partyId)
+                              : modalConfig?.parties?.find(p => p.name === workDay.partyName);
+                            if (matchedParty) {
+                              modalPartyName = matchedParty.name;
+                            } else if (modalConfig?.parties && modalConfig.parties.length > 0) {
+                              modalPartyName = modalConfig.parties[0].name;
+                            }
+                          }
+
+                          return (
+                            <div className="text-right shrink-0">
+                              <span className={cn(
+                                "text-xs font-black px-2.5 py-1 rounded-lg border inline-block",
+                                isModalParty
+                                  ? "bg-purple-950 text-purple-200 border-purple-500/40"
+                                  : "bg-brand-primary/15 text-brand-primary border-brand-primary/30"
+                              )}>
+                                {workDay.shift || (isModalParty ? (modalPartyName ? `Festa: ${modalPartyName}` : 'Festa') : 'CCSP')}
+                              </span>
+                              {isModalParty && modalPartyName && workDay.shift && (
+                                <p className="text-[10px] text-purple-300 font-medium mt-0.5 truncate max-w-[140px]">
+                                  🎉 {modalPartyName}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-3 bg-brand-bg/60 border-t border-brand-border flex items-center justify-end">
+                <button 
+                  onClick={() => setSelectedDayModal(null)}
+                  className="bg-brand-primary text-slate-950 font-black px-4 py-2 rounded-xl text-xs hover:bg-brand-primary/90 transition-all"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
