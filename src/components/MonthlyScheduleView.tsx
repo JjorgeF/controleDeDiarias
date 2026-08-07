@@ -792,8 +792,13 @@ export default function MonthlyScheduleView({
                                         </div>
 
                                         <div className="truncate min-w-0">
-                                          <p className={cn("truncate font-bold leading-tight text-xs", isThisHighlighted ? "text-amber-200" : "text-white")}>
-                                            {employee.artisticName || employee.name}
+                                          <p className={cn("truncate font-bold leading-tight text-xs flex items-center gap-1", isThisHighlighted ? "text-amber-200" : "text-white")}>
+                                            <span className="truncate">{employee.artisticName || employee.name}</span>
+                                            {employee.status === 'inactive' && (
+                                              <span className="text-[9px] font-black text-red-400 bg-red-500/10 border border-red-500/20 px-1 py-0.2 rounded shrink-0">
+                                                Inativo
+                                              </span>
+                                            )}
                                           </p>
                                           <p className="text-[10px] text-gray-400 truncate leading-tight">
                                             {employee.level}
