@@ -17,6 +17,9 @@ async function runBackup() {
   let firebaseCreds;
   try {
     firebaseCreds = JSON.parse(firebaseCredsRaw);
+    if (firebaseCreds.private_key) {
+      firebaseCreds.private_key = firebaseCreds.private_key.replace(/\\n/g, '\n');
+    }
   } catch (err) {
     console.error("❌ ERRO: 'FIREBASE_SERVICE_ACCOUNT' não é um JSON válido.", err);
     process.exit(1);
@@ -78,6 +81,9 @@ async function runBackup() {
   let driveCreds;
   try {
     driveCreds = JSON.parse(driveCredsRaw);
+    if (driveCreds.private_key) {
+      driveCreds.private_key = driveCreds.private_key.replace(/\\n/g, '\n');
+    }
   } catch (err) {
     console.error("❌ ERRO: JSON de credenciais do Google Drive inválido.", err);
     process.exit(1);
