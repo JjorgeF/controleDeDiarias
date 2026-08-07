@@ -91,7 +91,7 @@ async function runBackup() {
 
   const driveAuth = new google.auth.GoogleAuth({
     credentials: driveCreds,
-    scopes: ['https://www.googleapis.com/auth/drive.file']
+    scopes: ['https://www.googleapis.com/auth/drive']
   });
 
   const drive = google.drive({ version: 'v3', auth: driveAuth });
@@ -100,7 +100,7 @@ async function runBackup() {
   console.log("☁️ Enviando backup para o Google Drive...");
   const fileMetadata = {
     name: fileName,
-    parents: driveFolderId ? [driveFolderId] : []
+    parents: driveFolderId ? [driveFolderId.trim()] : []
   };
 
   const media = {
@@ -110,25 +110,34 @@ async function runBackup() {
 
   try {
     const res = await drive.files.create({
-      resource: fileMetadata,
+      requestBody: fileMetadata,
       media: media,
-      fields: 'id, name, webViewLink'
+      fields: 'id, name, webViewLink',
+      supportsAllDrives: true
     });
 
-    console.log(`✅ BACKUP CONCLUÍDO COM SUCESSO!`);
+    console.log(`✅ BACKUP ENVIADO PARA O GOOGLE DRIVE COM SUCESSO!`);
     console.log(`   ID do Arquivo no Drive: ${res.data.id}`);
     console.log(`   Link de Acesso: ${res.data.webViewLink}`);
 
-    // Limpar arquivo temporário
+    // Limpar arquivo temporário se enviado com sucesso para o Drive
     if (fs.existsSync(tempFilePath)) {
       fs.unlinkSync(tempFilePath);
     }
   } catch (err) {
-    console.error("❌ ERRO ao enviar para o Google Drive:", err.message);
-    if (err.errors) {
-      console.error(JSON.stringify(err.errors, null, 2));
+    console.warn("⚠️ AVISO ao enviar para o Google Drive:");
+    console.warn("Mensagem:", err.message);
+
+    if (err.message && err.message.includes("Service Accounts do not have storage quota")) {
+      console.log("\n📌 CAUSA DO ERRO NO GOOGLE DRIVE:");
+      console.log("O Google proíbe Service Accounts de criarem arquivos diretamente em contas pessoais do Google Drive (@gmail.com) por não possuírem cota de armazenamento.");
+      console.log("O arquivo de backup JSON continua salvo e preservado para o GitHub Actions salvar nos Artifacts/Releases.");
+    } else if (err.response && err.response.data) {
+      console.warn("Detalhes do Servidor:", JSON.stringify(err.response.data, null, 2));
     }
-    process.exit(1);
+
+    // Não encerramos com erro fatal para permitir que o GitHub Actions salve o Artifact/Release
+    console.log("📦 Backup local mantido com sucesso no runner:", fileName);
   }
 }
 
