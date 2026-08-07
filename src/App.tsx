@@ -300,8 +300,40 @@ export default function App() {
     return () => unsubscribe();
   }, [user, isAdmin, adminCheckLoading, db]);
 
+  const activeEmployees = useMemo(() => {
+    return employees.filter(emp => emp.status !== 'inactive');
+  }, [employees]);
+
+  const inactiveEmployees = useMemo(() => {
+    return employees.filter(emp => emp.status === 'inactive');
+  }, [employees]);
+
+  // Auto-purge inactive employees older than 180 days (6 months)
+  useEffect(() => {
+    if (!isAdmin || !db || employeesLoading || employees.length === 0) return;
+    const SIX_MONTHS_MS = 180 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const expired = employees.filter(emp => {
+      if (emp.status !== 'inactive' || !emp.inactivatedAt) return false;
+      const inactTime = new Date(emp.inactivatedAt).getTime();
+      return (now - inactTime) >= SIX_MONTHS_MS;
+    });
+
+    if (expired.length > 0) {
+      console.log(`Auto-purging ${expired.length} expired inactive employee(s) (>6 months)...`);
+      expired.forEach(async (emp) => {
+        try {
+          await deleteDoc(doc(db, 'employees', emp.id));
+          console.log(`Successfully auto-deleted expired employee: ${emp.id} (${emp.name})`);
+        } catch (err) {
+          console.error(`Failed to auto-delete expired employee ${emp.id}:`, err);
+        }
+      });
+    }
+  }, [isAdmin, db, employeesLoading, employees]);
+
   const filteredEmployees = useMemo(() => {
-    return employees
+    return activeEmployees
       .filter(emp => 
         emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         emp.artisticName.toLowerCase().includes(searchQuery.toLowerCase())
@@ -311,7 +343,7 @@ export default function App() {
         const nameB = b.artisticName || b.name || '';
         return nameA.localeCompare(nameB, 'pt-BR', { sensitivity: 'base' });
       });
-  }, [employees, searchQuery]);
+  }, [activeEmployees, searchQuery]);
 
   const cancellations = useMemo(() => {
     const list: CancellationLog[] = [];
@@ -445,6 +477,55 @@ export default function App() {
           });
         }
       });
+
+      // 1.5 Extraordinary Availability notifications (for admins)
+      Object.entries(dayConfigs || {}).forEach(([dateStr, cfg]) => {
+        const dayCfg = cfg as DayConfig;
+        if (!dayCfg) return;
+        const lockedMap = dayCfg.extraordinaryLockedAvailabilities;
+        const isExtraOpen = !!dayCfg.isExtraordinaryOpen;
+        if (!lockedMap && !isExtraOpen) return;
+
+        employees.forEach(emp => {
+          const empAvails = (emp.availabilities || []).filter(a => a === dateStr || a.startsWith(`${dateStr}_`));
+          if (empAvails.length === 0) return;
+
+          const lockedKeys = lockedMap?.[emp.id] || [];
+          const extraKeys = lockedMap
+            ? empAvails.filter(k => !lockedKeys.includes(k) && (k !== dateStr || !lockedKeys.includes(`${dateStr}_common`)))
+            : (isExtraOpen ? empAvails : []);
+
+          extraKeys.forEach(extraKey => {
+            const notifId = `extraordinary_avail_${emp.id}_${dateStr}_${extraKey}`;
+            if (!dismissedNotificationIds.includes(notifId)) {
+              let detail = 'Disponibilidade';
+              if (extraKey === dateStr || extraKey.includes('_common')) {
+                detail = 'Diária CCSP';
+              } else if (extraKey.includes('_party')) {
+                const partyId = extraKey.replace(`${dateStr}_party_`, '');
+                const party = dayCfg.parties?.find(p => p.id === partyId);
+                detail = party ? `Festa (${party.name})` : 'Festa';
+              }
+
+              let formattedDate = dateStr;
+              try {
+                formattedDate = format(parseISO(dateStr), 'dd/MM/yyyy');
+              } catch {}
+
+              list.push({
+                id: notifId,
+                type: 'extraordinary_avail',
+                title: `⚡ Abertura Extra: ${emp.artisticName || emp.name}`,
+                message: `${emp.artisticName || emp.name} enviou disponibilidade (${detail}) para o dia ${formattedDate} após a Abertura Extra.`,
+                date: new Date().toISOString(),
+                isRead: readNotificationIds.includes(notifId),
+                employeeId: emp.id,
+                targetDate: dateStr
+              });
+            }
+          });
+        });
+      });
     }
 
     // 2. Deadline notifications
@@ -502,7 +583,7 @@ export default function App() {
     });
 
     return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [cancellations, deadlines, currentMonth, isViewingAsAdmin, readNotificationIds, dismissedNotificationIds, customNotificationsDocs, employees, simulationActive, simulatedEmployeeId]);
+  }, [cancellations, deadlines, currentMonth, isViewingAsAdmin, readNotificationIds, dismissedNotificationIds, customNotificationsDocs, employees, dayConfigs, simulationActive, simulatedEmployeeId]);
 
   const unreadNotificationsCount = useMemo(() => {
     return allNotifications.filter(n => !n.isRead).length;
@@ -732,6 +813,71 @@ export default function App() {
       };
     }
   };
+
+  const handleInactivateEmployee = useCallback(async (id: string) => {
+    if (!id || !db) return;
+    try {
+      const docRef = doc(db, 'employees', id);
+      await updateDoc(docRef, {
+        status: 'inactive',
+        inactivatedAt: new Date().toISOString()
+      });
+      console.log("Employee inactivated successfully:", id);
+    } catch (error: any) {
+      console.error("handleInactivateEmployee error:", error);
+      handleFirestoreError(error, OperationType.UPDATE, `employees/${id}`);
+      alert("Erro ao desativar funcionário: " + (error.message || "Erro desconhecido."));
+      throw error;
+    }
+  }, [db]);
+
+  const handleReactivateEmployee = useCallback(async (id: string) => {
+    if (!id || !db) return;
+    try {
+      const docRef = doc(db, 'employees', id);
+      await updateDoc(docRef, {
+        status: 'active',
+        inactivatedAt: null
+      });
+      console.log("Employee reactivated successfully:", id);
+    } catch (error: any) {
+      console.error("handleReactivateEmployee error:", error);
+      handleFirestoreError(error, OperationType.UPDATE, `employees/${id}`);
+      alert("Erro ao reativar funcionário: " + (error.message || "Erro desconhecido."));
+      throw error;
+    }
+  }, [db]);
+
+  const handlePurgeExpiredInactives = useCallback(async () => {
+    if (!db) return;
+    const SIX_MONTHS_MS = 180 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+
+    const expired = employees.filter(emp => {
+      if (emp.status !== 'inactive' || !emp.inactivatedAt) return false;
+      const inactTime = new Date(emp.inactivatedAt).getTime();
+      return (now - inactTime) >= SIX_MONTHS_MS;
+    });
+
+    if (expired.length === 0) {
+      alert("Nenhum funcionário desativado há mais de 6 meses encontrado.");
+      return;
+    }
+
+    if (!window.confirm(`Deseja excluir definitivamente ${expired.length} funcionário(s) desativado(s) há mais de 6 meses? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+
+    try {
+      for (const emp of expired) {
+        await deleteDoc(doc(db, 'employees', emp.id));
+      }
+      alert(`${expired.length} funcionário(s) desativado(s) há mais de 6 meses excluído(s) com sucesso da base de dados.`);
+    } catch (error: any) {
+      console.error("handlePurgeExpiredInactives error:", error);
+      alert("Erro ao excluir desativados expirados: " + error.message);
+    }
+  }, [db, employees]);
 
   const handleDeleteEmployee = useCallback(async (id: string) => {
     if (!id) {
@@ -1180,7 +1326,7 @@ export default function App() {
                 </div>
               ) : employeeActiveTab === 'master_schedule' ? (
                 <MonthlyScheduleView 
-                  employees={employees}
+                  employees={activeEmployees}
                   currentMonth={currentMonth}
                   setCurrentMonth={setCurrentMonth}
                   currentEmployee={myEmployeeRecord}
@@ -1211,7 +1357,7 @@ export default function App() {
           isOpen={isSendNotificationModalOpen}
           onClose={() => setIsSendNotificationModalOpen(false)}
           onSend={handleSendCustomNotification}
-          employees={employees}
+          employees={activeEmployees}
         />
         <PWAInstallPrompt />
       </div>
@@ -1223,7 +1369,7 @@ export default function App() {
     <div className="min-h-screen bg-brand-bg pb-12">
       {isSimulationEnabled && isAdmin && (
         <SimulationBanner 
-          employees={employees}
+          employees={activeEmployees}
           simulationActive={simulationActive}
           setSimulationActive={setSimulationActive}
           simulatedEmployeeId={simulatedEmployeeId}
@@ -1362,7 +1508,7 @@ export default function App() {
 
         {viewMode === 'list' && (
           <EmployeeList 
-            employees={filteredEmployees}
+            employees={employees}
             onEdit={(e) => {
               setSelectedEmployee(e);
               setIsEmployeeModalOpen(true);
@@ -1372,6 +1518,10 @@ export default function App() {
               setIsManageDaysModalOpen(true);
             }}
             onViewStory={(e) => setSelectedStoryEmployee(e)}
+            onInactivate={handleInactivateEmployee}
+            onReactivate={handleReactivateEmployee}
+            onDelete={handleDeleteEmployee}
+            onPurgeExpired={handlePurgeExpiredInactives}
             currentMonth={currentMonth}
             setCurrentMonth={setCurrentMonth}
           />
@@ -1379,7 +1529,7 @@ export default function App() {
 
         {viewMode === 'calendar' && (
           <CalendarView 
-            employees={employees}
+            employees={activeEmployees}
             onUpdateDays={handleUpdateDays}
             currentMonth={currentMonth}
             setCurrentMonth={setCurrentMonth}
@@ -1399,7 +1549,7 @@ export default function App() {
 
         {viewMode === 'dashboard' && isViewingAsAdmin && (
           <AdminDashboard 
-            employees={employees}
+            employees={activeEmployees}
             currentMonth={currentMonth}
             setCurrentMonth={setCurrentMonth}
             dayConfigs={dayConfigs}
@@ -1408,10 +1558,10 @@ export default function App() {
 
         {viewMode === 'master_schedule' && (
           <MonthlyScheduleView 
-            employees={employees}
+            employees={activeEmployees}
             currentMonth={currentMonth}
             setCurrentMonth={setCurrentMonth}
-            currentEmployee={simulationActive ? employees.find(e => e.id === simulatedEmployeeId) : null}
+            currentEmployee={simulationActive ? activeEmployees.find(e => e.id === simulatedEmployeeId) : null}
             isAdmin={isViewingAsAdmin}
             dayConfigs={dayConfigs}
           />
@@ -1422,6 +1572,8 @@ export default function App() {
         isOpen={isEmployeeModalOpen}
         onClose={() => setIsEmployeeModalOpen(false)}
         onSave={handleSaveEmployee}
+        onInactivate={handleInactivateEmployee}
+        onReactivate={handleReactivateEmployee}
         onDelete={handleDeleteEmployee}
         employee={selectedEmployee}
       />

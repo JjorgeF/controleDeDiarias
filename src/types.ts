@@ -62,6 +62,8 @@ export interface Employee {
   promotionEffectiveDate?: string;
   startDate?: string; // YYYY-MM-DD date when employee joined
   photoUrl?: string; // Base64 compressed profile photo or URL
+  status?: 'active' | 'inactive';
+  inactivatedAt?: string; // ISO timestamp when inactivated
 }
 
 export type ViewMode = 'grid' | 'list' | 'calendar' | 'dashboard' | 'master_schedule';
@@ -76,7 +78,7 @@ export interface CancellationLog {
   viewedByAdmins: boolean;
 }
 
-export type NotificationType = 'cancellation' | 'deadline_warning' | 'deadline_expired' | 'info' | 'custom';
+export type NotificationType = 'cancellation' | 'deadline_warning' | 'deadline_expired' | 'info' | 'custom' | 'extraordinary_avail';
 
 export interface AppNotification {
   id: string;

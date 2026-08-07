@@ -103,12 +103,19 @@
 }
 
 .bg-logo-gradient {
-  background: linear-gradient(135deg, #b2127a, #1ca249, #fcb913, #2563eb, #b2127a, #1ca249);
+  background: linear-gradient(135deg, 
+    rgba(178, 18, 122, 0.55), 
+    rgba(28, 162, 73, 0.55), 
+    rgba(252, 185, 19, 0.55), 
+    rgba(37, 99, 235, 0.55), 
+    rgba(178, 18, 122, 0.55),
+    rgba(28, 162, 73, 0.55)
+  );
   background-size: 300% 300%;
 }
 
 .animate-logo-border {
-  animation: logoBorderGradient 5s ease infinite;
+  animation: logoBorderGradient 8s ease infinite;
 }
 
 
