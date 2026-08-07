@@ -31,3 +31,10 @@ jobs:
           GOOGLE_DRIVE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_DRIVE_SERVICE_ACCOUNT }}
           GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
         run: node scripts/backup-to-drive.js
+
+      - name: Salvar Arquivo de Backup nos Artifacts do GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-firestore-${{ github.run_id }}
+          path: backup_escala_bartenders_*.json
+          retention-days: 90
