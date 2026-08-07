@@ -48,7 +48,8 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
-  UserCheck
+  UserCheck,
+  ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Employee, WorkDay, DayType, CancellationLog, DayConfig, PartyConfig } from '../types';
@@ -1668,6 +1669,8 @@ export default function CalendarView({
                         const rawDateStr = format(dateObj, "EEEE, dd 'de' MMMM", { locale: ptBR });
                         const formattedDateClean = rawDateStr.replace(/-feira/gi, '').replace(/\s+feira/gi, '');
 
+                        const isCoordination = isParty && (partyName || '').toLowerCase().includes('coordena');
+
                         return (
                           <div 
                             key={d.date}
@@ -1677,18 +1680,22 @@ export default function CalendarView({
                             }}
                             className={cn(
                               "flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none hover:scale-[1.01] duration-150 group gap-3",
-                              isParty 
-                                ? "bg-purple-500/5 border-purple-500/20 hover:border-purple-500/45 hover:bg-purple-500/10" 
-                                : "bg-brand-primary/5 border-brand-primary/20 hover:border-brand-primary/45 hover:bg-brand-primary/10"
+                              isCoordination
+                                ? "bg-cyan-500/5 border-cyan-500/20 hover:border-cyan-500/45 hover:bg-cyan-500/10"
+                                : isParty 
+                                  ? "bg-purple-500/5 border-purple-500/20 hover:border-purple-500/45 hover:bg-purple-500/10" 
+                                  : "bg-brand-primary/5 border-brand-primary/20 hover:border-brand-primary/45 hover:bg-brand-primary/10"
                             )}
                           >
                             <div className="flex items-center gap-3 animate-in fade-in duration-200 min-w-0">
                               {/* Date circle badge */}
                               <div className={cn(
                                 "w-11 h-11 rounded-xl flex flex-col items-center justify-center font-black shrink-0 shadow-md transition-all",
-                                isParty 
-                                  ? "bg-purple-600 text-white group-hover:bg-purple-500" 
-                                  : "bg-brand-primary text-slate-900 group-hover:bg-brand-primary-hover"
+                                isCoordination
+                                  ? "bg-cyan-500 text-slate-950 group-hover:bg-cyan-400"
+                                  : isParty 
+                                    ? "bg-purple-600 text-white group-hover:bg-purple-500" 
+                                    : "bg-brand-primary text-slate-900 group-hover:bg-brand-primary-hover"
                               )}>
                                 <span className="text-sm leading-none">{format(dateObj, 'dd')}</span>
                                 <span className="text-[8px] uppercase tracking-wider leading-none mt-0.5 font-bold">
@@ -1703,8 +1710,12 @@ export default function CalendarView({
                                 </p>
 
                                 <div className="flex flex-wrap items-center gap-1.5">
-                                  {/* Onde é a escala (Festa ou CCSP) */}
-                                  {isParty ? (
+                                  {/* Onde é a escala (Festa, Coordenação ou CCSP) */}
+                                  {isCoordination ? (
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-cyan-500/10 dark:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 px-2 py-0.5 rounded border border-cyan-500/20">
+                                      <ShieldCheck size={10} className="shrink-0 text-cyan-300" /> Coordenação
+                                    </span>
+                                  ) : isParty ? (
                                     <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-purple-500/10 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded border border-purple-500/20">
                                       🎉 {partyName && partyName !== 'Festa' ? `Festa: ${partyName}` : 'Festa'}
                                     </span>
