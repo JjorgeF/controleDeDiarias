@@ -30,6 +30,11 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // In development / preview containers, do not cache or intercept HTML/JS requests
+  if (self.location.hostname.endsWith('run.app') || self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1') {
+    return; // Let browser handle network requests directly without SW intercept
+  }
+
   const url = new URL(event.request.url);
 
   // 1. Intercept manifest.json requests to dynamically update the PWA icon mapping
@@ -108,18 +113,65 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+// Handle Web Push / Background Push Notifications when PWA is closed or in background
+self.addEventListener('push', (event) => {
+  let data = {
+    title: 'Liga Positiva',
+    body: 'Você possui uma nova notificação do sistema!',
+    icon: '/logo.svg',
+    url: '/'
+  };
+
+  if (event.data) {
+    try {
+      const json = event.data.json();
+      if (json.notification) {
+        data.title = json.notification.title || data.title;
+        data.body = json.notification.body || data.body;
+        if (json.notification.icon) data.icon = json.notification.icon;
+      } else {
+        data = { ...data, ...json };
+      }
+    } catch (e) {
+      data.body = event.data.text();
+    }
+  }
+
+  const options = {
+    body: data.body,
+    icon: data.icon || '/logo.svg',
+    badge: '/logo.svg',
+    vibrate: [200, 100, 200, 100, 200],
+    tag: data.id || 'liga-push-' + Date.now(),
+    renotify: true,
+    data: {
+      url: data.url || '/',
+      timestamp: Date.now()
+    },
+    actions: [
+      { action: 'open', title: 'Abrir Liga Positiva' }
+    ]
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, options)
+  );
+});
+
 // Handle notification click on mobile devices
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  const targetUrl = event.notification.data?.url || '/';
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
-        if ('focus' in client) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
           return client.focus();
         }
       }
       if (clients.openWindow) {
-        return clients.openWindow('/');
+        return clients.openWindow(targetUrl);
       }
     })
   );
