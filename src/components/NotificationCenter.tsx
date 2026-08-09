@@ -20,6 +20,7 @@ import { AppNotification, NotificationType, CustomNotificationDoc } from '../typ
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '../lib/utils';
+import { registerPushSubscription } from '../lib/pushNotifications';
 
 interface NotificationCenterProps {
   notifications: AppNotification[];
@@ -68,7 +69,7 @@ export default function NotificationCenter({
     };
   }, [isOpen]);
 
-  // Request browser notification permission
+  // Request browser & PWA background notification permission
   const handleEnableBrowserNotifications = async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
       alert('Seu navegador não suporta notificações de sistema.');
@@ -76,13 +77,14 @@ export default function NotificationCenter({
     }
 
     try {
-      const permission = await Notification.requestPermission();
-      setBrowserPermission(permission);
-      if (permission === 'granted') {
-        new Notification('Liga Positiva', {
-          body: 'Notificações do sistema ativadas com sucesso!',
-          icon: '/logo.svg'
-        });
+      const result = await registerPushSubscription();
+      if (typeof Notification !== 'undefined') {
+        setBrowserPermission(Notification.permission);
+      }
+      if (result.success) {
+        console.log('Push subscription status:', result.message);
+      } else {
+        alert(result.message);
       }
     } catch (error) {
       console.error('Erro ao solicitar permissão de notificações:', error);
