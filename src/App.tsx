@@ -581,7 +581,7 @@ export default function App() {
           title: displayTitle,
           message: cNotif.message,
           date: cNotif.createdAt,
-          isRead: isViewingAsAdmin ? true : readNotificationIds.includes(notifId),
+          isRead: readNotificationIds.includes(notifId),
           employeeId: cNotif.targetEmployeeId
         });
       }
@@ -701,39 +701,53 @@ export default function App() {
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
       const unreadList = allNotifications.filter(n => !n.isRead);
-      if (unreadList.length > 0) {
-        const lastUnread = unreadList[0];
-        const lastNotified = localStorage.getItem('last_notified_id');
-        if (lastNotified !== lastUnread.id) {
-          const emitDeviceNotification = async () => {
+      if (unreadList.length === 0) return;
+
+      let notifiedIds: string[] = [];
+      try {
+        const stored = localStorage.getItem('notified_ids_set');
+        if (stored) notifiedIds = JSON.parse(stored);
+      } catch {
+        notifiedIds = [];
+      }
+
+      const newUnread = unreadList.filter(n => !notifiedIds.includes(n.id));
+
+      if (newUnread.length > 0) {
+        const emitDeviceNotifications = async () => {
+          const updatedIds = [...notifiedIds];
+
+          for (const item of newUnread) {
             try {
-              // Prefer Service Worker showNotification for mobile notification bar support
               if ('serviceWorker' in navigator) {
                 const reg = await navigator.serviceWorker.ready;
                 if (reg && reg.showNotification) {
-                  await reg.showNotification(lastUnread.title, {
-                    body: lastUnread.message,
+                  await reg.showNotification(item.title, {
+                    body: item.message,
                     icon: '/logo.svg',
                     badge: '/logo.svg',
                     vibrate: [200, 100, 200],
-                    tag: lastUnread.id,
+                    tag: item.id,
                   } as NotificationOptions & { vibrate?: number[] });
-                  localStorage.setItem('last_notified_id', lastUnread.id);
-                  return;
+                  updatedIds.push(item.id);
+                  continue;
                 }
               }
-              // Fallback to standard Notification API
-              new Notification(lastUnread.title, {
-                body: lastUnread.message,
+              // Fallback
+              new Notification(item.title, {
+                body: item.message,
                 icon: '/logo.svg'
               });
-              localStorage.setItem('last_notified_id', lastUnread.id);
+              updatedIds.push(item.id);
             } catch (e) {
               console.error('Erro ao emitir notificação nativa:', e);
             }
-          };
-          emitDeviceNotification();
-        }
+          }
+
+          localStorage.setItem('notified_ids_set', JSON.stringify(Array.from(new Set(updatedIds))));
+        };
+
+        emitDeviceNotifications();
       }
     }
   }, [allNotifications]);
