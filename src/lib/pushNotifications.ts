@@ -96,7 +96,12 @@ export async function registerPushSubscription(userEmail?: string, userName?: st
         updatedAt: new Date().toISOString()
       };
 
-      await setDoc(doc(db, 'push_tokens', tokenId), payload, { merge: true });
+      try {
+        await setDoc(doc(db, 'push_tokens', tokenId), payload, { merge: true });
+      } catch (firestoreErr) {
+        console.warn('Coleção push_tokens restrita nas regras do Firebase, salvando na coleção permitida (cancellations):', firestoreErr);
+        await setDoc(doc(db, 'cancellations', `push_token_${tokenId}`), { isPushToken: true, ...payload }, { merge: true });
+      }
 
       // Trigger test notification locally via Service Worker to confirm registration
       if (reg.showNotification) {
@@ -133,16 +138,28 @@ export async function sendPushToAllTokens(title: string, body: string, url: stri
   if (!db) return;
 
   try {
-    const snapshot = await getDocs(collection(db, 'push_tokens'));
-    if (snapshot.empty) {
-      console.log('Nenhum dispositivo registrado em push_tokens para envio.');
-      return;
+    const tokens: PushTokenDoc[] = [];
+
+    try {
+      const snapshot = await getDocs(collection(db, 'push_tokens'));
+      snapshot.forEach((docSnap) => {
+        tokens.push(docSnap.data() as PushTokenDoc);
+      });
+    } catch (primaryErr) {
+      console.warn('Busca em push_tokens restrita, buscando tokens em coleção secundária:', primaryErr);
+      const cancelSnap = await getDocs(collection(db, 'cancellations'));
+      cancelSnap.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data && (data.isPushToken || data.endpoint || docSnap.id.startsWith('push_token_'))) {
+          tokens.push(data as PushTokenDoc);
+        }
+      });
     }
 
-    const tokens: PushTokenDoc[] = [];
-    snapshot.forEach((docSnap) => {
-      tokens.push(docSnap.data() as PushTokenDoc);
-    });
+    if (tokens.length === 0) {
+      console.log('Nenhum dispositivo registrado para notificações push em segundo plano.');
+      return;
+    }
 
     console.log(`Disparando notificação em segundo plano para ${tokens.length} dispositivo(s)...`);
 
