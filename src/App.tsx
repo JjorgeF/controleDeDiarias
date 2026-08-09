@@ -28,6 +28,7 @@ import SimulationBanner from './components/SimulationBanner';
 import EmployeeStoryView from './components/EmployeeStoryView';
 import MonthlyScheduleView from './components/MonthlyScheduleView';
 import InAppBrowserGuide, { isInAppBrowser } from './components/InAppBrowserGuide';
+import { registerPushSubscription, sendPushToAllTokens } from './lib/pushNotifications';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import Logo from './components/Logo';
 import { LogIn, AlertTriangle, Calendar, Award, X, Table, UserPlus, Plus } from 'lucide-react';
@@ -231,6 +232,10 @@ export default function App() {
             } catch (logErr) {
               console.error("Erro geral ao salvar log de acesso:", logErr);
             }
+          }
+          // Sync push subscription for PWA background notifications if permission was granted
+          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+            registerPushSubscription(user.email, user.displayName || user.email.split('@')[0]).catch(() => {});
           }
         } catch (error) {
           console.error("Erro ao verificar status de admin:", error);
@@ -625,6 +630,12 @@ export default function App() {
       }
 
       await setDoc(docRef, { items }, { merge: true });
+
+      // Dispatch background push notification to all registered PWA devices
+      sendPushToAllTokens(data.title, data.message).catch(e => {
+        console.warn('Erro ao disparar push notification:', e);
+      });
+
       return { success: true };
     } catch (err: any) {
       console.error('Erro ao enviar notificação personalizada:', err);
