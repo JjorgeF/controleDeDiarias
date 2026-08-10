@@ -137,66 +137,27 @@ export async function registerPushSubscription(userEmail?: string, userName?: st
  * Delivers alerts to users even when their PWA is closed.
  */
 export async function sendPushToAllTokens(title: string, body: string, url: string = '/', targetEmployeeId?: string) {
-  if (!db) return;
-
   try {
-    const allTokens: PushTokenDoc[] = [];
-
-    try {
-      const snapshot = await getDocs(collection(db, 'push_tokens'));
-      snapshot.forEach((docSnap) => {
-        allTokens.push(docSnap.data() as PushTokenDoc);
-      });
-    } catch (primaryErr) {
-      console.warn('Busca em push_tokens restrita, buscando tokens em coleção secundária:', primaryErr);
-      const cancelSnap = await getDocs(collection(db, 'cancellations'));
-      cancelSnap.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (data && (data.isPushToken || data.endpoint || docSnap.id.startsWith('push_token_'))) {
-          allTokens.push(data as PushTokenDoc);
-        }
-      });
-    }
-
-    // Filter tokens if targeted to a specific employee
-    const tokens = (targetEmployeeId && targetEmployeeId !== 'all')
-      ? allTokens.filter(t => t.employeeId === targetEmployeeId || (t.userEmail && targetEmployeeId && t.userEmail.toLowerCase().includes(targetEmployeeId.toLowerCase())))
-      : allTokens;
-
-    if (tokens.length === 0) {
-      console.log('Nenhum dispositivo cadastrado para o destinatário desta notificação.');
-      return;
-    }
-
-    console.log(`Disparando notificação em segundo plano para ${tokens.length} dispositivo(s)...`);
-
-    // Dispatch via Web Push protocol endpoints
-    const promises = tokens.map(async (item) => {
-      if (!item.endpoint) return;
-
-      try {
-        await fetch(item.endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'TTL': '86400'
-          },
-          body: JSON.stringify({
-            title,
-            body,
-            icon: '/logo.svg',
-            url
-          })
-        }).catch((e) => {
-          console.warn('Push endpoint fetch result:', e);
-        });
-      } catch (err) {
-        console.warn('Erro ao enviar push para token:', item.id, err);
-      }
+    const res = await fetch('/api/send-push', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        title,
+        body,
+        url,
+        targetEmployeeId
+      })
     });
 
-    await Promise.allSettled(promises);
+    if (res.ok) {
+      const data = await res.json();
+      console.log('Push enviado com sucesso via servidor:', data);
+    } else {
+      console.warn('Aviso do servidor de push:', res.status, await res.text());
+    }
   } catch (error) {
-    console.error('Erro ao buscar tokens de push para envio:', error);
+    console.error('Erro ao conectar ao servidor de push /api/send-push:', error);
   }
 }
