@@ -16,10 +16,17 @@ export interface PushTokenDoc {
   updatedAt: string;
 }
 
+// Helper to clean base64 string
+function cleanBase64Key(keyStr: string): string {
+  if (!keyStr) return '';
+  return keyStr.trim().replace(/^["']|["']$/g, '').replace(/\s+/g, '');
+}
+
 // Convert VAPID key string to Uint8Array for PushManager
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const cleaned = cleanBase64Key(base64String);
+  const padding = '='.repeat((4 - (cleaned.length % 4)) % 4);
+  const base64 = (cleaned + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData = window.atob(base64);
   const outputArray = new Uint8Array(rawData.length);
   for (let i = 0; i < rawData.length; ++i) {
@@ -52,6 +59,32 @@ export async function registerPushSubscription(
       return { success: false, message: 'Permissão de notificações não foi concedida pelo usuário.' };
     }
 
+    const vapidKeyRaw = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+    if (!vapidKeyRaw) {
+      return {
+        success: false,
+        message: 'A variável VITE_FIREBASE_VAPID_KEY não está configurada no ambiente Vercel. Adicione nas variáveis de ambiente e faça um Novo Deploy.'
+      };
+    }
+
+    const cleanedVapidKey = cleanBase64Key(vapidKeyRaw);
+    let applicationServerKey: Uint8Array;
+    try {
+      applicationServerKey = urlBase64ToUint8Array(cleanedVapidKey);
+    } catch (parseErr: any) {
+      return {
+        success: false,
+        message: `A variável VITE_FIREBASE_VAPID_KEY não é uma string Base64URL válida: ${parseErr?.message || parseErr}`
+      };
+    }
+
+    if (applicationServerKey.length !== 65) {
+      return {
+        success: false,
+        message: `Chave VAPID inválida (${applicationServerKey.length} bytes / ${cleanedVapidKey.length} caracteres). Uma chave pública VAPID P-256 válida precisa ter exatamente 65 bytes. Verifique no Firebase Console -> Configurações do Projeto -> Cloud Messaging -> Certificados do Web Push.`
+      };
+    }
+
     // Ensure Service Worker is registered and active
     let reg: ServiceWorkerRegistration;
     try {
@@ -72,52 +105,42 @@ export async function registerPushSubscription(
       }
     }
 
-    const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
-
     if (!subscription) {
-      if (!vapidKey) {
-        return {
-          success: false,
-          message: 'A variável VITE_FIREBASE_VAPID_KEY não está configurada no ambiente. Adicione essa variável na Vercel e faça um novo Deploy.'
-        };
-      }
-
-      let subscribeError = '';
-
       try {
-        const applicationServerKey = urlBase64ToUint8Array(vapidKey.trim());
         subscription = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey
         });
       } catch (err: any) {
-        subscribeError = err?.message || String(err);
-        console.error('Falha ao assinar PushManager com VAPID:', err);
+        const errMsg = err?.message || String(err);
+        console.warn('Falha na primeira tentativa de subscribe com VAPID:', err);
 
-        // If error is InvalidAccessError or key mismatch, try unsubscribing any stale registration and retry once
-        if (err?.name === 'InvalidAccessError' || subscribeError.includes('applicationServerKey') || subscribeError.includes('key')) {
-          try {
-            const existing = await reg.pushManager.getSubscription();
-            if (existing) {
-              await existing.unsubscribe();
-            }
-            const applicationServerKey = urlBase64ToUint8Array(vapidKey.trim());
-            subscription = await reg.pushManager.subscribe({
-              userVisibleOnly: true,
-              applicationServerKey
-            });
-            subscribeError = '';
-          } catch (retryErr: any) {
-            subscribeError = retryErr?.message || String(retryErr);
+        // Try SW reset and retry subscription
+        try {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const r of regs) {
+            await r.unregister();
+          }
+          const newReg = await navigator.serviceWorker.register('/sw.js');
+          await navigator.serviceWorker.ready;
+          subscription = await newReg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey
+          });
+        } catch (retryErr: any) {
+          const retryMsg = retryErr?.message || String(retryErr);
+          if (retryMsg.includes('push service error') || errMsg.includes('push service error')) {
+            return {
+              success: false,
+              message: `O serviço de Push do navegador recusou a chave ('push service error'). Isso indica que a chave 'VITE_FIREBASE_VAPID_KEY' não é uma chave VAPID válida ou foi revogada no Firebase Console. Vá em Firebase Console -> Configurações -> Cloud Messaging -> Certificados Web Push, recrie a chave e atualize a variável na Vercel.`
+            };
+          } else {
+            return {
+              success: false,
+              message: `Erro ao criar Assinatura Web Push: ${retryMsg || errMsg}`
+            };
           }
         }
-      }
-
-      if (!subscription) {
-        return {
-          success: false,
-          message: `Erro do Navegador ao criar Assinatura Web Push: ${subscribeError || 'PushManager não retornou assinatura'}`
-        };
       }
     }
 
@@ -189,6 +212,21 @@ export async function getPushDiagnosticsInfo() {
     }
   }
 
+  let vapidByteLength: number | null = null;
+  let vapidKeyValid = false;
+  let vapidParseError: string | null = null;
+  const cleanedVapid = cleanBase64Key(vapidKey || '');
+
+  if (cleanedVapid) {
+    try {
+      const bytes = urlBase64ToUint8Array(cleanedVapid);
+      vapidByteLength = bytes.length;
+      vapidKeyValid = bytes.length === 65;
+    } catch (e: any) {
+      vapidParseError = e?.message || String(e);
+    }
+  }
+
   return {
     notificationPermission,
     hasSW,
@@ -196,8 +234,11 @@ export async function getPushDiagnosticsInfo() {
     swActive,
     swScope,
     swError,
-    vapidKeyPublic: vapidKey ? `${vapidKey.substring(0, 15)}... (tamanho ${vapidKey.length})` : 'NÃO CONFIGURADA (VITE_FIREBASE_VAPID_KEY)',
-    hasVapidKey: !!vapidKey,
+    vapidKeyPublic: cleanedVapid ? `${cleanedVapid.substring(0, 12)}...${cleanedVapid.slice(-6)} (${cleanedVapid.length} chars, ${vapidByteLength !== null ? vapidByteLength + ' bytes' : 'erro parse'})` : 'NÃO CONFIGURADA (VITE_FIREBASE_VAPID_KEY)',
+    hasVapidKey: !!cleanedVapid,
+    vapidByteLength,
+    vapidKeyValid,
+    vapidParseError,
     hasActiveSubscription: !!subscription,
     subscription
   };
