@@ -32,7 +32,12 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
  * Registers current device for Background Push Notifications.
  * Saves the Web Push subscription / FCM token to Firestore in `push_tokens` collection.
  */
-export async function registerPushSubscription(userEmail?: string, userName?: string, employeeId?: string): Promise<{ success: boolean; message: string }> {
+export async function registerPushSubscription(
+  userEmail?: string,
+  userName?: string,
+  employeeId?: string,
+  forceRenewal: boolean = false
+): Promise<{ success: boolean; message: string }> {
   if (typeof window === 'undefined') {
     return { success: false, message: 'Ambiente não suportado.' };
   }
@@ -44,7 +49,7 @@ export async function registerPushSubscription(userEmail?: string, userName?: st
   try {
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
-      return { success: false, message: 'Permissão de notificações não foi concedida.' };
+      return { success: false, message: 'Permissão de notificações não foi concedida pelo usuário.' };
     }
 
     // Ensure Service Worker is registered and active
@@ -57,29 +62,62 @@ export async function registerPushSubscription(userEmail?: string, userName?: st
 
     let subscription = await reg.pushManager.getSubscription();
 
+    // If force renewal requested, unsubscribe old subscription first
+    if (subscription && forceRenewal) {
+      try {
+        await subscription.unsubscribe();
+        subscription = null;
+      } catch (unsubErr) {
+        console.warn('Erro ao cancelar assinatura antiga:', unsubErr);
+      }
+    }
+
     const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 
     if (!subscription) {
-      if (vapidKey) {
-        try {
-          const applicationServerKey = urlBase64ToUint8Array(vapidKey);
-          subscription = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey
-          });
-        } catch (err) {
-          console.warn('Falha ao assinar com VAPID Key, tentando sem chave explícita:', err);
+      if (!vapidKey) {
+        return {
+          success: false,
+          message: 'A variável VITE_FIREBASE_VAPID_KEY não está configurada no ambiente. Adicione essa variável na Vercel e faça um novo Deploy.'
+        };
+      }
+
+      let subscribeError = '';
+
+      try {
+        const applicationServerKey = urlBase64ToUint8Array(vapidKey.trim());
+        subscription = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey
+        });
+      } catch (err: any) {
+        subscribeError = err?.message || String(err);
+        console.error('Falha ao assinar PushManager com VAPID:', err);
+
+        // If error is InvalidAccessError or key mismatch, try unsubscribing any stale registration and retry once
+        if (err?.name === 'InvalidAccessError' || subscribeError.includes('applicationServerKey') || subscribeError.includes('key')) {
+          try {
+            const existing = await reg.pushManager.getSubscription();
+            if (existing) {
+              await existing.unsubscribe();
+            }
+            const applicationServerKey = urlBase64ToUint8Array(vapidKey.trim());
+            subscription = await reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey
+            });
+            subscribeError = '';
+          } catch (retryErr: any) {
+            subscribeError = retryErr?.message || String(retryErr);
+          }
         }
       }
 
       if (!subscription) {
-        try {
-          subscription = await reg.pushManager.subscribe({
-            userVisibleOnly: true
-          });
-        } catch (subErr) {
-          console.warn('Erro na inscrição padrão do PushManager:', subErr);
-        }
+        return {
+          success: false,
+          message: `Erro do Navegador ao criar Assinatura Web Push: ${subscribeError || 'PushManager não retornou assinatura'}`
+        };
       }
     }
 
@@ -99,19 +137,19 @@ export async function registerPushSubscription(userEmail?: string, userName?: st
       };
 
       try {
-        await setDoc(doc(db, 'push_tokens', tokenId), payload, { merge: true });
+        await setDoc(doc(doc(db, 'push_tokens', tokenId).firestore, 'push_tokens', tokenId), payload, { merge: true });
       } catch (firestoreErr) {
         console.warn('Coleção push_tokens restrita nas regras do Firebase, salvando na coleção permitida (cancellations):', firestoreErr);
         await setDoc(doc(db, 'cancellations', `push_token_${tokenId}`), { isPushToken: true, ...payload }, { merge: true });
       }
 
-      return { success: true, message: 'Notificações em segundo plano registradas com sucesso!' };
+      return { success: true, message: 'Assinatura Web Push em segundo plano registrada com SUCESSO!' };
     } else {
-      return { success: true, message: 'Permissão de notificações ativada no dispositivo!' };
+      return { success: false, message: 'Banco de dados não disponível para registrar token de notificação.' };
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erro ao registrar assinatura de push:', error);
-    return { success: false, message: error instanceof Error ? error.message : 'Erro ao ativar notificações.' };
+    return { success: false, message: error?.message || 'Erro inesperado ao ativar notificações.' };
   }
 }
 
