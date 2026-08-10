@@ -11,6 +11,7 @@ export interface PushTokenDoc {
   };
   userEmail: string;
   userName: string;
+  employeeId?: string;
   userAgent: string;
   updatedAt: string;
 }
@@ -31,7 +32,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
  * Registers current device for Background Push Notifications.
  * Saves the Web Push subscription / FCM token to Firestore in `push_tokens` collection.
  */
-export async function registerPushSubscription(userEmail?: string, userName?: string): Promise<{ success: boolean; message: string }> {
+export async function registerPushSubscription(userEmail?: string, userName?: string, employeeId?: string): Promise<{ success: boolean; message: string }> {
   if (typeof window === 'undefined') {
     return { success: false, message: 'Ambiente não suportado.' };
   }
@@ -92,6 +93,7 @@ export async function registerPushSubscription(userEmail?: string, userName?: st
         keys: subJson.keys || undefined,
         userEmail: userEmail || 'Anônimo',
         userName: userName || 'Usuário',
+        ...(employeeId ? { employeeId } : {}),
         userAgent: navigator.userAgent,
         updatedAt: new Date().toISOString()
       };
@@ -134,16 +136,16 @@ export async function registerPushSubscription(userEmail?: string, userName?: st
  * Dispatches push notifications to all registered tokens in Firestore `push_tokens`.
  * Delivers alerts to users even when their PWA is closed.
  */
-export async function sendPushToAllTokens(title: string, body: string, url: string = '/') {
+export async function sendPushToAllTokens(title: string, body: string, url: string = '/', targetEmployeeId?: string) {
   if (!db) return;
 
   try {
-    const tokens: PushTokenDoc[] = [];
+    const allTokens: PushTokenDoc[] = [];
 
     try {
       const snapshot = await getDocs(collection(db, 'push_tokens'));
       snapshot.forEach((docSnap) => {
-        tokens.push(docSnap.data() as PushTokenDoc);
+        allTokens.push(docSnap.data() as PushTokenDoc);
       });
     } catch (primaryErr) {
       console.warn('Busca em push_tokens restrita, buscando tokens em coleção secundária:', primaryErr);
@@ -151,13 +153,18 @@ export async function sendPushToAllTokens(title: string, body: string, url: stri
       cancelSnap.forEach((docSnap) => {
         const data = docSnap.data();
         if (data && (data.isPushToken || data.endpoint || docSnap.id.startsWith('push_token_'))) {
-          tokens.push(data as PushTokenDoc);
+          allTokens.push(data as PushTokenDoc);
         }
       });
     }
 
+    // Filter tokens if targeted to a specific employee
+    const tokens = (targetEmployeeId && targetEmployeeId !== 'all')
+      ? allTokens.filter(t => t.employeeId === targetEmployeeId || (t.userEmail && targetEmployeeId && t.userEmail.toLowerCase().includes(targetEmployeeId.toLowerCase())))
+      : allTokens;
+
     if (tokens.length === 0) {
-      console.log('Nenhum dispositivo registrado para notificações push em segundo plano.');
+      console.log('Nenhum dispositivo cadastrado para o destinatário desta notificação.');
       return;
     }
 
