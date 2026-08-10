@@ -95,8 +95,8 @@ export async function registerPushSubscription(
 
     let subscription = await reg.pushManager.getSubscription();
 
-    // If force renewal requested, unsubscribe old subscription first
-    if (subscription && forceRenewal) {
+    // If subscription exists, or force renewal is requested, unsubscribe old subscription to clear push server cache
+    if (subscription && (forceRenewal || true)) {
       try {
         await subscription.unsubscribe();
         subscription = null;
@@ -117,6 +117,12 @@ export async function registerPushSubscription(
 
         // Try SW reset and retry subscription
         try {
+          // Explicitly clear any lingering subscription
+          const oldSub = await reg.pushManager.getSubscription();
+          if (oldSub) {
+            await oldSub.unsubscribe().catch(() => {});
+          }
+
           const regs = await navigator.serviceWorker.getRegistrations();
           for (const r of regs) {
             await r.unregister();
@@ -132,7 +138,7 @@ export async function registerPushSubscription(
           if (retryMsg.includes('push service error') || errMsg.includes('push service error')) {
             return {
               success: false,
-              message: `O serviço de Push do navegador recusou a chave ('push service error'). Isso indica que a chave 'VITE_FIREBASE_VAPID_KEY' não é uma chave VAPID válida ou foi revogada no Firebase Console. Vá em Firebase Console -> Configurações -> Cloud Messaging -> Certificados Web Push, recrie a chave e atualize a variável na Vercel.`
+              message: `O serviço de Push do navegador recusou a chave ('push service error').\n\nIsso ocorre quando o manifest.json não continha o gcm_sender_id ou o navegador mantinha um registro antigo no cache. Atualizamos o manifest.json do app com "gcm_sender_id": "103953800507". Recarregue a página (F5) e tente novamente.`
             };
           } else {
             return {
