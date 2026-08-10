@@ -49,13 +49,40 @@ export async function registerPushSubscription(
     return { success: false, message: 'Ambiente não suportado.' };
   }
 
+  const userAgent = navigator.userAgent || '';
+  const isIOS = (/iPad|iPhone|iPod/.test(userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) && !('MSStream' in window);
+  const isAndroid = /Android/i.test(userAgent);
+  const isStandalone = (window.navigator as any).standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+
+  // iOS Requirement: Push Notifications require PWA added to Home Screen
+  if (isIOS && !isStandalone) {
+    window.dispatchEvent(new Event('show-pwa-prompt'));
+    return {
+      success: false,
+      message: `No iPhone / iPad (iOS), as notificações de segundo plano exigem que o aplicativo esteja instalado na Tela de Início.\n\nComo instalar agora:\n1. Toque no ícone de Compartilhar (no rodapé do Safari - quadrado com seta para cima)\n2. Selecione 'Adicionar à Tela de Início'\n3. Abra o app pelo ícone criado na tela inicial e ative as notificações!`
+    };
+  }
+
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    if (isIOS) {
+      window.dispatchEvent(new Event('show-pwa-prompt'));
+      return {
+        success: false,
+        message: `Para ativar notificações no iOS, adicione o aplicativo à Tela de Início (Compartilhar -> Adicionar à Tela de Início).`
+      };
+    }
     return { success: false, message: 'Seu navegador ou dispositivo não suporta notificações em segundo plano (PWA).' };
   }
 
   try {
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
+      if (isAndroid) {
+        return {
+          success: false,
+          message: `Permissão de notificações bloqueada no Android.\n\nPara liberar:\n1. Acesse as Configurações do Android\n2. Vá em Aplicativos -> Chrome (ou seu navegador) -> Permissões -> Notificações\n3. Selecione 'Permitir' e tente novamente no app.`
+        };
+      }
       return { success: false, message: 'Permissão de notificações não foi concedida pelo usuário.' };
     }
 
@@ -162,9 +189,26 @@ export async function registerPushSubscription(
         } catch (retryErr: any) {
           const retryMsg = retryErr?.message || String(retryErr);
           if (retryMsg.includes('push service error') || errMsg.includes('push service error')) {
+            const isBrave = (navigator as any).brave && typeof (navigator as any).brave.isBrave === 'function';
+            let braveDetected = false;
+            if (isBrave) {
+              try {
+                braveDetected = await (navigator as any).brave.isBrave();
+              } catch {
+                braveDetected = false;
+              }
+            }
+
+            if (braveDetected) {
+              return {
+                success: false,
+                message: `O navegador BRAVE bloqueia os serviços do Google Push por padrão para proteção de privacidade.\n\nPara ativar no Brave:\n1. Digite brave://settings/privacy na barra de endereço\n2. Ative a opção: "Usar os serviços do Google para mensagens push" (Use Google services for push messaging)\n3. Feche e reabra a aba do app e clique em 'Ativar Notificações' novamente!`
+              };
+            }
+
             return {
               success: false,
-              message: `O serviço de Push do navegador recusou a conexão temporariamente ('push service error').\n\nIsso é um cache local do navegador. Para resolver na segunda máquina:\n1. Clique no cadeado no topo do navegador (ao lado da URL)\n2. Escolha 'Configurações do site' -> 'Redefinir permissões' ou 'Limpar dados'\n3. Recarregue a página e permita as notificações novamente.`
+              message: `O serviço de Push do navegador recusou a conexão ('push service error').\n\nSe você estiver usando o navegador BRAVE:\n- Vá em brave://settings/privacy e ative "Usar os serviços do Google para mensagens push".\n\nSe estiver no Chrome/Edge:\n- Clique no cadeado (lado da URL) -> Configurações do site -> Redefinir permissões, depois recarregue a página.`
             };
           } else {
             return {
