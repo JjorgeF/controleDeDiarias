@@ -134,14 +134,28 @@ export async function registerPushSubscription(
         const errMsg = err?.message || String(err);
         console.warn('Falha na primeira tentativa de subscribe com VAPID:', err);
 
-        // Retry once by clearing any lingering subscription without destroying the SW
+        // Retry by unregistering stale Service Worker and re-subscribing cleanly
         try {
-          const oldSub = await reg.pushManager.getSubscription();
-          if (oldSub) {
-            await oldSub.unsubscribe().catch(() => {});
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const r of regs) {
+            await r.unregister().catch(() => {});
           }
+          const freshReg = await navigator.serviceWorker.register('/sw.js');
+          
+          // Wait up to 3 seconds for worker to activate
+          await new Promise<void>((resolve) => {
+            const worker = freshReg.installing || freshReg.waiting || freshReg.active;
+            if (!worker || worker.state === 'activated') {
+              resolve();
+              return;
+            }
+            worker.addEventListener('statechange', () => {
+              if (worker.state === 'activated' || worker.state === 'redundant') resolve();
+            });
+            setTimeout(resolve, 3000);
+          });
 
-          subscription = await reg.pushManager.subscribe({
+          subscription = await freshReg.pushManager.subscribe({
             userVisibleOnly: true,
             applicationServerKey
           });
@@ -150,7 +164,7 @@ export async function registerPushSubscription(
           if (retryMsg.includes('push service error') || errMsg.includes('push service error')) {
             return {
               success: false,
-              message: `O serviço de Push do navegador recusou a chave ('push service error'). Recarregue a página (F5) para atualizar o manifest.json e restabelecer a conexão.`
+              message: `O serviço de Push do navegador recusou a conexão temporariamente ('push service error').\n\nIsso é um cache local do navegador. Para resolver na segunda máquina:\n1. Clique no cadeado no topo do navegador (ao lado da URL)\n2. Escolha 'Configurações do site' -> 'Redefinir permissões' ou 'Limpar dados'\n3. Recarregue a página e permita as notificações novamente.`
             };
           } else {
             return {
