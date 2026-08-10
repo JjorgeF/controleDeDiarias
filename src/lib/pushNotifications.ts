@@ -137,7 +137,37 @@ export async function registerPushSubscription(userEmail?: string, userName?: st
  * Delivers alerts to users even when their PWA is closed.
  */
 export async function sendPushToAllTokens(title: string, body: string, url: string = '/', targetEmployeeId?: string) {
+  if (!db) return;
+
   try {
+    const allTokens: PushTokenDoc[] = [];
+
+    try {
+      const snapshot = await getDocs(collection(db, 'push_tokens'));
+      snapshot.forEach((docSnap) => {
+        allTokens.push(docSnap.data() as PushTokenDoc);
+      });
+    } catch (primaryErr) {
+      console.warn('Busca em push_tokens restrita, buscando tokens em coleção secundária:', primaryErr);
+      const cancelSnap = await getDocs(collection(db, 'cancellations'));
+      cancelSnap.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data && (data.isPushToken || data.endpoint || docSnap.id.startsWith('push_token_'))) {
+          allTokens.push(data as PushTokenDoc);
+        }
+      });
+    }
+
+    // Filter tokens if targeted to a specific employee
+    const filteredTokens = (targetEmployeeId && targetEmployeeId !== 'all')
+      ? allTokens.filter(t => t.employeeId === targetEmployeeId || (t.userEmail && targetEmployeeId && t.userEmail.toLowerCase().includes(targetEmployeeId.toLowerCase())))
+      : allTokens;
+
+    if (filteredTokens.length === 0) {
+      console.log('Nenhum dispositivo cadastrado para o destinatário desta notificação.');
+      return;
+    }
+
     const res = await fetch('/api/send-push', {
       method: 'POST',
       headers: {
@@ -147,7 +177,7 @@ export async function sendPushToAllTokens(title: string, body: string, url: stri
         title,
         body,
         url,
-        targetEmployeeId
+        tokens: filteredTokens
       })
     });
 
@@ -158,6 +188,6 @@ export async function sendPushToAllTokens(title: string, body: string, url: stri
       console.warn('Aviso do servidor de push:', res.status, await res.text());
     }
   } catch (error) {
-    console.error('Erro ao conectar ao servidor de push /api/send-push:', error);
+    console.error('Erro ao buscar tokens e enviar push via /api/send-push:', error);
   }
 }
