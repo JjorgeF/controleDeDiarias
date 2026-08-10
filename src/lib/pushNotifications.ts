@@ -138,7 +138,7 @@ export async function registerPushSubscription(
           if (retryMsg.includes('push service error') || errMsg.includes('push service error')) {
             return {
               success: false,
-              message: `O serviço de Push do navegador recusou a chave ('push service error').\n\nIsso ocorre quando o manifest.json não continha o gcm_sender_id ou o navegador mantinha um registro antigo no cache. Atualizamos o manifest.json do app com "gcm_sender_id": "103953800507". Recarregue a página (F5) e tente novamente.`
+              message: `O navegador recusou a inscrição de push ('push service error'). Recarregue a página (F5) ou limpe os dados do site no navegador para renovar a permissão.`
             };
           } else {
             return {
