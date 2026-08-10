@@ -51,7 +51,7 @@ export default function PushDiagnosticsModal({
   const handleRegisterDevice = async () => {
     setLoading(true);
     try {
-      const res = await registerPushSubscription(userEmail, userName);
+      const res = await registerPushSubscription(userEmail, userName, undefined, true);
       alert(res.message);
       await loadDiagnostics();
     } catch (e: any) {
