@@ -13,7 +13,8 @@ import {
   BarChart3,
   Settings,
   Send,
-  Table
+  Table,
+  Activity
 } from 'lucide-react';
 import { auth, googleProvider } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
@@ -42,6 +43,7 @@ interface HeaderProps {
   onOpenSendNotificationModal?: () => void;
   customNotificationsDocs?: CustomNotificationDoc[];
   onDeleteCustomNotification?: (id: string) => Promise<void>;
+  onOpenPushDiagnostics?: () => void;
 }
 
 export default function Header({ 
@@ -62,7 +64,8 @@ export default function Header({
   onNavigateToCalendar,
   onOpenSendNotificationModal,
   customNotificationsDocs = [],
-  onDeleteCustomNotification
+  onDeleteCustomNotification,
+  onOpenPushDiagnostics
 }: HeaderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isStandalone, setIsStandalone] = useState(false);
@@ -222,6 +225,7 @@ export default function Header({
             isAdmin={isAdmin}
             customNotificationsDocs={customNotificationsDocs}
             onDeleteCustomNotification={onDeleteCustomNotification}
+            onOpenPushDiagnostics={onOpenPushDiagnostics}
           />
 
           <button 
@@ -271,6 +275,19 @@ export default function Header({
                   >
                     <LogIn size={16} />
                     <span>Entrar com Google</span>
+                  </button>
+                )}
+
+                {onOpenPushDiagnostics && (
+                  <button
+                    onClick={() => {
+                      setIsSettingsOpen(false);
+                      onOpenPushDiagnostics();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-purple-300 hover:text-purple-200 hover:bg-purple-500/10 rounded-lg transition-colors text-left"
+                  >
+                    <Activity size={16} className="text-purple-400" />
+                    <span>Diagnóstico de Notificações</span>
                   </button>
                 )}
 

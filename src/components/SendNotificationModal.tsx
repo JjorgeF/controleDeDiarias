@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Send, Users, User, AlertCircle, Sparkles } from 'lucide-react';
+import { X, Send, Users, User, AlertCircle, Sparkles, Activity } from 'lucide-react';
 import { Employee } from '../types';
 
 interface SendNotificationModalProps {
@@ -13,13 +13,15 @@ interface SendNotificationModalProps {
     targetEmployeeName?: string;
   }) => Promise<{ success: boolean; error?: string }>;
   employees: Employee[];
+  onOpenDiagnostics?: () => void;
 }
 
 export default function SendNotificationModal({
   isOpen,
   onClose,
   onSend,
-  employees
+  employees,
+  onOpenDiagnostics
 }: SendNotificationModalProps) {
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
@@ -193,32 +195,48 @@ export default function SendNotificationModal({
           </div>
 
           {/* Footer buttons */}
-          <div className="pt-2 flex items-center justify-end gap-2 border-t border-brand-border/60">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="px-4 py-2.5 text-xs font-bold text-brand-muted hover:text-brand-text transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-5 py-2.5 bg-brand-primary hover:bg-brand-primary-hover text-brand-bg font-bold rounded-xl text-xs transition-colors flex items-center gap-2 disabled:opacity-50"
-            >
-              {isSubmitting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-brand-bg border-t-transparent rounded-full animate-spin" />
-                  <span>Enviando...</span>
-                </>
-              ) : (
-                <>
-                  <Send size={15} />
-                  <span>Disparar Notificação</span>
-                </>
-              )}
-            </button>
+          <div className="pt-2 flex items-center justify-between gap-2 border-t border-brand-border/60">
+            {onOpenDiagnostics ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenDiagnostics();
+                }}
+                className="px-3 py-2 text-xs font-semibold text-purple-400 hover:text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 rounded-xl transition-all flex items-center gap-1.5"
+              >
+                <Activity size={14} />
+                <span>Diagnosticar Push</span>
+              </button>
+            ) : <div />}
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isSubmitting}
+                className="px-4 py-2.5 text-xs font-bold text-brand-muted hover:text-brand-text transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-5 py-2.5 bg-brand-primary hover:bg-brand-primary-hover text-brand-bg font-bold rounded-xl text-xs transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-brand-bg border-t-transparent rounded-full animate-spin" />
+                    <span>Enviando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send size={15} />
+                    <span>Disparar Notificação</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>

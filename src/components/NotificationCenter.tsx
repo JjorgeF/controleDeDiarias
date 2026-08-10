@@ -14,7 +14,8 @@ import {
   Sparkles,
   Send,
   History,
-  Zap
+  Zap,
+  Activity
 } from 'lucide-react';
 import { AppNotification, NotificationType, CustomNotificationDoc } from '../types';
 import { format, parseISO } from 'date-fns';
@@ -33,6 +34,7 @@ interface NotificationCenterProps {
   isAdmin: boolean;
   customNotificationsDocs?: CustomNotificationDoc[];
   onDeleteCustomNotification?: (id: string) => Promise<void>;
+  onOpenPushDiagnostics?: () => void;
 }
 
 export default function NotificationCenter({
@@ -45,7 +47,8 @@ export default function NotificationCenter({
   onOpenSendModal,
   isAdmin,
   customNotificationsDocs = [],
-  onDeleteCustomNotification
+  onDeleteCustomNotification,
+  onOpenPushDiagnostics
 }: NotificationCenterProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread' | 'cancellation' | 'deadline' | 'sent_history'>('all');
@@ -157,6 +160,19 @@ export default function NotificationCenter({
             </div>
             
             <div className="flex items-center gap-1.5">
+              {onOpenPushDiagnostics && (
+                <button
+                  onClick={() => {
+                    onOpenPushDiagnostics();
+                    setIsOpen(false);
+                  }}
+                  className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 font-bold text-[11px] px-2 py-1 rounded-lg flex items-center gap-1 transition-colors"
+                  title="Diagnosticar e testar notificações push no dispositivo"
+                >
+                  <Activity size={12} />
+                  <span className="hidden sm:inline">Diagnóstico</span>
+                </button>
+              )}
               {isAdmin && onOpenSendModal && (
                 <button
                   onClick={() => {
