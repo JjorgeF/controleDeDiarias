@@ -235,7 +235,9 @@ export default function App() {
           }
           // Sync push subscription for PWA background notifications if permission was granted
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-            registerPushSubscription(user.email, user.displayName || user.email.split('@')[0]).catch(() => {});
+            const myEmailLower = (user.email || '').trim().toLowerCase();
+            const myEmp = employees.find(e => (myEmailLower && (e.email || '').trim().toLowerCase() === myEmailLower) || (user.uid && e.userId === user.uid));
+            registerPushSubscription(user.email, user.displayName || user.email.split('@')[0], myEmp?.id).catch(() => {});
           }
         } catch (error) {
           console.error("Erro ao verificar status de admin:", error);
@@ -556,18 +558,18 @@ export default function App() {
     }
 
     // 3. Custom broadcast or targeted notifications
+    const userEmailLower = (user?.email || '').trim().toLowerCase();
     const myRecord = simulationActive
       ? employees.find(e => e.id === simulatedEmployeeId)
-      : employees[0];
+      : (userEmailLower
+          ? employees.find(e => (e.email || '').trim().toLowerCase() === userEmailLower || (user?.uid && e.userId === user.uid))
+          : null);
 
     customNotificationsDocs.forEach(cNotif => {
       const notifId = `custom_${cNotif.id}`;
       if (dismissedNotificationIds.includes(notifId)) return;
 
-      const isTargetedToMe = !isViewingAsAdmin && (
-        cNotif.targetType === 'all' || 
-        (myRecord && cNotif.targetEmployeeId === myRecord.id)
-      );
+      const isTargetedToMe = cNotif.targetType === 'all' || !cNotif.targetEmployeeId || (myRecord && cNotif.targetEmployeeId === myRecord.id);
 
       if (isViewingAsAdmin || isTargetedToMe) {
         let displayTitle = cNotif.title;
@@ -588,7 +590,7 @@ export default function App() {
     });
 
     return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [cancellations, deadlines, currentMonth, isViewingAsAdmin, readNotificationIds, dismissedNotificationIds, customNotificationsDocs, employees, dayConfigs, simulationActive, simulatedEmployeeId]);
+  }, [cancellations, deadlines, currentMonth, isViewingAsAdmin, readNotificationIds, dismissedNotificationIds, customNotificationsDocs, employees, dayConfigs, simulationActive, simulatedEmployeeId, user]);
 
   const unreadNotificationsCount = useMemo(() => {
     return allNotifications.filter(n => !n.isRead).length;
@@ -631,8 +633,13 @@ export default function App() {
 
       await setDoc(docRef, { items }, { merge: true });
 
-      // Dispatch background push notification to all registered PWA devices
-      sendPushToAllTokens(data.title, data.message).catch(e => {
+      // Dispatch background push notification to target user(s)
+      sendPushToAllTokens(
+        data.title,
+        data.message,
+        '/',
+        data.targetType === 'specific' ? data.targetEmployeeId : undefined
+      ).catch(e => {
         console.warn('Erro ao disparar push notification:', e);
       });
 
@@ -700,7 +707,24 @@ export default function App() {
   // Native browser & mobile device notification trigger
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-      const unreadList = allNotifications.filter(n => !n.isRead);
+      const userEmailLower = (user?.email || '').trim().toLowerCase();
+      const myRecord = simulationActive
+        ? employees.find(e => e.id === simulatedEmployeeId)
+        : (userEmailLower
+            ? employees.find(e => (e.email || '').trim().toLowerCase() === userEmailLower || (user?.uid && e.userId === user.uid))
+            : null);
+
+      // Filter unread notifications to ONLY those intended FOR this specific user/device to pop up natively:
+      const unreadList = allNotifications.filter(n => {
+        if (n.isRead) return false;
+        if (n.type === 'custom') {
+          // If targeted to a specific employee, only pop up if it's meant for this user (or sent to all)
+          const isTargetedToMe = n.employeeId === 'all' || !n.employeeId || (myRecord && n.employeeId === myRecord.id);
+          return isTargetedToMe;
+        }
+        return true;
+      });
+
       if (unreadList.length === 0) return;
 
       let notifiedIds: string[] = [];
