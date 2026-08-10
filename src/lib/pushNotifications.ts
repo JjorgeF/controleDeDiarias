@@ -85,12 +85,31 @@ export async function registerPushSubscription(
       };
     }
 
-    // Ensure Service Worker is registered and active
+    // Ensure Service Worker is registered
     let reg: ServiceWorkerRegistration;
     try {
-      reg = await navigator.serviceWorker.ready;
+      reg = (await navigator.serviceWorker.getRegistration('/sw.js')) || (await navigator.serviceWorker.register('/sw.js'));
     } catch {
       reg = await navigator.serviceWorker.register('/sw.js');
+    }
+
+    // Wait briefly for active state if worker is installing
+    if (!reg.active) {
+      await new Promise<void>((resolve) => {
+        const worker = reg.installing || reg.waiting;
+        if (!worker) {
+          resolve();
+          return;
+        }
+        const stateHandler = () => {
+          if (worker.state === 'activated' || worker.state === 'redundant') {
+            worker.removeEventListener('statechange', stateHandler);
+            resolve();
+          }
+        };
+        worker.addEventListener('statechange', stateHandler);
+        setTimeout(resolve, 2000);
+      });
     }
 
     let subscription = await reg.pushManager.getSubscription();
@@ -115,21 +134,14 @@ export async function registerPushSubscription(
         const errMsg = err?.message || String(err);
         console.warn('Falha na primeira tentativa de subscribe com VAPID:', err);
 
-        // Try SW reset and retry subscription
+        // Retry once by clearing any lingering subscription without destroying the SW
         try {
-          // Explicitly clear any lingering subscription
           const oldSub = await reg.pushManager.getSubscription();
           if (oldSub) {
             await oldSub.unsubscribe().catch(() => {});
           }
 
-          const regs = await navigator.serviceWorker.getRegistrations();
-          for (const r of regs) {
-            await r.unregister();
-          }
-          const newReg = await navigator.serviceWorker.register('/sw.js');
-          await navigator.serviceWorker.ready;
-          subscription = await newReg.pushManager.subscribe({
+          subscription = await reg.pushManager.subscribe({
             userVisibleOnly: true,
             applicationServerKey
           });
@@ -138,7 +150,7 @@ export async function registerPushSubscription(
           if (retryMsg.includes('push service error') || errMsg.includes('push service error')) {
             return {
               success: false,
-              message: `O navegador recusou a inscrição de push ('push service error'). Recarregue a página (F5) ou limpe os dados do site no navegador para renovar a permissão.`
+              message: `O serviço de Push do navegador recusou a chave ('push service error'). Recarregue a página (F5) para atualizar o manifest.json e restabelecer a conexão.`
             };
           } else {
             return {
