@@ -1,12 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import webpush from 'web-push';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, getDocs } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json' with { type: 'json' };
-
-// Initialize Firebase
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-const db = getFirestore(app);
 
 export interface PushTokenDoc {
   tokenId?: string;
@@ -41,7 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { title, body, url = '/', targetEmployeeId } = req.body || {};
+    const { title, body, url = '/', tokens = [] } = req.body || {};
 
     if (!title || !body) {
       return res.status(400).json({ error: 'Título e corpo da notificação são obrigatórios.' });
@@ -60,32 +53,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       );
     }
 
-    // Query tokens from Firestore
-    const tokens: PushTokenDoc[] = [];
+    const targetTokens: PushTokenDoc[] = Array.isArray(tokens) ? tokens : [];
 
-    try {
-      const snapshot = await getDocs(collection(db, 'push_tokens'));
-      snapshot.forEach((docSnap) => {
-        tokens.push(docSnap.data() as PushTokenDoc);
-      });
-    } catch (e) {
-      // Fallback collection
-      const cancelSnap = await getDocs(collection(db, 'cancellations'));
-      cancelSnap.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (data && (data.isPushToken || data.endpoint || docSnap.id.startsWith('push_token_'))) {
-          tokens.push(data as PushTokenDoc);
-        }
-      });
-    }
-
-    // Filter by target employee if specified
-    const filteredTokens = (targetEmployeeId && targetEmployeeId !== 'all')
-      ? tokens.filter(t => t.employeeId === targetEmployeeId || (t.userEmail && targetEmployeeId && t.userEmail.toLowerCase().includes(targetEmployeeId.toLowerCase())))
-      : tokens;
-
-    if (filteredTokens.length === 0) {
-      return res.status(200).json({ success: true, count: 0, message: 'Nenhum dispositivo encontrado para envio.' });
+    if (targetTokens.length === 0) {
+      return res.status(200).json({ success: true, sentCount: 0, message: 'Nenhum dispositivo encontrado para envio.' });
     }
 
     const payload = JSON.stringify({
@@ -100,7 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let failCount = 0;
 
     await Promise.all(
-      filteredTokens.map(async (tok) => {
+      targetTokens.map(async (tok) => {
         if (!tok.endpoint || !tok.keys?.p256dh || !tok.keys?.auth) {
           failCount++;
           return;
@@ -133,7 +104,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       sentCount: successCount,
       failedCount: failCount,
-      totalCount: filteredTokens.length
+      totalCount: targetTokens.length
     });
   } catch (error: any) {
     console.error('Erro no endpoint de envio de push:', error);
