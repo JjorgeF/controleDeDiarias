@@ -24,6 +24,7 @@ import AdminDashboard from './components/AdminDashboard';
 import EmployeeModal from './components/EmployeeModal';
 import ManageDaysModal from './components/ManageDaysModal';
 import SendNotificationModal from './components/SendNotificationModal';
+import PushDiagnosticsModal from './components/PushDiagnosticsModal';
 import SimulationBanner from './components/SimulationBanner';
 import EmployeeStoryView from './components/EmployeeStoryView';
 import MonthlyScheduleView from './components/MonthlyScheduleView';
@@ -378,6 +379,7 @@ export default function App() {
 
   const [customNotificationsDocs, setCustomNotificationsDocs] = useState<CustomNotificationDoc[]>([]);
   const [isSendNotificationModalOpen, setIsSendNotificationModalOpen] = useState(false);
+  const [isPushDiagnosticsOpen, setIsPushDiagnosticsOpen] = useState(false);
 
   useEffect(() => {
     if (!db || !user) {
@@ -1281,6 +1283,7 @@ export default function App() {
           onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
           onDismissNotification={handleDismissNotification}
           onOpenSendNotificationModal={() => setIsSendNotificationModalOpen(true)}
+          onOpenPushDiagnostics={() => setIsPushDiagnosticsOpen(true)}
           customNotificationsDocs={customNotificationsDocs}
           onDeleteCustomNotification={handleDeleteCustomNotification}
           onNavigateToCalendar={() => {
@@ -1445,6 +1448,7 @@ export default function App() {
         onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
         onDismissNotification={handleDismissNotification}
         onOpenSendNotificationModal={() => setIsSendNotificationModalOpen(true)}
+        onOpenPushDiagnostics={() => setIsPushDiagnosticsOpen(true)}
         customNotificationsDocs={customNotificationsDocs}
         onDeleteCustomNotification={handleDeleteCustomNotification}
         onNavigateToCalendar={() => {
@@ -1668,6 +1672,14 @@ export default function App() {
         onClose={() => setIsSendNotificationModalOpen(false)}
         onSend={handleSendCustomNotification}
         employees={employees}
+        onOpenDiagnostics={() => setIsPushDiagnosticsOpen(true)}
+      />
+
+      <PushDiagnosticsModal
+        isOpen={isPushDiagnosticsOpen}
+        onClose={() => setIsPushDiagnosticsOpen(false)}
+        userEmail={user?.email || undefined}
+        userName={user?.displayName || undefined}
       />
       
       <PWAInstallPrompt />
