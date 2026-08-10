@@ -95,8 +95,8 @@ export async function registerPushSubscription(
 
     let subscription = await reg.pushManager.getSubscription();
 
-    // If subscription exists, or force renewal is requested, unsubscribe old subscription to clear push server cache
-    if (subscription && (forceRenewal || true)) {
+    // Only unsubscribe if forceRenewal is explicitly requested
+    if (subscription && forceRenewal) {
       try {
         await subscription.unsubscribe();
         subscription = null;
