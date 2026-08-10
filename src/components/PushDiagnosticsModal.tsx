@@ -178,18 +178,33 @@ export default function PushDiagnosticsModal({
             {/* VAPID Public Key */}
             <div className="p-3.5 rounded-xl border border-brand-border bg-brand-bg/30 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                {info?.hasVapidKey ? (
+                {info?.hasVapidKey && info?.vapidKeyValid ? (
                   <Key className="text-emerald-400 shrink-0" size={20} />
                 ) : (
                   <XCircle className="text-rose-400 shrink-0" size={20} />
                 )}
                 <div>
-                  <p className="font-semibold text-brand-text text-sm">
+                  <p className="font-semibold text-brand-text text-sm flex items-center gap-2">
                     Chave Pública VAPID (Frontend)
+                    {info?.vapidKeyValid && (
+                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">
+                        VÁLIDA (65 bytes)
+                      </span>
+                    )}
+                    {info?.hasVapidKey && !info?.vapidKeyValid && (
+                      <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/30 px-2 py-0.5 rounded-full font-bold">
+                        FORMATO INCORRETO
+                      </span>
+                    )}
                   </p>
                   <p className="text-xs text-brand-muted">
                     {info?.vapidKeyPublic}
                   </p>
+                  {info?.hasVapidKey && !info?.vapidKeyValid && (
+                    <p className="text-xs text-rose-300 mt-1 font-medium">
+                      ⚠️ A chave no Vercel possui {info?.vapidByteLength || 0} bytes. Uma chave VAPID válida precisa ter 65 bytes. Copie o par de chaves em Firebase Console → Cloud Messaging → Certificados do Web Push.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
