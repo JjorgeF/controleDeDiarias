@@ -237,6 +237,56 @@ export function isExtraordinaryActive(config?: DayConfig): boolean {
   return true;
 }
 
+export function isOptionExcludedByExtraordinaryScope(
+  dayStr: string,
+  optionKey: string,
+  dayConfig?: DayConfig
+): boolean {
+  if (!dayConfig || !dayConfig.isExtraordinaryOpen || !isExtraordinaryActive(dayConfig)) {
+    return false;
+  }
+
+  const scope = dayConfig.extraordinaryScope || 'all';
+  if (scope === 'all') return false;
+
+  const isCcspOption = optionKey === dayStr || optionKey === `${dayStr}_common`;
+  const isPartyOption = optionKey.includes('_party');
+
+  if (isCcspOption) {
+    if (scope === 'ccsp') return false;
+    if (scope === 'parties' || scope === 'custom') {
+      return !dayConfig.extraordinaryCcspOpen;
+    }
+  }
+
+  if (isPartyOption) {
+    if (scope === 'ccsp') {
+      if (dayConfig.extraordinaryPartyIds && dayConfig.extraordinaryPartyIds.length > 0) {
+        const partyId = optionKey.replace(`${dayStr}_party_`, '');
+        if (partyId !== optionKey && dayConfig.extraordinaryPartyIds.includes(partyId)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    if (scope === 'parties' || scope === 'custom') {
+      if (dayConfig.extraordinaryPartyIds && dayConfig.extraordinaryPartyIds.length > 0) {
+        const partyId = optionKey.replace(`${dayStr}_party_`, '');
+        if (partyId !== optionKey && !dayConfig.extraordinaryPartyIds.includes(partyId)) {
+          return true;
+        }
+      }
+      if (scope === 'custom' && (!dayConfig.extraordinaryPartyIds || dayConfig.extraordinaryPartyIds.length === 0)) {
+        return true;
+      }
+      return false;
+    }
+  }
+
+  return false;
+}
+
 export function isOptionLockedForEmployee(
   dayStr: string,
   optionKey: string,
@@ -249,6 +299,11 @@ export function isOptionLockedForEmployee(
   
   const isExtra = isExtraordinaryActive(dayConfig);
   if (!isExtra) return true; // Deadline passed and no active extra opening -> locked
+
+  // If this option is excluded by scope, it cannot be newly edited or added
+  if (isOptionExcludedByExtraordinaryScope(dayStr, optionKey, dayConfig)) {
+    return true;
+  }
   
   const lockedMap = dayConfig.extraordinaryLockedAvailabilities;
   // If lockedMap was not defined when extra was opened, lock pre-existing availabilities
@@ -322,7 +377,10 @@ export default function CalendarView({
         parties,
         isExtraordinaryOpen: !!config.isExtraordinaryOpen,
         extraordinaryDeadline: config.extraordinaryDeadline,
-        extraordinaryLockedAvailabilities: config.extraordinaryLockedAvailabilities
+        extraordinaryLockedAvailabilities: config.extraordinaryLockedAvailabilities,
+        extraordinaryScope: config.extraordinaryScope,
+        extraordinaryPartyIds: config.extraordinaryPartyIds,
+        extraordinaryCcspOpen: config.extraordinaryCcspOpen
       };
     }
 
@@ -833,7 +891,8 @@ export default function CalendarView({
       
       const partyCount = config.parties?.length ?? (config.isParty ? 1 : 0);
       // Sempre abre o pop-up para dias com Festa (ou múltiplos eventos/CCSP+Festa), permitindo ao funcionário visualizar o nome completo da festa e o horário antes de escolher
-      const shouldOpenChoiceModal = config.isParty || (config.isCommon && config.isParty) || partyCount > 1;
+      const hasScopeRestriction = isExtraordinary && config.extraordinaryScope && config.extraordinaryScope !== 'all';
+      const shouldOpenChoiceModal = config.isParty || (config.isCommon && config.isParty) || partyCount > 1 || hasScopeRestriction;
 
       if (shouldOpenChoiceModal) {
         setEmployeeChoiceDate(day);
@@ -852,6 +911,10 @@ export default function CalendarView({
             }
             newAvailabilities = currentAvailabilities.filter(d => !d.startsWith(`${dayStr}_party`));
           } else {
+            if (isOptionExcludedByExtraordinaryScope(dayStr, `${dayStr}_party`, config)) {
+              alert("⚡ Esta Abertura Extra está restrita apenas para o CCSP (Sede). Não é possível cadastrar disponibilidade para eventos neste dia.");
+              return;
+            }
             const clean = currentAvailabilities.filter(d => !d.startsWith(`${dayStr}_party`));
             newAvailabilities = [...clean, `${dayStr}_party`];
             isAdding = true;
@@ -866,6 +929,10 @@ export default function CalendarView({
             }
             newAvailabilities = currentAvailabilities.filter(d => d !== dayStr && d !== `${dayStr}_common`);
           } else {
+            if (isOptionExcludedByExtraordinaryScope(dayStr, `${dayStr}_common`, config)) {
+              alert("⚡ Esta Abertura Extra está restrita apenas para Festas/Eventos. Não é possível cadastrar disponibilidade para o CCSP neste dia.");
+              return;
+            }
             const clean = currentAvailabilities.filter(d => d !== dayStr && d !== `${dayStr}_common`);
             newAvailabilities = [...clean, `${dayStr}_common`];
             isAdding = true;
@@ -1152,30 +1219,38 @@ export default function CalendarView({
                                 {extraEmps.map(({ employee: emp, isDispCommon, partyDetails }) => (
                                   <div 
                                     key={emp.id}
-                                    className="flex items-center justify-between gap-2 bg-amber-500/[0.08] border border-amber-500/30 p-1.5 px-2 rounded-lg text-xs"
+                                    className="bg-amber-500/[0.08] border border-amber-500/30 p-2 rounded-lg text-xs space-y-1.5"
                                   >
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <div className="w-6 h-6 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center font-black text-[10px] text-amber-300 shrink-0">
-                                        {emp.photoUrl ? (
-                                          <img src={emp.photoUrl} alt="" className="w-full h-full rounded-full object-cover" />
-                                        ) : (
-                                          (emp.artisticName || emp.name).slice(0, 2).toUpperCase()
-                                        )}
+                                    {/* Top Row: Avatar + Name + Level */}
+                                    <div className="flex items-center justify-between gap-2 min-w-0">
+                                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                                        <div className="w-6 h-6 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center font-black text-[10px] text-amber-300 shrink-0 overflow-hidden shadow-2xs">
+                                          {emp.photoUrl ? (
+                                            <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
+                                          ) : (
+                                            (emp.artisticName || emp.name).slice(0, 2).toUpperCase()
+                                          )}
+                                        </div>
+                                        <span className="font-bold text-brand-text truncate text-xs min-w-0">
+                                          {emp.artisticName || emp.name}
+                                        </span>
                                       </div>
-                                      <span className="font-bold text-brand-text truncate text-xs">
-                                        {emp.artisticName || emp.name}
+                                      <span className="text-[9px] font-black text-amber-300 uppercase shrink-0 bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/30">
+                                        {emp.level}
                                       </span>
                                     </div>
 
-                                    <div className="flex items-center gap-1 shrink-0">
+                                    {/* Badges Row: Options Selected */}
+                                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                                       {isDispCommon && (
-                                        <span className="text-[9px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded">
-                                          CCSP
+                                        <span className="text-[9px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded flex items-center gap-1 shadow-2xs">
+                                          <span className="text-emerald-400">✓</span> CCSP
                                         </span>
                                       )}
                                       {partyDetails.map((pName, idx) => (
-                                        <span key={idx} className="text-[9px] font-extrabold bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded truncate max-w-[80px]" title={`Festa: ${pName}`}>
-                                          {pName}
+                                        <span key={idx} className="text-[9px] font-black bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded flex items-center gap-1 max-w-full truncate shadow-2xs" title={`Festa: ${pName}`}>
+                                          <span className="text-purple-400">✓</span>
+                                          <span className="truncate">{pName}</span>
                                         </span>
                                       ))}
                                     </div>
@@ -1920,7 +1995,7 @@ export default function CalendarView({
                                   <span className="text-[10px] text-brand-primary font-black uppercase shrink-0">{emp.level}</span>
                                 </div>
                                 
-                                <div className="flex items-center gap-1 mt-1">
+                                <div className="flex flex-wrap items-center gap-1 mt-1">
                                   {config.isCommon !== false && (
                                     <motion.button
                                       whileHover={{ scale: 1.05 }}
@@ -1939,24 +2014,46 @@ export default function CalendarView({
                                       CCSP
                                     </motion.button>
                                   )}
-                                  {!!config.isParty && (
-                                    <motion.button
-                                      whileHover={{ scale: 1.05 }}
-                                      whileTap={{ scale: 0.95 }}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        toggleWorkDayType(emp, selectedDay!, 'party');
-                                      }}
-                                      className={cn(
-                                        "text-[9px] font-black px-2 py-0.5 rounded transition-all uppercase flex items-center gap-1",
-                                        hasParty 
-                                          ? "bg-purple-500 text-white shadow-sm" 
-                                          : "bg-brand-bg text-gray-400 border border-brand-border hover:border-purple-500/40"
-                                      )}
-                                    >
-                                      Festa
-                                    </motion.button>
-                                  )}
+                                  {(() => {
+                                    const dayParties: PartyConfig[] = (config?.parties && config.parties.length > 0)
+                                      ? config.parties
+                                      : config?.isParty
+                                        ? [{ id: 'default_party', name: 'Festa', time: config.partyTime || '' }]
+                                        : [];
+
+                                    return dayParties.map((party) => {
+                                      const isAssignedToThisParty = dayData?.type === 'party' && (
+                                        dayData.partyId === party.id || (!dayData.partyId && party.id === 'default_party') || dayData.partyName === party.name
+                                      );
+                                      const isCoord = (party.name || '').toLowerCase().includes('coordena');
+
+                                      return (
+                                        <motion.button
+                                          key={party.id}
+                                          whileHover={{ scale: 1.05 }}
+                                          whileTap={{ scale: 0.95 }}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleWorkDayType(emp, selectedDay!, 'party', party);
+                                          }}
+                                          className={cn(
+                                            "text-[9px] font-black px-2 py-0.5 rounded transition-all uppercase flex items-center gap-1 max-w-[140px] truncate border",
+                                            isAssignedToThisParty 
+                                              ? isCoord
+                                                ? "bg-cyan-500 text-slate-950 font-bold border-cyan-400 shadow-sm ring-1 ring-cyan-300"
+                                                : "bg-purple-600 text-white border-purple-500 shadow-sm ring-1 ring-purple-400" 
+                                              : isCoord
+                                                ? "bg-brand-bg text-cyan-300 border border-cyan-500/40 hover:border-cyan-400"
+                                                : "bg-brand-bg text-gray-400 border border-brand-border hover:border-purple-500/40"
+                                          )}
+                                          title={`Escalar para ${party.name}${party.time ? ` (${party.time})` : ''}`}
+                                        >
+                                          {isCoord ? <ShieldCheck size={10} className="shrink-0 text-cyan-300" /> : <span className="text-[10px]">🎉</span>}
+                                          <span className="truncate">{party.name}</span>
+                                        </motion.button>
+                                      );
+                                    });
+                                  })()}
                                   {!!dayData?.extraHours && (
                                     <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
                                       +{dayData.extraHours}h extra ({formatCurrency(dayData.extraHours * (dayData.extraHourRateAtTime !== undefined ? dayData.extraHourRateAtTime : emp.extraHourRate))})
@@ -2080,7 +2177,12 @@ export default function CalendarView({
                             )}
                           >
                             <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                              <div className="w-7 h-7 rounded-full bg-emerald-500/20 shrink-0 overflow-hidden flex items-center justify-center text-[10px] font-bold text-emerald-400 border border-emerald-500/30 shadow-sm">
+                              <div className={cn(
+                                "w-7 h-7 rounded-full shrink-0 overflow-hidden flex items-center justify-center text-[10px] font-bold border shadow-sm",
+                                isExtraAvail 
+                                  ? "bg-amber-500/20 text-amber-300 border-amber-500/50" 
+                                  : "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                              )}>
                                 {emp.photoUrl ? (
                                   <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
                                 ) : (
@@ -2089,22 +2191,12 @@ export default function CalendarView({
                               </div>
                               <div className="min-w-0 flex-1">
                                 <p className="text-xs font-bold text-brand-text truncate">{emp.artisticName || emp.name}</p>
-                                <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                                   <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase truncate">{emp.level}</span>
-                                  {isDispCommon && (
-                                    <span className="text-[9px] font-extrabold bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded flex items-center gap-0.5">
-                                      ✓ CCSP
-                                    </span>
-                                  )}
-                                  {isDispParty && (
-                                    <span className="text-[9px] font-extrabold bg-purple-500/20 text-purple-600 dark:text-purple-300 border border-purple-500/30 px-1.5 py-0.2 rounded flex items-center gap-0.5">
-                                      ✓ Festa
-                                    </span>
-                                  )}
                                   {isExtraAvail && (
-                                    <span className="text-[9px] font-black bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded flex items-center gap-0.5 animate-pulse shadow-2xs" title="Disponibilidade enviada após Abertura Extra">
+                                    <span className="text-[9px] font-black bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded-md flex items-center gap-1 shrink-0 whitespace-nowrap shadow-xs" title="Disponibilidade enviada após Abertura Extra">
                                       <Zap size={10} className="fill-amber-400 text-amber-400 shrink-0" />
-                                      Abertura Extra
+                                      Extra
                                     </span>
                                   )}
                                 </div>
@@ -2124,18 +2216,50 @@ export default function CalendarView({
                                   CCSP
                                 </motion.button>
                               )}
-                              {showPartyBtn && (
-                                <motion.button 
-                                  whileHover={{ scale: 1.05 }}
-                                  whileTap={{ scale: 0.95 }}
-                                  onClick={() => toggleWorkDayType(emp, selectedDay!, 'party')}
-                                  className="text-[10px] font-black bg-purple-500/10 hover:bg-purple-500 text-purple-600 dark:text-purple-300 hover:text-white px-2.5 py-1 rounded-lg border border-purple-500/30 hover:border-transparent transition-colors flex items-center gap-1 uppercase"
-                                  title="Escalar para Festa (Optado pelo recreador)"
-                                >
-                                  <UserPlus size={12} />
-                                  Festa
-                                </motion.button>
-                              )}
+                              {(() => {
+                                const dayParties: PartyConfig[] = (config?.parties && config.parties.length > 0)
+                                  ? config.parties
+                                  : config?.isParty
+                                    ? [{ id: 'default_party', name: 'Festa', time: config.partyTime || '' }]
+                                    : [];
+
+                                return dayParties.length > 0 ? (
+                                  dayParties.map((party) => {
+                                    const isCoord = (party.name || '').toLowerCase().includes('coordena');
+                                    return (
+                                      <motion.button 
+                                        key={party.id}
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={() => toggleWorkDayType(emp, selectedDay!, 'party', party)}
+                                        className={cn(
+                                          "text-[10px] font-black px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 uppercase max-w-[130px] truncate border",
+                                          isCoord
+                                            ? "bg-cyan-500/10 hover:bg-cyan-500 text-cyan-300 hover:text-slate-950 border-cyan-500/30 hover:border-cyan-400"
+                                            : "bg-purple-500/10 hover:bg-purple-500 text-purple-600 dark:text-purple-300 hover:text-white border-purple-500/30 hover:border-purple-400"
+                                        )}
+                                        title={`Escalar para ${party.name}${party.time ? ` (${party.time})` : ''}`}
+                                      >
+                                        {isCoord ? <ShieldCheck size={12} className="shrink-0 text-cyan-300" /> : <UserPlus size={12} className="shrink-0" />}
+                                        <span className="truncate">{party.name}</span>
+                                      </motion.button>
+                                    );
+                                  })
+                                ) : (
+                                  showPartyBtn && (
+                                    <motion.button 
+                                      whileHover={{ scale: 1.05 }}
+                                      whileTap={{ scale: 0.95 }}
+                                      onClick={() => toggleWorkDayType(emp, selectedDay!, 'party')}
+                                      className="text-[10px] font-black bg-purple-500/10 hover:bg-purple-500 text-purple-600 dark:text-purple-300 hover:text-white px-2.5 py-1 rounded-lg border border-purple-500/30 hover:border-transparent transition-colors flex items-center gap-1 uppercase"
+                                      title="Escalar para Festa (Optado pelo recreador)"
+                                    >
+                                      <UserPlus size={12} />
+                                      Festa
+                                    </motion.button>
+                                  )
+                                );
+                              })()}
                             </div>
                           </motion.div>
                         );
@@ -2194,17 +2318,49 @@ export default function CalendarView({
                                     CCSP
                                   </motion.button>
                                 )}
-                                {showPartyBtn && (
-                                  <motion.button 
-                                    whileHover={{ scale: 1.05 }}
-                                    whileTap={{ scale: 0.95 }}
-                                    onClick={() => toggleWorkDayType(emp, selectedDay!, 'party')}
-                                    className="text-[10px] font-black bg-brand-bg border border-brand-border hover:bg-purple-500/10 hover:border-purple-500 hover:text-purple-400 text-gray-400 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 uppercase"
-                                  >
-                                    <UserPlus size={12} />
-                                    Festa
-                                  </motion.button>
-                                )}
+                                {(() => {
+                                  const dayParties: PartyConfig[] = (config?.parties && config.parties.length > 0)
+                                    ? config.parties
+                                    : config?.isParty
+                                      ? [{ id: 'default_party', name: 'Festa', time: config.partyTime || '' }]
+                                      : [];
+
+                                  return dayParties.length > 0 ? (
+                                    dayParties.map((party) => {
+                                      const isCoord = (party.name || '').toLowerCase().includes('coordena');
+                                      return (
+                                        <motion.button 
+                                          key={party.id}
+                                          whileHover={{ scale: 1.05 }}
+                                          whileTap={{ scale: 0.95 }}
+                                          onClick={() => toggleWorkDayType(emp, selectedDay!, 'party', party)}
+                                          className={cn(
+                                            "text-[10px] font-black bg-brand-bg border rounded-lg px-2.5 py-1 transition-colors flex items-center gap-1 uppercase max-w-[130px] truncate",
+                                            isCoord
+                                              ? "border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-400 hover:text-cyan-200"
+                                              : "border-brand-border text-gray-400 hover:bg-purple-500/10 hover:border-purple-500 hover:text-purple-400"
+                                          )}
+                                          title={`Escalar para ${party.name}${party.time ? ` (${party.time})` : ''}`}
+                                        >
+                                          {isCoord ? <ShieldCheck size={12} className="shrink-0 text-cyan-300" /> : <UserPlus size={12} className="shrink-0" />}
+                                          <span className="truncate">{party.name}</span>
+                                        </motion.button>
+                                      );
+                                    })
+                                  ) : (
+                                    showPartyBtn && (
+                                      <motion.button 
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={() => toggleWorkDayType(emp, selectedDay!, 'party')}
+                                        className="text-[10px] font-black bg-brand-bg border border-brand-border hover:bg-purple-500/10 hover:border-purple-500 hover:text-purple-400 text-gray-400 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 uppercase"
+                                      >
+                                        <UserPlus size={12} />
+                                        Festa
+                                      </motion.button>
+                                    )
+                                  );
+                                })()}
                               </div>
                             </motion.div>
                           );
@@ -2450,12 +2606,33 @@ export default function CalendarView({
                 const cfg = getDayConfig(dateStr);
                 if (!isExtraordinaryActive(cfg)) return null;
 
+                let scopeLabel = "Geral (CCSP + Festas)";
+                if (cfg.extraordinaryScope === 'ccsp') scopeLabel = "Apenas CCSP (Sede)";
+                if (cfg.extraordinaryScope === 'parties') {
+                  if (cfg.extraordinaryPartyIds && cfg.extraordinaryPartyIds.length > 0) {
+                    scopeLabel = "Festas selecionadas";
+                  } else {
+                    scopeLabel = "Apenas Festas / Eventos";
+                  }
+                }
+                if (cfg.extraordinaryScope === 'custom') {
+                  const items: string[] = [];
+                  if (cfg.extraordinaryCcspOpen) items.push('CCSP');
+                  if (cfg.extraordinaryPartyIds && cfg.extraordinaryPartyIds.length > 0) {
+                    items.push(`${cfg.extraordinaryPartyIds.length} festa(s)`);
+                  }
+                  scopeLabel = items.length > 0 ? items.join(' + ') : 'Opções Selecionadas';
+                }
+
                 return (
                   <div className="flex items-center gap-2.5 bg-amber-500/15 border border-amber-500/40 rounded-xl p-3 text-xs text-amber-200 animate-in fade-in">
                     <Zap size={18} className="text-amber-400 shrink-0 fill-amber-400" />
                     <div>
-                      <p className="font-bold text-amber-300 flex items-center gap-1.5">
+                      <p className="font-bold text-amber-300 flex items-center gap-1.5 flex-wrap">
                         <span>Abertura Extra Ativa</span>
+                        <span className="text-[10px] bg-amber-500/30 border border-amber-400/40 px-2 py-0.5 rounded-full text-amber-200 font-semibold">
+                          Escopo: {scopeLabel}
+                        </span>
                         {cfg.extraordinaryDeadline && (
                           <span className="text-[10px] text-amber-200/90 font-normal">
                             (Até {format(new Date(cfg.extraordinaryDeadline), "dd/MM 'às' HH:mm")})
@@ -2463,7 +2640,11 @@ export default function CalendarView({
                         )}
                       </p>
                       <p className="text-[11px] text-amber-200/90 mt-0.5">
-                        Você pode cadastrar ou alterar sua disponibilidade para este dia até o encerramento do prazo extra.
+                        {cfg.extraordinaryScope === 'ccsp' 
+                          ? 'Esta abertura extra aceita envios EXCLUSIVAMENTE para a escala de CCSP.'
+                          : cfg.extraordinaryScope === 'parties'
+                            ? 'Esta abertura extra aceita envios EXCLUSIVAMENTE para Festas e Eventos.'
+                            : 'Você pode cadastrar ou alterar sua disponibilidade para este dia até o encerramento do prazo extra.'}
                       </p>
                     </div>
                   </div>
@@ -2483,26 +2664,36 @@ export default function CalendarView({
                 const currentAvailabilities = myEmployee.availabilities || [];
                 const isCommonChecked = currentAvailabilities.includes(dateStr) || currentAvailabilities.includes(`${dateStr}_common`);
                 const isLocked = isCommonChecked && isOptionLockedForEmployee(dateStr, dateStr, myEmployee, config, isDeadlinePassed);
+                const isExcludedByScope = isOptionExcludedByExtraordinaryScope(dateStr, `${dateStr}_common`, config);
 
                 return (
                   <motion.label 
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.96 }}
+                    whileHover={{ scale: isExcludedByScope && !isCommonChecked ? 1 : 1.01 }}
+                    whileTap={{ scale: isExcludedByScope && !isCommonChecked ? 1 : 0.96 }}
                     transition={{ type: "spring", stiffness: 400, damping: 25 }}
                     className={cn(
-                      "flex items-center justify-between p-4 rounded-xl border cursor-pointer select-none transition-all shadow-sm",
+                      "flex items-center justify-between p-4 rounded-xl border select-none transition-all shadow-sm",
+                      isExcludedByScope && !isCommonChecked 
+                        ? "bg-red-500/5 border-red-500/20 text-gray-500 cursor-not-allowed opacity-75"
+                        : "cursor-pointer",
                       isCommonChecked 
                         ? "bg-emerald-500/15 border-emerald-500/60 text-emerald-600 dark:text-emerald-400 ring-2 ring-emerald-500/30" 
-                        : "bg-brand-bg/40 border-brand-border text-brand-muted hover:border-brand-primary/30 hover:bg-brand-bg/70"
+                        : (!isExcludedByScope && "bg-brand-bg/40 border-brand-border text-brand-muted hover:border-brand-primary/30 hover:bg-brand-bg/70")
                     )}
                   >
                     <div className="flex flex-col">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-bold text-sm text-brand-text">Dia CCSP 🏢</span>
                         {isLocked && (
-                          <span className="text-[10px] bg-amber500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
+                          <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
                             <Lock size={10} />
                             <span>Confirmado (Trava pré-abertura)</span>
+                          </span>
+                        )}
+                        {isExcludedByScope && !isCommonChecked && (
+                          <span className="text-[10px] bg-red-500/20 text-red-300 border border-red-500/40 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
+                            <Ban size={10} />
+                            <span>Indisponível (Fora do Escopo Extra)</span>
                           </span>
                         )}
                       </div>
@@ -2512,7 +2703,12 @@ export default function CalendarView({
                       <input 
                         type="checkbox"
                         checked={isCommonChecked}
+                        disabled={isExcludedByScope && !isCommonChecked}
                         onChange={(e) => {
+                          if (e.target.checked && isExcludedByScope) {
+                            alert("⚡ Esta Abertura Extra está restrita apenas para Festas/Eventos. Não é possível cadastrar disponibilidade para o CCSP.");
+                            return;
+                          }
                           if (!e.target.checked && isLocked) {
                             alert("🔒 Sua disponibilidade para este dia já estava confirmada antes da Abertura Extra e não pode ser removida.");
                             return;
@@ -2535,7 +2731,7 @@ export default function CalendarView({
                         animate={{
                           scale: isCommonChecked ? [0.8, 1.25, 1] : 1,
                           backgroundColor: isCommonChecked ? "#10b981" : "rgba(255,255,255,0.05)",
-                          borderColor: isCommonChecked ? "#34d399" : "rgba(255,255,255,0.2)"
+                          borderColor: isCommonChecked ? "#34d399" : (isExcludedByScope ? "rgba(239, 68, 68, 0.3)" : "rgba(255,255,255,0.2)")
                         }}
                         transition={{ duration: 0.3, ease: "easeOut" }}
                         className="w-6 h-6 rounded-lg border flex items-center justify-center shrink-0 shadow-sm"
@@ -2582,18 +2778,22 @@ export default function CalendarView({
                       
                       const isPartyChecked = hasSpecificPartyKey || (hasGeneralPartyKey && (parties.length === 1 || !hasAnySpecificPartyKeyForDate));
                       const isLocked = isPartyChecked && isOptionLockedForEmployee(dateStr, partyKey, myEmployee, config, isDeadlinePassed);
+                      const isExcludedByScope = isOptionExcludedByExtraordinaryScope(dateStr, partyKey, config);
 
                       return (
                         <motion.label 
                           key={party.id} 
-                          whileHover={{ scale: 1.01 }}
-                          whileTap={{ scale: 0.96 }}
+                          whileHover={{ scale: isExcludedByScope && !isPartyChecked ? 1 : 1.01 }}
+                          whileTap={{ scale: isExcludedByScope && !isPartyChecked ? 1 : 0.96 }}
                           transition={{ type: "spring", stiffness: 400, damping: 25 }}
                           className={cn(
-                            "flex items-center justify-between p-4 rounded-xl border cursor-pointer select-none transition-all shadow-sm",
+                            "flex items-center justify-between p-4 rounded-xl border select-none transition-all shadow-sm",
+                            isExcludedByScope && !isPartyChecked 
+                              ? "bg-red-500/5 border-red-500/20 text-gray-500 cursor-not-allowed opacity-75"
+                              : "cursor-pointer",
                             isPartyChecked 
                               ? "bg-purple-500/15 border-purple-500/60 text-purple-600 dark:text-purple-300 ring-2 ring-purple-500/30" 
-                              : "bg-brand-bg/40 border-brand-border text-brand-muted hover:border-brand-primary/30 hover:bg-brand-bg/70"
+                              : (!isExcludedByScope && "bg-brand-bg/40 border-brand-border text-brand-muted hover:border-brand-primary/30 hover:bg-brand-bg/70")
                           )}
                         >
                           <div className="flex flex-col space-y-1 pr-2">
@@ -2604,6 +2804,12 @@ export default function CalendarView({
                                 <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
                                   <Lock size={10} />
                                   <span>Confirmado (Trava pré-abertura)</span>
+                                </span>
+                              )}
+                              {isExcludedByScope && !isPartyChecked && (
+                                <span className="text-[10px] bg-red-500/20 text-red-300 border border-red-500/40 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
+                                  <Ban size={10} />
+                                  <span>Indisponível (Fora do Escopo Extra)</span>
                                 </span>
                               )}
                             </span>
@@ -2620,8 +2826,13 @@ export default function CalendarView({
                             <input 
                               type="checkbox"
                               checked={isPartyChecked}
+                              disabled={isExcludedByScope && !isPartyChecked}
                               onChange={(e) => {
                                 const willBeChecked = e.target.checked;
+                                if (willBeChecked && isExcludedByScope) {
+                                  alert("⚡ Esta Abertura Extra não inclui este evento. Verifique o escopo liberado pela coordenação.");
+                                  return;
+                                }
                                 if (!willBeChecked && isLocked) {
                                   alert("🔒 Sua disponibilidade para este evento já estava confirmada antes da Abertura Extra e não pode ser removida.");
                                   return;
