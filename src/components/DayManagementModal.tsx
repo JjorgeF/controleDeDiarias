@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Search, UserPlus, UserMinus, Clock, Copy, ClipboardPaste, Users, Plus, Trash2, PartyPopper, ChevronDown, ChevronUp, Zap, Lock, ShieldCheck } from 'lucide-react';
+import { X, Search, UserPlus, UserMinus, Clock, Copy, ClipboardPaste, Users, Plus, Trash2, PartyPopper, ChevronDown, ChevronUp, Zap, Lock, ShieldCheck, Target } from 'lucide-react';
 import { Employee, WorkDay, DayType, DayConfig, PartyConfig } from '../types';
 import { format, isSunday, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -194,7 +194,7 @@ export default function DayManagementModal({
         return;
       }
       const filtered = employee.workDays.filter(d => d.date !== selectedDayStr);
-      const defaultShift = isSunday(parseISO(selectedDayStr)) ? 'Brinquedoteca (9h - 18h)' : 'Brinquedoteca 1 (9h - 18h)';
+      const defaultShift = 'Definir Horário';
       const newDays: WorkDay[] = [...filtered, {
         date: selectedDayStr,
         type: 'common',
@@ -419,7 +419,7 @@ export default function DayManagementModal({
                     animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
                     transition={{ duration: 0.2 }}
-                    className="space-y-3 pt-3 overflow-hidden"
+                    className="space-y-3 pt-3 max-h-[50vh] sm:max-h-[55vh] overflow-y-auto pr-1.5 custom-scrollbar"
                   >
                     {/* Toggles & Add Party Button */}
                     <div className="flex flex-wrap items-center gap-2 max-w-full">
@@ -539,6 +539,135 @@ export default function DayManagementModal({
                                 Limpar prazo
                               </button>
                             )}
+                          </div>
+                        </div>
+
+                        {/* Escopo da Abertura Extra */}
+                        <div className="pt-2 border-t border-amber-500/20 space-y-2">
+                          {/* Seleção Granular por Evento/Opção no Dia */}
+                          <div className="bg-brand-bg/80 border border-amber-500/30 p-3 rounded-xl space-y-2">
+                            <div className="flex items-center justify-between pb-1 border-b border-amber-500/20">
+                              <label className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5">
+                                <Target size={13} className="text-amber-400" />
+                                <span>Opções Liberadas nesta Abertura Extra:</span>
+                              </label>
+                              <span className="text-[10px] text-amber-400/80 font-mono hidden xs:inline">
+                                (Marque os itens abertos)
+                              </span>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              {/* Opção CCSP */}
+                              {dayConfig.isCommon && (
+                                <label className="flex items-center justify-between p-2 rounded-lg bg-emerald-950/30 border border-emerald-500/30 cursor-pointer hover:bg-emerald-950/50 transition-all">
+                                  <div className="flex items-center gap-2">
+                                    <input 
+                                      type="checkbox"
+                                      checked={
+                                        !dayConfig.extraordinaryScope || 
+                                        dayConfig.extraordinaryScope === 'all' || 
+                                        dayConfig.extraordinaryScope === 'ccsp' ||
+                                        !!dayConfig.extraordinaryCcspOpen
+                                      }
+                                      onChange={(e) => {
+                                        const isChecked = e.target.checked;
+                                        const allPartyIds = normalizedParties.map(item => item.id);
+                                        const activePartyIds = dayConfig.extraordinaryPartyIds || (dayConfig.extraordinaryScope === 'ccsp' ? [] : allPartyIds);
+
+                                        let nextScope: DayConfig['extraordinaryScope'] = 'custom';
+                                        if (isChecked && activePartyIds.length === allPartyIds.length) {
+                                          nextScope = 'all';
+                                        } else if (!isChecked && activePartyIds.length > 0) {
+                                          nextScope = 'parties';
+                                        } else if (isChecked && activePartyIds.length === 0) {
+                                          nextScope = 'ccsp';
+                                        }
+
+                                        onUpdateDayConfig(selectedDayStr, {
+                                          ...dayConfig,
+                                          extraordinaryScope: nextScope,
+                                          extraordinaryCcspOpen: isChecked,
+                                          extraordinaryPartyIds: activePartyIds
+                                        });
+                                      }}
+                                      className="rounded border-emerald-400 text-emerald-500 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                                    />
+                                    <span className="text-xs font-bold text-emerald-200">🏢 CCSP (Sede)</span>
+                                  </div>
+                                  <span className="text-[10px] text-emerald-300/80 font-medium bg-emerald-500/20 px-2 py-0.5 rounded-full">
+                                    Escala CCSP
+                                  </span>
+                                </label>
+                              )}
+
+                              {/* Lista de Festas */}
+                              {normalizedParties.map(p => {
+                                const allPartyIds = normalizedParties.map(item => item.id);
+                                const isPartyActive = (
+                                  !dayConfig.extraordinaryScope || 
+                                  dayConfig.extraordinaryScope === 'all' ||
+                                  (dayConfig.extraordinaryScope === 'parties' && (!dayConfig.extraordinaryPartyIds || dayConfig.extraordinaryPartyIds.length === 0)) ||
+                                  (dayConfig.extraordinaryPartyIds && dayConfig.extraordinaryPartyIds.includes(p.id))
+                                );
+
+                                return (
+                                  <label key={p.id} className="flex items-center justify-between p-2 rounded-lg bg-purple-950/30 border border-purple-500/30 cursor-pointer hover:bg-purple-950/50 transition-all">
+                                    <div className="flex items-center gap-2">
+                                      <input 
+                                        type="checkbox"
+                                        checked={isPartyActive}
+                                        onChange={(e) => {
+                                          const isChecked = e.target.checked;
+                                          let currentActiveIds = dayConfig.extraordinaryPartyIds 
+                                            ? [...dayConfig.extraordinaryPartyIds]
+                                            : (dayConfig.extraordinaryScope === 'ccsp' ? [] : allPartyIds);
+
+                                          if (isChecked) {
+                                            if (!currentActiveIds.includes(p.id)) {
+                                              currentActiveIds.push(p.id);
+                                            }
+                                          } else {
+                                            currentActiveIds = currentActiveIds.filter(id => id !== p.id);
+                                          }
+
+                                          const isCcspActive = (
+                                            !dayConfig.extraordinaryScope || 
+                                            dayConfig.extraordinaryScope === 'all' || 
+                                            dayConfig.extraordinaryScope === 'ccsp' ||
+                                            !!dayConfig.extraordinaryCcspOpen
+                                          );
+
+                                          let nextScope: DayConfig['extraordinaryScope'] = 'custom';
+                                          if (currentActiveIds.length === allPartyIds.length && isCcspActive) {
+                                            nextScope = 'all';
+                                          } else if (currentActiveIds.length === allPartyIds.length && !isCcspActive) {
+                                            nextScope = 'parties';
+                                          } else if (currentActiveIds.length === 0 && isCcspActive) {
+                                            nextScope = 'ccsp';
+                                          }
+
+                                          onUpdateDayConfig(selectedDayStr, {
+                                            ...dayConfig,
+                                            extraordinaryScope: nextScope,
+                                            extraordinaryPartyIds: currentActiveIds,
+                                            extraordinaryCcspOpen: isCcspActive
+                                          });
+                                        }}
+                                        className="rounded border-purple-400 text-purple-500 focus:ring-purple-500 w-4 h-4 cursor-pointer"
+                                      />
+                                      <span className="text-xs font-bold text-purple-200">
+                                        🎉 {p.name || 'Festa'}
+                                      </span>
+                                    </div>
+                                    {p.time && (
+                                      <span className="text-[10px] text-purple-300/80 font-mono bg-purple-500/20 px-2 py-0.5 rounded-full">
+                                        {p.time}
+                                      </span>
+                                    )}
+                                  </label>
+                                );
+                              })}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -746,7 +875,7 @@ export default function DayManagementModal({
                               {isCommon && (
                                 <div className="mt-2 pt-2 border-t border-brand-primary/10" onClick={(e) => e.stopPropagation()}>
                                   <ShiftSelector
-                                    currentShift={workDay?.shift || (isSunday(parseISO(selectedDayStr)) ? 'Brinquedoteca (9h - 18h)' : 'Brinquedoteca 1 (9h - 18h)')}
+                                    currentShift={workDay?.shift || 'Definir Horário'}
                                     dateStr={selectedDayStr}
                                     onChange={(newShift) => updateShift(emp, newShift)}
                                   />
@@ -889,7 +1018,12 @@ export default function DayManagementModal({
                             )}
                           >
                             <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                              <div className="w-7 h-7 rounded-full bg-emerald-500/20 shrink-0 overflow-hidden flex items-center justify-center text-[10px] font-bold text-emerald-400 border border-emerald-500/30 shadow-sm">
+                              <div className={cn(
+                                "w-7 h-7 rounded-full shrink-0 overflow-hidden flex items-center justify-center text-[10px] font-bold border shadow-sm",
+                                isExtraAvail 
+                                  ? "bg-amber-500/20 text-amber-300 border-amber-500/50" 
+                                  : "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                              )}>
                                 {emp.photoUrl ? (
                                   <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
                                 ) : (
@@ -898,42 +1032,12 @@ export default function DayManagementModal({
                               </div>
                               <div className="min-w-0 flex-1">
                                 <p className="text-xs font-bold text-white truncate">{emp.artisticName || emp.name}</p>
-                                <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                                   <span className="text-[10px] text-emerald-400 font-bold uppercase truncate">{emp.level}</span>
-                                  {isDispCommon && (
-                                    <span className="text-[9px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded flex items-center gap-0.5">
-                                      ✓ CCSP
-                                    </span>
-                                  )}
-                                  {normalizedParties.length > 0 ? (
-                                    activePartyButtons.map(p => {
-                                      const isCoord = (p.name || '').toLowerCase().includes('coordena');
-                                      return (
-                                        <span 
-                                          key={p.id} 
-                                          className={cn(
-                                            "text-[9px] font-extrabold border px-1.5 py-0.2 rounded flex items-center gap-0.5 truncate max-w-[120px]",
-                                            isCoord
-                                              ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/30"
-                                              : "bg-purple-500/20 text-purple-300 border-purple-500/30"
-                                          )} 
-                                          title={`Disponível para ${p.name}`}
-                                        >
-                                          {isCoord ? <ShieldCheck size={10} className="text-cyan-300 shrink-0" /> : '✓'} {p.name}
-                                        </span>
-                                      );
-                                    })
-                                  ) : (
-                                    hasAnyPartyAvail && (
-                                      <span className="text-[9px] font-extrabold bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.2 rounded flex items-center gap-0.5">
-                                        ✓ Festa
-                                      </span>
-                                    )
-                                  )}
                                   {isExtraAvail && (
-                                    <span className="text-[9px] font-black bg-amber-500/25 text-amber-300 border border-amber-500/50 px-1.5 py-0.2 rounded flex items-center gap-0.5 animate-pulse shadow-2xs" title="Disponibilidade enviada durante Abertura Extra">
+                                    <span className="text-[9px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded-md flex items-center gap-1 shrink-0 whitespace-nowrap shadow-xs" title="Disponibilidade enviada durante Abertura Extra">
                                       <Zap size={10} className="fill-amber-400 text-amber-400 shrink-0" />
-                                      Abertura Extra
+                                      Extra
                                     </span>
                                   )}
                                 </div>
