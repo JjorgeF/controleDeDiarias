@@ -20,7 +20,8 @@ import {
   Zap, 
   CheckCircle2, 
   X,
-  UserCheck
+  UserCheck,
+  ShieldCheck
 } from 'lucide-react';
 import { Employee, DayConfig, WorkDay } from '../types';
 import { format, isSameMonth, parseISO, eachDayOfInterval, startOfMonth, endOfMonth, isToday, isWeekend, isSameDay } from 'date-fns';
@@ -638,7 +639,9 @@ export default function MonthlyScheduleView({
                             {config?.isExtraordinaryOpen && (
                               <span className="text-[9px] font-black text-amber-300 bg-amber-500/20 border border-amber-500/40 px-1.5 py-0.2 rounded-md flex items-center gap-1">
                                 <Zap size={10} className="fill-amber-400" />
-                                <span>Abertura Extra</span>
+                                <span>
+                                  {config.extraordinaryScope === 'parties' ? 'Extra (Festas)' : config.extraordinaryScope === 'ccsp' ? 'Extra (CCSP)' : config.extraordinaryScope === 'custom' ? 'Extra (Seletiva)' : 'Abertura Extra'}
+                                </span>
                               </span>
                             )}
                           </div>
@@ -724,6 +727,7 @@ export default function MonthlyScheduleView({
                         return (
                           <>
                             {sortedGroups.map(([groupKey, group]) => {
+                          const isCoordination = !group.isParty && (group.label || '').toLowerCase().includes('coordena');
                           const headerText = group.isParty
                             ? `🎉 ${group.partyName || 'Festa'}${group.label && group.label !== 'Festa' ? ` (${group.label})` : ''}`
                             : group.label;
@@ -734,17 +738,21 @@ export default function MonthlyScheduleView({
                                 "flex items-center justify-between text-[10px] font-extrabold px-2.5 py-1 rounded-lg border transition-all shadow-sm",
                                 group.isParty
                                   ? "bg-purple-900/80 text-purple-100 border-purple-500/60 ring-1 ring-purple-500/20"
-                                  : "bg-brand-primary/10 text-brand-primary border-brand-primary/20"
+                                  : isCoordination
+                                    ? "bg-cyan-950/80 text-cyan-200 border-cyan-500/60 ring-1 ring-cyan-500/20"
+                                    : "bg-brand-primary/10 text-brand-primary border-brand-primary/20"
                               )}>
                                 <span className="truncate flex items-center gap-1.5">
                                   {group.isParty ? (
                                     <PartyPopper size={12} className="shrink-0 text-purple-300" />
+                                  ) : isCoordination ? (
+                                    <ShieldCheck size={12} className="shrink-0 text-cyan-300" />
                                   ) : (
                                     <Clock size={11} className="shrink-0 text-brand-primary" />
                                   )}
                                   <span className="truncate font-black">{headerText}</span>
                                 </span>
-                                <span className={cn("text-[9px] font-bold ml-1.5 shrink-0", group.isParty ? "text-purple-200/90" : "text-gray-400")}>
+                                <span className={cn("text-[9px] font-bold ml-1.5 shrink-0", group.isParty ? "text-purple-200/90" : isCoordination ? "text-cyan-200/90" : "text-gray-400")}>
                                   {group.items.length} {group.items.length === 1 ? 'pessoa' : 'pessoas'}
                                 </span>
                               </div>
@@ -1025,7 +1033,9 @@ export default function MonthlyScheduleView({
                       {modalConfig?.isExtraordinaryOpen && (
                         <span className="text-[10px] font-extrabold text-amber-300 bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded-md flex items-center gap-1">
                           <Zap size={11} className="fill-amber-400" />
-                          <span>Abertura Extra</span>
+                          <span>
+                            {modalConfig.extraordinaryScope === 'parties' ? 'Abertura Extra (Apenas Festas)' : modalConfig.extraordinaryScope === 'ccsp' ? 'Abertura Extra (Apenas CCSP)' : 'Abertura Extra'}
+                          </span>
                         </span>
                       )}
                     </div>
