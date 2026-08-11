@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { 
   collection, 
   onSnapshot, 
@@ -1695,6 +1696,7 @@ export default function App() {
       />
       
       <PWAInstallPrompt />
+      <SpeedInsights />
     </div>
   );
 }
