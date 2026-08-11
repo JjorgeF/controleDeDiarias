@@ -16,6 +16,9 @@ export interface DayConfig {
   isExtraordinaryOpen?: boolean;
   extraordinaryDeadline?: string; // Format: 'YYYY-MM-DDTHH:mm'
   extraordinaryLockedAvailabilities?: Record<string, string[]>; // Map employeeId -> locked availability keys before extra opening
+  extraordinaryScope?: 'all' | 'ccsp' | 'parties' | 'custom';
+  extraordinaryPartyIds?: string[];
+  extraordinaryCcspOpen?: boolean;
 }
 
 export interface WorkDay {
@@ -62,6 +65,7 @@ export interface Employee {
   promotionEffectiveDate?: string;
   startDate?: string; // YYYY-MM-DD date when employee joined
   photoUrl?: string; // Base64 compressed profile photo or URL
+  phone?: string;
   status?: 'active' | 'inactive';
   inactivatedAt?: string; // ISO timestamp when inactivated
 }
