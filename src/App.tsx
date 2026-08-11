@@ -521,11 +521,15 @@ export default function App() {
                 formattedDate = format(parseISO(dateStr), 'dd/MM/yyyy');
               } catch {}
 
+              let scopeInfo = '';
+              if (dayCfg.extraordinaryScope === 'parties') scopeInfo = ' [Escopo: Festas]';
+              else if (dayCfg.extraordinaryScope === 'ccsp') scopeInfo = ' [Escopo: CCSP]';
+
               list.push({
                 id: notifId,
                 type: 'extraordinary_avail',
                 title: `⚡ Abertura Extra: ${emp.artisticName || emp.name}`,
-                message: `${emp.artisticName || emp.name} enviou disponibilidade (${detail}) para o dia ${formattedDate} após a Abertura Extra.`,
+                message: `${emp.artisticName || emp.name} enviou disponibilidade (${detail}) para o dia ${formattedDate} via Abertura Extra${scopeInfo}.`,
                 date: new Date().toISOString(),
                 isRead: readNotificationIds.includes(notifId),
                 employeeId: emp.id,
@@ -1057,12 +1061,20 @@ export default function App() {
   const handleUpdateDayConfig = async (dateStr: string, config: DayConfig) => {
     if (!db) return;
     try {
-      const cleanConfig: Record<string, any> = {};
-      Object.entries(config).forEach(([key, value]) => {
-        if (value !== undefined) {
-          cleanConfig[key] = value;
-        }
-      });
+      const cleanConfig: Record<string, any> = {
+        isCommon: !!config.isCommon,
+        isParty: !!config.isParty,
+        partyTime: config.partyTime || '',
+        parties: config.parties || [],
+        isExtraordinaryOpen: !!config.isExtraordinaryOpen,
+        extraordinaryDeadline: config.extraordinaryDeadline || '',
+        extraordinaryScope: config.extraordinaryScope || 'all',
+        extraordinaryPartyIds: config.extraordinaryPartyIds || null,
+        extraordinaryCcspOpen: config.extraordinaryCcspOpen ?? null
+      };
+      if (config.extraordinaryLockedAvailabilities) {
+        cleanConfig.extraordinaryLockedAvailabilities = config.extraordinaryLockedAvailabilities;
+      }
       const docRef = doc(db, 'settings', 'dayConfigs');
       await setDoc(docRef, { [dateStr]: cleanConfig }, { merge: true });
     } catch (error) {
