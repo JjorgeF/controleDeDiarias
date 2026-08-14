@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { 
   collection, 
@@ -11,7 +11,8 @@ import {
   where,
   getDoc,
   getDocs,
-  setDoc
+  setDoc,
+  writeBatch
 } from 'firebase/firestore';
 import { onAuthStateChanged, User, signInWithPopup, getRedirectResult } from 'firebase/auth';
 import { auth, db, googleProvider, isFirebaseConfigured, handleFirestoreError, OperationType } from './lib/firebase';
@@ -21,19 +22,36 @@ import Header from './components/Header';
 import EmployeeCard from './components/EmployeeCard';
 import EmployeeList from './components/EmployeeList';
 import CalendarView from './components/CalendarView';
-import AdminDashboard from './components/AdminDashboard';
 import EmployeeModal from './components/EmployeeModal';
-import ManageDaysModal from './components/ManageDaysModal';
-import SendNotificationModal from './components/SendNotificationModal';
-import PushDiagnosticsModal from './components/PushDiagnosticsModal';
 import SimulationBanner from './components/SimulationBanner';
-import EmployeeStoryView from './components/EmployeeStoryView';
-import MonthlyScheduleView from './components/MonthlyScheduleView';
 import InAppBrowserGuide, { isInAppBrowser } from './components/InAppBrowserGuide';
 import { registerPushSubscription, sendPushToAllTokens } from './lib/pushNotifications';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
+import { WhatsNewModal } from './components/WhatsNewModal';
+
+// Lazy loaded heavy components for optimal bundle size & performance
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
+const KpisView = lazy(() => import('./components/KpisView').then(m => ({ default: m.KpisView })));
+const MonthlyScheduleView = lazy(() => import('./components/MonthlyScheduleView'));
+const PaymentsView = lazy(() => import('./components/PaymentsView'));
+const EmployeeStoryView = lazy(() => import('./components/EmployeeStoryView'));
+const EmployeeEarningsView = lazy(() => import('./components/EmployeeEarningsView'));
+const ManageDaysModal = lazy(() => import('./components/ManageDaysModal'));
+const SendNotificationModal = lazy(() => import('./components/SendNotificationModal'));
+const PushDiagnosticsModal = lazy(() => import('./components/PushDiagnosticsModal'));
+const AdvancedSettingsModal = lazy(() => import('./components/AdvancedSettingsModal'));
+const RevertCancellationModal = lazy(() => import('./components/RevertCancellationModal'));
+
+const ViewFallback = () => (
+  <div className="flex items-center justify-center p-12 text-brand-muted">
+    <div className="flex items-center gap-3">
+      <div className="w-5 h-5 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
+      <span className="text-xs font-bold uppercase tracking-wider">Carregando visualização...</span>
+    </div>
+  </div>
+);
 import Logo from './components/Logo';
-import { LogIn, AlertTriangle, Calendar, Award, X, Table, UserPlus, Plus } from 'lucide-react';
+import { LogIn, AlertTriangle, Calendar, Award, X, Table, UserPlus, Plus, DollarSign, UserRound } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format, isSameMonth, parseISO, eachDayOfInterval, startOfMonth, endOfMonth, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -52,6 +70,7 @@ export default function App() {
   const [deadlines, setDeadlines] = useState<Record<string, string>>({}); // Key: "yyyy-MM", Value: "yyyy-MM-ddTHH:mm"
   const [dayConfigs, setDayConfigs] = useState<Record<string, DayConfig>>({});
   const [sidebarTab, setSidebarTab] = useState<'availabilities' | 'cancellations'>('availabilities');
+  const [isAdvancedSettingsOpen, setIsAdvancedSettingsOpen] = useState(false);
   
   // Estado para simulação de papéis (Role simulation)
   const [simulationActive, setSimulationActive] = useState(false);
@@ -63,8 +82,9 @@ export default function App() {
   const isViewingAsAdmin = isAdmin && (!isSimulationEnabled || !simulationActive);
 
   // Modals & Navigation state
-  const [employeeActiveTab, setEmployeeActiveTab] = useState<'schedule' | 'master_schedule' | 'story'>('schedule');
+  const [employeeActiveTab, setEmployeeActiveTab] = useState<'schedule' | 'master_schedule' | 'profile' | 'earnings'>('schedule');
   const [selectedStoryEmployee, setSelectedStoryEmployee] = useState<Employee | null>(null);
+  const [adminStoryModalTab, setAdminStoryModalTab] = useState<'profile' | 'earnings'>('profile');
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
   const [isManageDaysModalOpen, setIsManageDaysModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | undefined>(undefined);
@@ -358,7 +378,7 @@ export default function App() {
     const list: CancellationLog[] = [];
     employees.forEach(emp => {
       (emp.workDays || []).forEach(wd => {
-        if (wd.isCancelled && !wd.cancellationDismissed) {
+        if (wd.isCancelled && !wd.cancellationDismissed && !wd.cancellationIgnored) {
           list.push({
             id: `${emp.id}_${wd.date}`,
             employeeId: emp.id,
@@ -381,6 +401,13 @@ export default function App() {
   const [customNotificationsDocs, setCustomNotificationsDocs] = useState<CustomNotificationDoc[]>([]);
   const [isSendNotificationModalOpen, setIsSendNotificationModalOpen] = useState(false);
   const [isPushDiagnosticsOpen, setIsPushDiagnosticsOpen] = useState(false);
+  const [isRevertCancellationModalOpen, setIsRevertCancellationModalOpen] = useState(false);
+  const [revertCancellationTarget, setRevertCancellationTarget] = useState<{ employeeId?: string; date?: string }>({});
+
+  const handleOpenRevertCancellation = (employeeId?: string, date?: string) => {
+    setRevertCancellationTarget({ employeeId, date });
+    setIsRevertCancellationModalOpen(true);
+  };
 
   useEffect(() => {
     if (!db || !user) {
@@ -711,6 +738,24 @@ export default function App() {
     }
   };
 
+  const handleUpdateEmployeeDetails = async (employeeId: string, updatedFields: Partial<Employee>) => {
+    if (!db) return;
+    try {
+      const empRef = doc(db, 'employees', employeeId);
+      await updateDoc(empRef, updatedFields);
+
+      setEmployees(prev => prev.map(emp => emp.id === employeeId ? { ...emp, ...updatedFields } : emp));
+      if (selectedStoryEmployee?.id === employeeId) {
+        setSelectedStoryEmployee(prev => prev ? { ...prev, ...updatedFields } : null);
+      }
+    } catch (error: any) {
+      console.error("Erro ao atualizar dados do funcionário:", error);
+      handleFirestoreError(error, OperationType.UPDATE, 'employees');
+    }
+  };
+
+
+
   // Native browser & mobile device notification trigger
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
@@ -973,7 +1018,9 @@ export default function App() {
       
       const earnings = monthDays.reduce((acc, day) => {
         let dayBase = 0;
-        if (day.type === 'common') {
+        if (day.isReducedHours && day.customTotalPay !== undefined && day.customTotalPay >= 0) {
+          dayBase = day.customTotalPay;
+        } else if (day.type === 'common') {
           dayBase = day.dailyRateAtTime !== undefined ? day.dailyRateAtTime : emp.dailyRate;
         } else if (day.type === 'party') {
           dayBase = day.partyRateAtTime !== undefined ? day.partyRateAtTime : emp.partyRate;
@@ -998,6 +1045,9 @@ export default function App() {
         
         if (workDay) {
           let typeLabel = workDay.type === 'common' ? 'CCSP' : 'Festa';
+          if (workDay.isReducedHours) {
+            typeLabel += ` [Reduzido: ${workDay.customHoursText || 'Acordo'} - R$${workDay.customTotalPay || 0}]`;
+          }
           if (workDay.extraHours) typeLabel += ` (+${workDay.extraHours}h)`;
           row[dayLabel] = typeLabel;
         } else {
@@ -1039,8 +1089,31 @@ export default function App() {
   const handleUpdateAvailabilities = async (employeeId: string, availabilities: string[]) => {
     if (!user || !db) return;
     try {
+      let finalAvailabilities = availabilities;
+
+      if (!isAdmin) {
+        const empRef = doc(db, 'employees', employeeId);
+        const empSnap = await getDoc(empRef);
+        if (empSnap.exists()) {
+          const empData = empSnap.data() as Employee;
+          const currentAvails = empData.availabilities || [];
+          const todayStr = format(new Date(), 'yyyy-MM-dd');
+          const currentMonthKeyNow = format(new Date(), 'yyyy-MM');
+
+          // Preserva disponibilidades de datas passadas ou meses encerrados
+          const protectedAvails = currentAvails.filter(av => {
+            if (av.startsWith('login_') || av.startsWith('no_avail_')) return false;
+            const dateStr = av.split('_')[0];
+            const monthKey = dateStr.slice(0, 7);
+            return dateStr < todayStr || monthKey < currentMonthKeyNow;
+          });
+
+          finalAvailabilities = Array.from(new Set([...availabilities, ...protectedAvails]));
+        }
+      }
+
       const empRef = doc(db, 'employees', employeeId);
-      await updateDoc(empRef, { availabilities });
+      await updateDoc(empRef, { availabilities: finalAvailabilities });
     } catch (error: any) {
       console.error("Error updating availabilities:", error);
       alert("Erro ao salvar suas disponibilidades: " + (error.message || "Verifique sua conexão e permissões do banco de dados."));
@@ -1087,6 +1160,14 @@ export default function App() {
   const handleCancelWorkDay = async (employeeId: string, dateStr: string, type: 'common' | 'party', employeeName: string) => {
     if (!user || !db) return;
     try {
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const monthKey = dateStr.slice(0, 7);
+      const currentMonthKeyNow = format(new Date(), 'yyyy-MM');
+
+      if (!isAdmin && (dateStr < todayStr || monthKey < currentMonthKeyNow)) {
+        return;
+      }
+
       const empRef = doc(db, 'employees', employeeId);
       const empSnap = await getDoc(empRef);
       if (empSnap.exists()) {
@@ -1163,6 +1244,122 @@ export default function App() {
       }
     } catch (error) {
       console.error("Error dismissing cancellation:", error);
+    }
+  };
+
+  const handleRevertCancellation = async ({
+    employeeId,
+    dates,
+    reason,
+    mode
+  }: {
+    employeeId: string;
+    dates: string[];
+    reason: string;
+    mode: 'restore_workday' | 'ignore_penalty_only';
+  }): Promise<{ success: boolean; error?: string }> => {
+    if (!db) return { success: false, error: 'Banco de dados indisponível.' };
+    try {
+      const empRef = doc(db, 'employees', employeeId);
+      const empSnap = await getDoc(empRef);
+      if (!empSnap.exists()) {
+        return { success: false, error: 'Colaborador não encontrado.' };
+      }
+
+      const empData = empSnap.data() as Employee;
+      const updatedWorkDays = (empData.workDays || []).map(wd => {
+        if (dates.includes(wd.date)) {
+          return {
+            ...wd,
+            isCancelled: mode === 'restore_workday' ? false : true,
+            cancellationIgnored: true,
+            revertedAt: new Date().toISOString(),
+            reversionReason: reason,
+            revertedBy: user?.email || 'Admin',
+            reversionMode: mode,
+            cancellationDismissed: true,
+            cancellationViewed: true
+          };
+        }
+        return wd;
+      });
+
+      await updateDoc(empRef, { workDays: updatedWorkDays });
+
+      // Atualiza estado do React
+      setEmployees(prev => prev.map(e => e.id === employeeId ? { ...e, workDays: updatedWorkDays } : e));
+      if (selectedStoryEmployee?.id === employeeId) {
+        setSelectedStoryEmployee(prev => prev ? { ...prev, workDays: updatedWorkDays } : null);
+      }
+
+      // Salva log de auditoria
+      try {
+        const logDocId = `reversion_${employeeId}_${Date.now()}`;
+        const logRef = doc(db, 'cancellations', logDocId);
+        await setDoc(logRef, {
+          type: 'cancellation_reverted',
+          employeeId,
+          employeeName: empData.artisticName || empData.name,
+          dates,
+          reason,
+          mode,
+          revertedAt: new Date().toISOString(),
+          revertedBy: user?.email || 'Admin'
+        }, { merge: true });
+      } catch (logErr) {
+        console.warn("Log de reversão salvo:", logErr);
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      console.error("Erro ao reverter cancelamento:", error);
+      return { success: false, error: error.message || 'Falha ao processar reversão no banco de dados.' };
+    }
+  };
+
+  const handleRestoreBackup = async (restoredData: { employees: Employee[]; dayConfigs?: Record<string, DayConfig>; deadlines?: Record<string, string> }) => {
+    if (!user || !db) return;
+    try {
+      const batch = writeBatch(db);
+
+      if (restoredData.employees && Array.isArray(restoredData.employees)) {
+        restoredData.employees.forEach(emp => {
+          if (!emp.id) return;
+          const empRef = doc(db, 'employees', emp.id);
+          batch.set(empRef, emp, { merge: true });
+        });
+      }
+
+      if (restoredData.dayConfigs) {
+        Object.entries(restoredData.dayConfigs).forEach(([dayKey, config]) => {
+          const cfgRef = doc(db, 'dayConfigs', dayKey);
+          batch.set(cfgRef, config, { merge: true });
+        });
+      }
+
+      if (restoredData.deadlines) {
+        Object.entries(restoredData.deadlines).forEach(([monthKey, val]) => {
+          const dlRef = doc(db, 'deadlines', monthKey);
+          batch.set(dlRef, { deadline: val }, { merge: true });
+        });
+      }
+
+      await batch.commit();
+
+      if (restoredData.employees) {
+        setEmployees(restoredData.employees);
+      }
+      if (restoredData.dayConfigs) {
+        setDayConfigs(prev => ({ ...prev, ...restoredData.dayConfigs }));
+      }
+      if (restoredData.deadlines) {
+        setDeadlines(prev => ({ ...prev, ...restoredData.deadlines }));
+      }
+
+      alert("Restauração concluída com sucesso no banco de dados!");
+    } catch (err: any) {
+      console.error("Erro ao restaurar backup:", err);
+      alert("Erro ao restaurar backup: " + (err.message || "Verifique sua conexão e tente novamente."));
     }
   };
 
@@ -1308,49 +1505,59 @@ export default function App() {
         <main className={`w-full mx-auto px-2 md:px-4 py-4 md:py-8 ${employeeActiveTab === 'master_schedule' ? 'max-w-7xl' : 'max-w-4xl'}`}>
           {myEmployeeRecord ? (
             <div className="space-y-6">
-              {/* Navegação de Abas da Interface do Funcionário (Alinhadas Lado a Lado) */}
-              <div className="grid grid-cols-3 gap-1.5 sm:gap-3 border-b border-brand-border pb-3 w-full">
+              {/* Navegação de Abas da Interface do Funcionário (Ícones limpos no mobile / Texto completo em telas maiores) */}
+              <div className="grid grid-cols-4 gap-1.5 sm:gap-3 border-b border-brand-border pb-3 w-full">
                 <button
                   type="button"
                   onClick={() => setEmployeeActiveTab('schedule')}
-                  className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all text-center whitespace-nowrap ${
+                  title="Meu Calendário & Disponibilidade"
+                  className={`flex items-center justify-center gap-2 px-2 sm:px-3 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all text-center ${
                     employeeActiveTab === 'schedule'
                       ? 'bg-brand-primary text-slate-900 shadow-md ring-1 ring-brand-primary/50'
                       : 'bg-brand-card hover:bg-brand-primary/10 text-gray-700 dark:text-gray-300 hover:text-brand-text border border-brand-border'
                   }`}
                 >
-                  <Calendar size={18} className="shrink-0" />
-                  <span className="truncate">
-                    <span className="inline md:hidden">Meu Calendário</span>
-                    <span className="hidden md:inline">Meu Calendário & Disponibilidade</span>
-                  </span>
+                  <Calendar size={19} className="shrink-0" />
+                  <span className="hidden md:inline whitespace-nowrap">Meu Calendário</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setEmployeeActiveTab('master_schedule')}
-                  className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all text-center whitespace-nowrap ${
+                  title="Escala Geral Mensal"
+                  className={`flex items-center justify-center gap-2 px-2 sm:px-3 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all text-center ${
                     employeeActiveTab === 'master_schedule'
                       ? 'bg-brand-primary text-slate-900 shadow-md ring-1 ring-brand-primary/50'
                       : 'bg-brand-card hover:bg-brand-primary/10 text-gray-700 dark:text-gray-300 hover:text-brand-text border border-brand-border'
                   }`}
                 >
-                  <Table size={18} className="shrink-0" />
-                  <span className="truncate">
-                    <span className="inline md:hidden">Escala Geral</span>
-                    <span className="hidden md:inline">Escala Geral Mensal</span>
-                  </span>
+                  <Table size={19} className="shrink-0" />
+                  <span className="hidden md:inline whitespace-nowrap">Escala Geral</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => setEmployeeActiveTab('story')}
-                  className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all text-center whitespace-nowrap ${
-                    employeeActiveTab === 'story'
+                  onClick={() => setEmployeeActiveTab('profile')}
+                  title="Meu Perfil & Cadastro"
+                  className={`flex items-center justify-center gap-2 px-2 sm:px-3 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all text-center ${
+                    employeeActiveTab === 'profile'
                       ? 'bg-brand-primary text-slate-900 shadow-md ring-1 ring-brand-primary/50'
                       : 'bg-brand-card hover:bg-brand-primary/10 text-gray-700 dark:text-gray-300 hover:text-brand-text border border-brand-border'
                   }`}
                 >
-                  <Award size={18} className="shrink-0" />
-                  <span className="truncate">Minha História</span>
+                  <UserRound size={19} className="shrink-0" />
+                  <span className="hidden md:inline whitespace-nowrap">Perfil</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEmployeeActiveTab('earnings')}
+                  title="Ganhos & Pagamentos"
+                  className={`flex items-center justify-center gap-2 px-2 sm:px-3 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all text-center ${
+                    employeeActiveTab === 'earnings'
+                      ? 'bg-brand-primary text-slate-900 shadow-md ring-1 ring-brand-primary/50'
+                      : 'bg-brand-card hover:bg-brand-primary/10 text-gray-700 dark:text-gray-300 hover:text-brand-text border border-brand-border'
+                  }`}
+                >
+                  <DollarSign size={19} className="shrink-0" />
+                  <span className="hidden md:inline whitespace-nowrap">Ganhos</span>
                 </button>
               </div>
 
@@ -1361,9 +1568,10 @@ export default function App() {
                       employee={myEmployeeRecord}
                       onEdit={() => {}}
                       onManageDays={() => {}}
-                      onViewStory={() => setEmployeeActiveTab('story')}
+                      onViewStory={() => setEmployeeActiveTab('profile')}
                       currentMonth={currentMonth}
                       isReadOnly={true}
+                      onUpdateDetails={handleUpdateEmployeeDetails}
                     />
                   </div>
                   <div className="w-full md:w-2/3 space-y-4">
@@ -1398,16 +1606,25 @@ export default function App() {
                   isAdmin={false}
                   dayConfigs={dayConfigs}
                 />
+              ) : employeeActiveTab === 'earnings' ? (
+                <Suspense fallback={<ViewFallback />}>
+                  <EmployeeEarningsView 
+                    employee={myEmployeeRecord}
+                    onViewStory={() => setEmployeeActiveTab('profile')}
+                  />
+                </Suspense>
               ) : (
                 <EmployeeStoryView 
                   employee={myEmployeeRecord}
-                  isAdmin={isAdmin}
+                  isAdmin={isViewingAsAdmin}
                   onEditEmployee={() => {
                     setSelectedEmployee(myEmployeeRecord);
                     setIsEmployeeModalOpen(true);
                   }}
                   onUpdatePhoto={(photoUrl) => handleUpdatePhoto(myEmployeeRecord.id, photoUrl)}
+                  onUpdateDetails={handleUpdateEmployeeDetails}
                   canEditPhoto={true}
+                  onNavigateToEarnings={() => setEmployeeActiveTab('earnings')}
                 />
               )}
             </div>
@@ -1461,6 +1678,7 @@ export default function App() {
         onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
         onDismissNotification={handleDismissNotification}
         onOpenSendNotificationModal={() => setIsSendNotificationModalOpen(true)}
+        onOpenAdvancedSettingsModal={() => setIsAdvancedSettingsOpen(true)}
         onOpenPushDiagnostics={() => setIsPushDiagnosticsOpen(true)}
         customNotificationsDocs={customNotificationsDocs}
         onDeleteCustomNotification={handleDeleteCustomNotification}
@@ -1561,6 +1779,7 @@ export default function App() {
                   }}
                   onViewStory={(e) => setSelectedStoryEmployee(e)}
                   currentMonth={currentMonth}
+                  onUpdateDetails={handleUpdateEmployeeDetails}
                 />
               ))}
               {filteredEmployees.length === 0 && !isViewingAsAdmin && (
@@ -1610,27 +1829,53 @@ export default function App() {
             onMarkCancellationRead={handleMarkCancellationRead}
             sidebarTab={sidebarTab}
             onSidebarTabChange={setSidebarTab}
+            onOpenRevertCancellation={handleOpenRevertCancellation}
           />
         )}
 
-        {viewMode === 'dashboard' && isViewingAsAdmin && (
-          <AdminDashboard 
-            employees={employees}
-            currentMonth={currentMonth}
-            setCurrentMonth={setCurrentMonth}
-            dayConfigs={dayConfigs}
-          />
+        {(viewMode === 'dashboard' || viewMode === 'kpis') && isViewingAsAdmin && (
+          <Suspense fallback={<ViewFallback />}>
+            <div className="space-y-10">
+              <KpisView 
+                employees={employees}
+                monthConfigs={dayConfigs}
+                promotions={[]}
+                currentMonth={currentMonth}
+              />
+              <AdminDashboard 
+                employees={employees}
+                currentMonth={currentMonth}
+                setCurrentMonth={setCurrentMonth}
+                dayConfigs={dayConfigs}
+                onOpenRevertCancellation={handleOpenRevertCancellation}
+              />
+            </div>
+          </Suspense>
+        )}
+
+        {viewMode === 'payments' && isViewingAsAdmin && (
+          <Suspense fallback={<ViewFallback />}>
+            <PaymentsView 
+              employees={employees}
+              currentMonth={currentMonth}
+              setCurrentMonth={setCurrentMonth}
+              onUpdateDetails={handleUpdateEmployeeDetails}
+              onViewStory={(e) => setSelectedStoryEmployee(e)}
+            />
+          </Suspense>
         )}
 
         {viewMode === 'master_schedule' && (
-          <MonthlyScheduleView 
-            employees={employees}
-            currentMonth={currentMonth}
-            setCurrentMonth={setCurrentMonth}
-            currentEmployee={simulationActive ? employees.find(e => e.id === simulatedEmployeeId) : null}
-            isAdmin={isViewingAsAdmin}
-            dayConfigs={dayConfigs}
-          />
+          <Suspense fallback={<ViewFallback />}>
+            <MonthlyScheduleView 
+              employees={employees}
+              currentMonth={currentMonth}
+              setCurrentMonth={setCurrentMonth}
+              currentEmployee={simulationActive ? employees.find(e => e.id === simulatedEmployeeId) : null}
+              isAdmin={isViewingAsAdmin}
+              dayConfigs={dayConfigs}
+            />
+          </Suspense>
         )}
       </main>
 
@@ -1644,57 +1889,124 @@ export default function App() {
         employee={selectedEmployee}
       />
 
-      {selectedEmployee && (
-        <ManageDaysModal 
-          isOpen={isManageDaysModalOpen}
-          onClose={() => setIsManageDaysModalOpen(false)}
-          employee={selectedEmployee}
-          onUpdateDays={handleUpdateDays}
-        />
-      )}
+      <Suspense fallback={null}>
+        {selectedEmployee && isManageDaysModalOpen && (
+          <ManageDaysModal 
+            isOpen={isManageDaysModalOpen}
+            onClose={() => setIsManageDaysModalOpen(false)}
+            employee={selectedEmployee}
+            onUpdateDays={handleUpdateDays}
+          />
+        )}
 
-      {/* Modal de História do Funcionário */}
-      {selectedStoryEmployee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md overflow-y-auto">
-          <div className="bg-brand-card border border-brand-border w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden my-8 p-6 relative max-h-[90vh] overflow-y-auto">
-            <button 
-              onClick={() => setSelectedStoryEmployee(null)}
-              className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white bg-black/40 rounded-full z-20 hover:bg-black/60 transition-colors"
-              title="Fechar"
-            >
-              <X size={20} />
-            </button>
-            <EmployeeStoryView 
-              employee={selectedStoryEmployee} 
-              isAdmin={isViewingAsAdmin}
-              onEditEmployee={() => {
-                const emp = selectedStoryEmployee;
-                setSelectedStoryEmployee(null);
-                setSelectedEmployee(emp);
-                setIsEmployeeModalOpen(true);
-              }}
-              onUpdatePhoto={(photoUrl) => handleUpdatePhoto(selectedStoryEmployee.id, photoUrl)}
-              canEditPhoto={true}
-            />
+        {/* Modal de História do Funcionário */}
+        {selectedStoryEmployee && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md overflow-y-auto">
+            <div className="bg-brand-card border border-brand-border w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden my-8 p-6 relative max-h-[90vh] overflow-y-auto">
+              <button 
+                onClick={() => setSelectedStoryEmployee(null)}
+                className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white bg-black/40 rounded-full z-20 hover:bg-black/60 transition-colors"
+                title="Fechar"
+              >
+                <X size={20} />
+              </button>
+
+              {/* Sub-navegação do modal: Perfil vs Ganhos */}
+              <div className="flex items-center gap-2 mb-6 border-b border-brand-border pb-3 pr-12">
+                <button
+                  type="button"
+                  onClick={() => setAdminStoryModalTab('profile')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all ${
+                    adminStoryModalTab === 'profile'
+                      ? 'bg-brand-primary text-slate-900 shadow-md'
+                      : 'bg-brand-bg/60 text-brand-muted hover:text-brand-text'
+                  }`}
+                >
+                  <UserRound size={16} />
+                  Perfil & Cadastro
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdminStoryModalTab('earnings')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all ${
+                    adminStoryModalTab === 'earnings'
+                      ? 'bg-brand-primary text-slate-900 shadow-md'
+                      : 'bg-brand-bg/60 text-brand-muted hover:text-brand-text'
+                  }`}
+                >
+                  <DollarSign size={16} />
+                  Ganhos & Linha Financeira
+                </button>
+              </div>
+
+              {adminStoryModalTab === 'earnings' ? (
+                <EmployeeEarningsView 
+                  employee={selectedStoryEmployee}
+                  onViewStory={() => setAdminStoryModalTab('profile')}
+                />
+              ) : (
+                <EmployeeStoryView 
+                  employee={selectedStoryEmployee} 
+                  isAdmin={isViewingAsAdmin}
+                  onEditEmployee={() => {
+                    const emp = selectedStoryEmployee;
+                    setSelectedStoryEmployee(null);
+                    setSelectedEmployee(emp);
+                    setIsEmployeeModalOpen(true);
+                  }}
+                  onUpdatePhoto={(photoUrl) => handleUpdatePhoto(selectedStoryEmployee.id, photoUrl)}
+                  onUpdateDetails={handleUpdateEmployeeDetails}
+                  canEditPhoto={true}
+                  onNavigateToEarnings={() => setAdminStoryModalTab('earnings')}
+                />
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <SendNotificationModal
-        isOpen={isSendNotificationModalOpen}
-        onClose={() => setIsSendNotificationModalOpen(false)}
-        onSend={handleSendCustomNotification}
-        employees={employees}
-        onOpenDiagnostics={() => setIsPushDiagnosticsOpen(true)}
-      />
+        {isSendNotificationModalOpen && (
+          <SendNotificationModal
+            isOpen={isSendNotificationModalOpen}
+            onClose={() => setIsSendNotificationModalOpen(false)}
+            onSend={handleSendCustomNotification}
+            employees={employees}
+            onOpenDiagnostics={() => setIsPushDiagnosticsOpen(true)}
+          />
+        )}
 
-      <PushDiagnosticsModal
-        isOpen={isPushDiagnosticsOpen}
-        onClose={() => setIsPushDiagnosticsOpen(false)}
-        userEmail={user?.email || undefined}
-        userName={user?.displayName || undefined}
-      />
+        {isPushDiagnosticsOpen && (
+          <PushDiagnosticsModal
+            isOpen={isPushDiagnosticsOpen}
+            onClose={() => setIsPushDiagnosticsOpen(false)}
+            userEmail={user?.email || undefined}
+            userName={user?.displayName || undefined}
+          />
+        )}
+
+        {isAdvancedSettingsOpen && (
+          <AdvancedSettingsModal
+            isOpen={isAdvancedSettingsOpen}
+            onClose={() => setIsAdvancedSettingsOpen(false)}
+            employees={employees}
+            dayConfigs={dayConfigs}
+            deadlines={deadlines}
+            onRestoreBackup={handleRestoreBackup}
+          />
+        )}
+
+        {isRevertCancellationModalOpen && (
+          <RevertCancellationModal
+            isOpen={isRevertCancellationModalOpen}
+            onClose={() => setIsRevertCancellationModalOpen(false)}
+            employees={employees}
+            initialEmployeeId={revertCancellationTarget.employeeId}
+            initialDate={revertCancellationTarget.date}
+            onRevertCancellation={handleRevertCancellation}
+          />
+        )}
+      </Suspense>
       
+      <WhatsNewModal isAdmin={isViewingAsAdmin} />
       <PWAInstallPrompt />
       <SpeedInsights />
     </div>

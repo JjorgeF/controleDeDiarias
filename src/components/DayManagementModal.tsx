@@ -254,6 +254,21 @@ export default function DayManagementModal({
     onUpdateDays(employee.id, newDays);
   };
 
+  const updateReducedHoursConfig = (employee: Employee, isReduced: boolean, customHours?: string, customPay?: number) => {
+    const newDays = employee.workDays.map(d => {
+      if (d.date === selectedDayStr && !d.isCancelled) {
+        return {
+          ...d,
+          isReducedHours: isReduced,
+          customHoursText: isReduced ? (customHours !== undefined ? customHours : (d.customHoursText || '01h30m')) : undefined,
+          customTotalPay: isReduced ? (customPay !== undefined ? customPay : (d.customTotalPay !== undefined ? d.customTotalPay : 45.0)) : undefined
+        };
+      }
+      return d;
+    });
+    onUpdateDays(employee.id, newDays);
+  };
+
   return (
     <AnimatePresence>
       {isOpen && selectedDay && (
@@ -915,33 +930,94 @@ export default function DayManagementModal({
                         </div>
                         
                         {isExpanded && (isCommon || isParty) && (
-                          <div className="flex flex-wrap items-center gap-3 pt-2.5 mt-2 border-t border-brand-primary/10 animate-in fade-in slide-in-from-top-2">
-                            <label className="text-[10px] font-black text-gray-500 uppercase">Horas Extras:</label>
-                            <input 
-                              type="number"
-                              min="0"
-                              step="0.5"
-                              autoFocus
-                              value={emp.workDays.find(d => d.date === selectedDayStr && !d.isCancelled)?.extraHours || ''}
-                              onChange={(e) => updateExtraHours(emp, Number(e.target.value))}
-                              placeholder="0"
-                              className="w-20 bg-brand-bg border border-brand-primary/20 rounded-lg py-1 px-2.5 text-xs focus:outline-none focus:border-brand-primary"
-                            />
+                          <div className="pt-2.5 mt-2 border-t border-brand-primary/10 animate-in fade-in slide-in-from-top-2 space-y-3">
+                            {/* Toggle Horário Reduzido (Acordo com a Administração) */}
                             {(() => {
-                              const currentWD = emp.workDays.find(d => d.date === selectedDayStr && !d.isCancelled);
-                              const extraH = currentWD?.extraHours || 0;
-                              const rate = currentWD?.extraHourRateAtTime !== undefined ? currentWD.extraHourRateAtTime : emp.extraHourRate;
-                              if (extraH > 0) {
-                                return (
-                                  <span className="text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                                    = {formatCurrency(extraH * rate)} ({formatCurrency(rate)}/h)
-                                  </span>
-                                );
-                              }
+                              const dayData = emp.workDays.find(d => d.date === selectedDayStr && !d.isCancelled);
                               return (
-                                <span className="text-[10px] text-gray-500 italic">
-                                  (Taxa: {formatCurrency(rate)}/h)
-                                </span>
+                                <>
+                                  <div className="flex items-center justify-between bg-amber-500/10 p-2 rounded-lg border border-amber-500/30">
+                                    <label className="flex items-center gap-1.5 text-xs font-bold text-amber-400 cursor-pointer">
+                                      <Clock size={13} className="text-amber-400" />
+                                      Horário Reduzido (Acordo de Horas e Valor)
+                                    </label>
+                                    <input 
+                                      type="checkbox"
+                                      checked={!!dayData?.isReducedHours}
+                                      onChange={(e) => updateReducedHoursConfig(emp, e.target.checked)}
+                                      className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 accent-amber-500 cursor-pointer"
+                                    />
+                                  </div>
+
+                                  {dayData?.isReducedHours ? (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-brand-bg/60 p-3 rounded-lg border border-amber-500/20">
+                                      <div>
+                                        <label className="block text-[10px] font-bold text-gray-300 uppercase mb-1">
+                                          Quantas Horas (Ex: 01h30m)
+                                        </label>
+                                        <input 
+                                          type="text"
+                                          value={dayData?.customHoursText || ''}
+                                          onChange={(e) => updateReducedHoursConfig(emp, true, e.target.value, dayData?.customTotalPay)}
+                                          placeholder="01h30m"
+                                          className="w-full bg-brand-card border border-amber-500/40 rounded-md py-1 px-2.5 text-xs font-medium text-white focus:outline-none focus:border-amber-400"
+                                        />
+                                      </div>
+
+                                      <div>
+                                        <label className="block text-[10px] font-bold text-gray-300 uppercase mb-1">
+                                          Valor Total de Horas (R$)
+                                        </label>
+                                        <div className="relative">
+                                          <span className="absolute left-2.5 top-1 text-xs text-gray-400 font-bold">R$</span>
+                                          <input 
+                                            type="number"
+                                            min="0"
+                                            step="1"
+                                            value={dayData?.customTotalPay !== undefined ? dayData.customTotalPay : ''}
+                                            onChange={(e) => updateReducedHoursConfig(emp, true, dayData?.customHoursText, Number(e.target.value))}
+                                            placeholder="45.00"
+                                            className="w-full bg-brand-card border border-amber-500/40 rounded-md py-1 pl-8 pr-2.5 text-xs font-bold text-emerald-400 focus:outline-none focus:border-amber-400"
+                                          />
+                                        </div>
+                                      </div>
+
+                                      <div className="col-span-full text-[10px] text-amber-300 font-medium bg-amber-500/10 p-1.5 rounded border border-amber-500/20">
+                                        Valor total acordado para este dia: <strong>{formatCurrency(dayData?.customTotalPay || 0)}</strong> ({dayData?.customHoursText || 'Horário Reduzido'}).
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="flex flex-wrap items-center gap-3">
+                                      <label className="text-[10px] font-black text-gray-500 uppercase">Horas Extras:</label>
+                                      <input 
+                                        type="number"
+                                        min="0"
+                                        step="0.5"
+                                        autoFocus
+                                        value={dayData?.extraHours || ''}
+                                        onChange={(e) => updateExtraHours(emp, Number(e.target.value))}
+                                        placeholder="0"
+                                        className="w-20 bg-brand-bg border border-brand-primary/20 rounded-lg py-1 px-2.5 text-xs focus:outline-none focus:border-brand-primary"
+                                      />
+                                      {(() => {
+                                        const extraH = dayData?.extraHours || 0;
+                                        const rate = dayData?.extraHourRateAtTime !== undefined ? dayData.extraHourRateAtTime : emp.extraHourRate;
+                                        if (extraH > 0) {
+                                          return (
+                                            <span className="text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                                              = {formatCurrency(extraH * rate)} ({formatCurrency(rate)}/h)
+                                            </span>
+                                          );
+                                        }
+                                        return (
+                                          <span className="text-[10px] text-gray-500 italic">
+                                            (Taxa: {formatCurrency(rate)}/h)
+                                          </span>
+                                        );
+                                      })()}
+                                    </div>
+                                  )}
+                                </>
                               );
                             })()}
                           </div>

@@ -13,7 +13,7 @@ import {
   parseISO
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Clock, DollarSign, Sparkles } from 'lucide-react';
 import { Employee, WorkDay, DayType } from '../types';
 import { cn } from '../lib/utils';
 
@@ -67,12 +67,16 @@ export default function ManageDaysModal({ isOpen, onClose, employee, onUpdateDay
     } else {
       const existingDay = tempDays[existingDayIndex];
       if (existingDay.isCancelled) {
-        // If cancelled, uncancel it as a common day
+        // If cancelled, uncancel it as a common day and ignore previous penalty
         const newDays = [...tempDays];
         newDays[existingDayIndex] = { 
           ...existingDay, 
           isCancelled: false, 
-          cancellationViewed: false, 
+          cancellationIgnored: true,
+          cancellationDismissed: true,
+          revertedAt: new Date().toISOString(),
+          reversionReason: 'Reativado pelo administrador',
+          cancellationViewed: true, 
           type: 'common',
           dailyRateAtTime: existingDay.dailyRateAtTime !== undefined ? existingDay.dailyRateAtTime : employee.dailyRate,
           partyRateAtTime: existingDay.partyRateAtTime !== undefined ? existingDay.partyRateAtTime : employee.partyRate,
@@ -110,6 +114,56 @@ export default function ManageDaysModal({ isOpen, onClose, employee, onUpdateDay
     if (existingDayIndex !== -1) {
       const newDays = [...tempDays];
       newDays[existingDayIndex] = { ...newDays[existingDayIndex], extraHours: hours };
+      setTempDays(newDays);
+    }
+  };
+
+  const handleToggleReducedHours = (enabled: boolean) => {
+    if (!selectedDay) return;
+    const dateStr = format(selectedDay, 'yyyy-MM-dd');
+    const existingDayIndex = tempDays.findIndex(d => d.date === dateStr);
+    
+    if (existingDayIndex !== -1) {
+      const newDays = [...tempDays];
+      const curr = newDays[existingDayIndex];
+      newDays[existingDayIndex] = { 
+        ...curr, 
+        isReducedHours: enabled,
+        customHoursText: enabled ? (curr.customHoursText || '01h30m') : undefined,
+        customTotalPay: enabled ? (curr.customTotalPay !== undefined ? curr.customTotalPay : 45.0) : undefined
+      };
+      setTempDays(newDays);
+    }
+  };
+
+  const handleCustomHoursTextChange = (text: string) => {
+    if (!selectedDay) return;
+    const dateStr = format(selectedDay, 'yyyy-MM-dd');
+    const existingDayIndex = tempDays.findIndex(d => d.date === dateStr);
+    
+    if (existingDayIndex !== -1) {
+      const newDays = [...tempDays];
+      newDays[existingDayIndex] = { 
+        ...newDays[existingDayIndex], 
+        isReducedHours: true,
+        customHoursText: text 
+      };
+      setTempDays(newDays);
+    }
+  };
+
+  const handleCustomTotalPayChange = (amount: number) => {
+    if (!selectedDay) return;
+    const dateStr = format(selectedDay, 'yyyy-MM-dd');
+    const existingDayIndex = tempDays.findIndex(d => d.date === dateStr);
+    
+    if (existingDayIndex !== -1) {
+      const newDays = [...tempDays];
+      newDays[existingDayIndex] = { 
+        ...newDays[existingDayIndex], 
+        isReducedHours: true,
+        customTotalPay: amount 
+      };
       setTempDays(newDays);
     }
   };
@@ -173,14 +227,20 @@ export default function ManageDaysModal({ isOpen, onClose, employee, onUpdateDay
                       "aspect-square flex items-center justify-center rounded-lg text-sm font-medium transition-all relative",
                       !isCurrentMonth && "opacity-20",
                       (!dayData || dayData.isCancelled) && isCurrentMonth && "hover:bg-white/5",
-                      dayData?.type === 'common' && !dayData.isCancelled && "bg-brand-primary text-brand-bg",
-                      dayData?.type === 'party' && !dayData.isCancelled && "bg-purple-600 text-white",
+                      dayData?.type === 'common' && !dayData.isCancelled && !dayData.isReducedHours && "bg-brand-primary text-brand-bg",
+                      dayData?.type === 'party' && !dayData.isCancelled && !dayData.isReducedHours && "bg-purple-600 text-white",
+                      dayData?.isReducedHours && !dayData.isCancelled && "bg-amber-500 text-slate-950 font-bold",
                       isSelected && "ring-2 ring-white ring-offset-2 ring-offset-brand-card"
                     )}
                   >
                     {format(day, 'd')}
+                    {dayData?.isReducedHours && !dayData.isCancelled ? (
+                      <span className="absolute -top-1 -left-1 w-4 h-4 bg-amber-400 text-slate-950 text-[8px] font-black flex items-center justify-center rounded-full border border-brand-card shadow">
+                        ⏱
+                      </span>
+                    ) : null}
                     {dayData?.extraHours && !dayData.isCancelled ? (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 text-[8px] flex items-center justify-center rounded-full border border-brand-card">
+                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 text-white text-[8px] flex items-center justify-center rounded-full border border-brand-card shadow">
                         +{dayData.extraHours}
                       </span>
                     ) : null}
@@ -190,56 +250,131 @@ export default function ManageDaysModal({ isOpen, onClose, employee, onUpdateDay
             </div>
           </div>
 
-          <div className="w-full md:w-56 space-y-6">
-            {selectedDayData ? (
-              <div className="bg-brand-bg/50 p-4 rounded-lg border border-brand-primary/30 animate-in fade-in slide-in-from-right-4">
-                <h4 className="text-xs font-bold text-brand-primary mb-3 uppercase tracking-wider">
-                  {format(selectedDay!, "dd 'de' MMMM", { locale: ptBR })}
-                </h4>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Horas Extras</label>
+          <div className="w-full md:w-64 space-y-4">
+            {selectedDayData && !selectedDayData.isCancelled ? (
+              <div className="bg-brand-bg/50 p-4 rounded-lg border border-brand-primary/30 animate-in fade-in slide-in-from-right-4 space-y-4">
+                <div className="flex items-center justify-between border-b border-brand-border/60 pb-2">
+                  <h4 className="text-xs font-bold text-brand-primary uppercase tracking-wider">
+                    {format(selectedDay!, "dd 'de' MMMM", { locale: ptBR })}
+                  </h4>
+                  <span className={cn(
+                    "text-[10px] font-black px-2 py-0.5 rounded",
+                    selectedDayData.isReducedHours
+                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                      : selectedDayData.type === 'party'
+                        ? "bg-purple-500/20 text-purple-300"
+                        : "bg-brand-primary/20 text-brand-primary"
+                  )}>
+                    {selectedDayData.isReducedHours ? 'Horário Reduzido' : selectedDayData.type === 'party' ? 'Festa' : 'Dia CCSP'}
+                  </span>
+                </div>
+
+                {/* Option 1: Horário Reduzido & Acordo de Valor */}
+                <div className="bg-brand-card/70 p-3 rounded-lg border border-amber-500/30 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-amber-400 cursor-pointer">
+                      <Clock size={14} className="text-amber-400" />
+                      Horário Reduzido
+                    </label>
                     <input 
-                      type="number"
-                      min="0"
-                      step="0.5"
-                      value={selectedDayData.extraHours || ''}
-                      onChange={(e) => handleExtraHoursChange(Number(e.target.value))}
-                      placeholder="0"
-                      className="w-full bg-brand-card border border-brand-border rounded-md py-1.5 px-3 text-sm focus:outline-none focus:border-brand-primary"
+                      type="checkbox"
+                      checked={!!selectedDayData.isReducedHours}
+                      onChange={(e) => handleToggleReducedHours(e.target.checked)}
+                      className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 accent-amber-500 cursor-pointer"
                     />
                   </div>
-                  <div className="text-[10px] text-gray-400 italic">
-                    As horas extras serão calculadas com base no valor de R$ {employee.extraHourRate}/h.
-                  </div>
+
+                  {selectedDayData.isReducedHours && (
+                    <div className="space-y-3 pt-1 animate-in fade-in">
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-300 uppercase mb-1">
+                          Quantas Horas (Ex: 01h30m)
+                        </label>
+                        <input 
+                          type="text"
+                          value={selectedDayData.customHoursText || ''}
+                          onChange={(e) => handleCustomHoursTextChange(e.target.value)}
+                          placeholder="01h30m"
+                          className="w-full bg-brand-bg border border-amber-500/40 rounded-md py-1.5 px-3 text-xs font-medium text-white focus:outline-none focus:border-amber-400"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-300 uppercase mb-1">
+                          Valor Total Acordado (R$)
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-1.5 text-xs text-gray-400 font-bold">R$</span>
+                          <input 
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={selectedDayData.customTotalPay !== undefined ? selectedDayData.customTotalPay : ''}
+                            onChange={(e) => handleCustomTotalPayChange(Number(e.target.value))}
+                            placeholder="45.00"
+                            className="w-full bg-brand-bg border border-amber-500/40 rounded-md py-1.5 pl-8 pr-3 text-xs font-bold text-emerald-400 focus:outline-none focus:border-amber-400"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="text-[10px] text-amber-300/80 bg-amber-500/10 p-2 rounded border border-amber-500/20">
+                        Neste dia, será pago o valor fixo acordado de <strong>R$ {selectedDayData.customTotalPay || 0}</strong> por <strong>{selectedDayData.customHoursText || 'horas acordadas'}</strong>.
+                      </div>
+                    </div>
+                  )}
                 </div>
+
+                {/* Option 2: Horas Extras normais */}
+                {!selectedDayData.isReducedHours && (
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Horas Extras Normais</label>
+                      <input 
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        value={selectedDayData.extraHours || ''}
+                        onChange={(e) => handleExtraHoursChange(Number(e.target.value))}
+                        placeholder="0"
+                        className="w-full bg-brand-card border border-brand-border rounded-md py-1.5 px-3 text-sm focus:outline-none focus:border-brand-primary"
+                      />
+                    </div>
+                    <div className="text-[10px] text-gray-400 italic">
+                      Calculadas a R$ {employee.extraHourRate}/h.
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="bg-brand-bg/50 p-4 rounded-lg border border-brand-border min-h-[110px] flex items-center justify-center text-center">
-                <p className="text-xs text-gray-500 italic">Selecione um dia marcado para editar as horas extras.</p>
+                <p className="text-xs text-gray-500 italic">Selecione um dia marcado para configurar horário reduzido ou horas extras.</p>
               </div>
             )}
 
             <div className="bg-brand-bg/50 p-4 rounded-lg border border-brand-border">
-              <h4 className="text-sm font-bold text-gray-400 mb-3 uppercase tracking-wider">Legenda</h4>
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-sm">
-                  <div className="w-4 h-4 rounded bg-brand-primary"></div>
-                  <span>Dia CCSP</span>
+              <h4 className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-wider">Legenda</h4>
+              <div className="space-y-2.5">
+                <div className="flex items-center gap-2 text-xs">
+                  <div className="w-3.5 h-3.5 rounded bg-brand-primary"></div>
+                  <span>Dia CCSP Padrão</span>
                 </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <div className="w-4 h-4 rounded bg-purple-600"></div>
+                <div className="flex items-center gap-2 text-xs">
+                  <div className="w-3.5 h-3.5 rounded bg-purple-600"></div>
                   <span>Dia de Festa</span>
                 </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <div className="w-4 h-4 rounded bg-blue-500"></div>
+                <div className="flex items-center gap-2 text-xs">
+                  <div className="w-3.5 h-3.5 rounded bg-amber-500"></div>
+                  <span>Horário Reduzido (Acordo)</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <div className="w-3.5 h-3.5 rounded bg-blue-500"></div>
                   <span>Com Hora Extra</span>
                 </div>
               </div>
             </div>
 
-            <div className="text-sm text-gray-400 italic">
-              Dica: Clique repetidamente no dia para alternar entre os tipos ou remover.
+            <div className="text-[11px] text-gray-400 italic">
+              Dica: Clique no dia no calendário para alternar o tipo (CCSP/Festa) ou remover.
             </div>
           </div>
         </div>

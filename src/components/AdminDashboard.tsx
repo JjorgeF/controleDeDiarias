@@ -36,6 +36,7 @@ import {
   FileJson,
   FileSpreadsheet,
   HardDrive,
+  RotateCcw,
   Check
 } from 'lucide-react';
 import { format, parseISO, formatDistanceToNow, addMonths, subMonths } from 'date-fns';
@@ -48,6 +49,7 @@ interface AdminDashboardProps {
   currentMonth: Date;
   setCurrentMonth: React.Dispatch<React.SetStateAction<Date>>;
   dayConfigs?: Record<string, DayConfig>;
+  onOpenRevertCancellation?: (employeeId?: string, date?: string) => void;
 }
 
 interface AccessLog {
@@ -57,7 +59,7 @@ interface AccessLog {
   timestamp: string;
 }
 
-export default function AdminDashboard({ employees, currentMonth, setCurrentMonth, dayConfigs = {} }: AdminDashboardProps) {
+export default function AdminDashboard({ employees, currentMonth, setCurrentMonth, dayConfigs = {}, onOpenRevertCancellation }: AdminDashboardProps) {
   const [cancellationsLogs, setCancellationsLogs] = useState<AccessLog[]>([]);
   const [adminSettingsLogs, setAdminSettingsLogs] = useState<AccessLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
@@ -435,7 +437,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
       ).length || 0;
 
       const cancellationsThisMonthList = emp.workDays?.filter(d => 
-        d.date.startsWith(currentMonthKey) && d.isCancelled
+        d.date.startsWith(currentMonthKey) && d.isCancelled && !d.cancellationIgnored
       ) || [];
       const cancellationsThisMonth = cancellationsThisMonthList.length;
 
@@ -472,7 +474,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
       const availabilitiesThisMonth = activeAvails.length;
 
       const totalConfirmedAllTime = emp.workDays?.filter(d => !d.isCancelled).length || 0;
-      const totalCancellationsAllTime = emp.workDays?.filter(d => d.isCancelled).length || 0;
+      const totalCancellationsAllTime = emp.workDays?.filter(d => d.isCancelled && !d.cancellationIgnored).length || 0;
       
       // All time availabilities count, deduplicated by date and type
       let totalAvailabilitiesAllTime = 0;
@@ -579,88 +581,6 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
-      {/* Title Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-brand-card p-6 rounded-2xl border border-brand-border shadow-sm">
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="text-brand-primary" size={24} />
-            <h2 className="text-2xl font-black text-brand-text tracking-wide font-playful">
-              Painel de Administração e Auditoria
-            </h2>
-          </div>
-          <p className="text-sm text-gray-400 font-semibold">
-            Visualização consolidada de métricas, rankings de dedicação e controle de acessos em tempo real.
-          </p>
-        </div>
-        <div className="flex items-center gap-3 bg-brand-bg/60 border border-brand-border p-2 rounded-xl">
-          <div className="flex items-center gap-1 bg-brand-bg border border-brand-border rounded-lg p-1 shrink-0">
-            <button 
-              onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-              className="p-1.5 hover:bg-brand-primary/10 rounded-md transition-colors text-brand-muted hover:text-brand-text"
-              title="Mês anterior"
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <button 
-              onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-              className="p-1.5 hover:bg-brand-primary/10 rounded-md transition-colors text-brand-muted hover:text-brand-text"
-              title="Próximo mês"
-            >
-              <ChevronRight size={18} />
-            </button>
-          </div>
-          <div className="text-right pr-2">
-            <span className="block text-[10px] uppercase tracking-wider font-extrabold text-gray-500">Mês de Auditoria</span>
-            <span className="text-sm font-black text-brand-text capitalize">{format(currentMonth, 'MMMM yyyy', { locale: ptBR })}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats Bento Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-        {/* Stat 1 */}
-        <div className="bg-gradient-to-br from-brand-card to-brand-card/50 p-6 rounded-2xl border border-brand-border hover:border-brand-primary/25 transition-all duration-300 group shadow-lg">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase text-gray-500 tracking-wider">TOTAL DE RECREADORES</span>
-            <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary group-hover:scale-110 duration-200">
-              <Users size={20} />
-            </div>
-          </div>
-          <div className="mt-4">
-            <span className="text-3xl font-black text-brand-text">{stats.totalEmployees}</span>
-            <p className="text-[11px] text-gray-400 font-semibold mt-1">Colaboradores ativos cadastrados</p>
-          </div>
-        </div>
-
-        {/* Stat 2 */}
-        <div className="bg-gradient-to-br from-brand-card to-brand-card/50 p-6 rounded-2xl border border-brand-border hover:border-brand-primary/25 transition-all duration-300 group shadow-lg">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase text-gray-500 tracking-wider">Escalas Confirmadas (Mês)</span>
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:scale-110 duration-200">
-              <CheckCircle2 size={20} />
-            </div>
-          </div>
-          <div className="mt-4">
-            <span className="text-3xl font-black text-emerald-400">{stats.totalScheduledDaysThisMonth}</span>
-            <p className="text-[11px] text-gray-400 font-semibold mt-1">Dias de trabalho agendados neste mês</p>
-          </div>
-        </div>
-
-        {/* Stat 3 */}
-        <div className="bg-gradient-to-br from-brand-card to-brand-card/50 p-6 rounded-2xl border border-brand-border hover:border-brand-primary/25 transition-all duration-300 group shadow-lg">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase text-gray-500 tracking-wider">Disponibilidades Dadas (Mês)</span>
-            <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 group-hover:scale-110 duration-200">
-              <CalendarDays size={20} />
-            </div>
-          </div>
-          <div className="mt-4">
-            <span className="text-3xl font-black text-purple-400">{stats.totalAvailabilitiesThisMonth}</span>
-            <p className="text-[11px] text-gray-400 font-semibold mt-1">Datas de disponibilidade enviadas</p>
-          </div>
-        </div>
-      </div>
-
       {/* Main Content Area */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left Col: Rankings (8 cols) */}
@@ -741,6 +661,18 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                   Desistências
                 </button>
               </div>
+
+              {onOpenRevertCancellation && rankMetric === 'cancellations' && (
+                <button
+                  type="button"
+                  onClick={() => onOpenRevertCancellation()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black bg-amber-500/20 hover:bg-amber-500 text-amber-400 hover:text-slate-950 border border-amber-500/40 rounded-lg transition-all shadow-sm shrink-0"
+                  title="Reverter cancelamento acidental de colaborador"
+                >
+                  <RotateCcw size={13} />
+                  <span>Reverter Cancelamento</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1047,13 +979,16 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                               {item.monthCancellations.map((c, idx) => {
                                 const dayNum = c.date.split('-')[2];
                                 return (
-                                  <span 
-                                    key={`canc-${idx}`} 
-                                    className="px-1.5 py-0.5 rounded font-black border border-rose-500/20 bg-rose-500/10 text-rose-400 text-[9px] flex items-center gap-0.5"
-                                    title={`Desistência de ${c.type === 'party' ? 'Festa' : 'CCSP'} para o dia ${dayNum}`}
+                                  <button
+                                    key={`canc-${idx}`}
+                                    type="button"
+                                    onClick={() => onOpenRevertCancellation && onOpenRevertCancellation(item.id, c.date)}
+                                    className="px-2 py-0.5 rounded font-black border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-white text-[10px] flex items-center gap-1 transition-all cursor-pointer group shadow-sm"
+                                    title={`Desistência de ${c.type === 'party' ? 'Festa' : 'CCSP'} para o dia ${dayNum}. Clique para reverter!`}
                                   >
-                                    Dia {dayNum} {c.type === 'party' ? '🎉' : '🏢'}
-                                  </span>
+                                    <span>Dia {dayNum} {c.type === 'party' ? '🎉' : '🏢'}</span>
+                                    <RotateCcw size={10} className="text-amber-400 group-hover:rotate-180 transition-transform" />
+                                  </button>
                                 );
                               })}
                             </div>

@@ -217,7 +217,9 @@ export default function EmployeeList({
 
                   const totalEarnings = monthWorkDays.reduce((acc, day) => {
                     let dayBase = 0;
-                    if (day.type === 'common') {
+                    if (day.isReducedHours && day.customTotalPay !== undefined && day.customTotalPay >= 0) {
+                      dayBase = day.customTotalPay;
+                    } else if (day.type === 'common') {
                       dayBase = day.dailyRateAtTime !== undefined ? day.dailyRateAtTime : emp.dailyRate;
                     } else if (day.type === 'party') {
                       dayBase = day.partyRateAtTime !== undefined ? day.partyRateAtTime : emp.partyRate;
@@ -251,7 +253,7 @@ export default function EmployeeList({
                     >
                       <td className="p-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-brand-primary/10 border border-brand-primary/30 flex items-center justify-center text-xs font-bold text-brand-primary shrink-0 overflow-hidden">
+                          <div className="w-8 h-8 rounded-full bg-brand-primary/10 border border-brand-primary/30 flex items-center justify-center text-xs font-bold text-brand-primary shrink-0 overflow-hidden">
                             {emp.photoUrl ? (
                               <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
                             ) : (
@@ -374,7 +376,7 @@ export default function EmployeeList({
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-xs font-bold text-amber-400 shrink-0 overflow-hidden">
+                        <div className="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-xs font-bold text-amber-400 shrink-0 overflow-hidden">
                           {emp.photoUrl ? (
                             <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
                           ) : (

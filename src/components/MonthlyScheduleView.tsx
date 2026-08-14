@@ -803,9 +803,16 @@ export default function MonthlyScheduleView({
                                               </span>
                                             )}
                                           </p>
-                                          <p className="text-[10px] text-gray-400 truncate leading-tight">
-                                            {employee.level}
-                                          </p>
+                                          <div className="flex items-center gap-1.5 leading-tight">
+                                            <p className="text-[10px] text-gray-400 truncate">
+                                              {employee.level}
+                                            </p>
+                                            {workDay.isReducedHours && (
+                                              <span className="text-[9px] font-black text-amber-300 bg-amber-500/20 border border-amber-500/30 px-1 py-0.2 rounded shrink-0">
+                                                ⏱ {workDay.customHoursText || 'Reduzido'} (R${workDay.customTotalPay || 0})
+                                              </span>
+                                            )}
+                                          </div>
                                         </div>
                                       </div>
 

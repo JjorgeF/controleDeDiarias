@@ -1,10 +1,11 @@
-import React from 'react';
-import { Edit2, Calendar, Sparkles, Award } from 'lucide-react';
+import React, { useState } from 'react';
+import { Edit2, Pencil, User, UserRound, Calendar, Sparkles, Award, CreditCard, Copy, Check, Shirt, PhoneCall, Wind, CheckCircle2, DollarSign } from 'lucide-react';
 import { Employee } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
-import { format, startOfMonth, endOfMonth, isSameMonth, parseISO } from 'date-fns';
+import { format, startOfMonth, endOfMonth, isSameMonth, parseISO, lastDayOfMonth, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'motion/react';
+import EditPersonalDetailsModal from './EditPersonalDetailsModal';
 
 const COLORS = ['#FBBF24', '#34D399', '#60A5FA', '#F472B6', '#A78BFA', '#F87171', '#FF2E93', '#22D3EE'];
 
@@ -59,6 +60,7 @@ interface EmployeeCardProps {
   onViewStory?: (employee: Employee) => void;
   currentMonth: Date;
   isReadOnly?: boolean;
+  onUpdateDetails?: (employeeId: string, updatedFields: Partial<Employee>) => Promise<void> | void;
 }
 
 const EmployeeCard: React.FC<EmployeeCardProps> = ({ 
@@ -67,12 +69,39 @@ const EmployeeCard: React.FC<EmployeeCardProps> = ({
   onManageDays, 
   onViewStory,
   currentMonth,
-  isReadOnly = false
+  isReadOnly = false,
+  onUpdateDetails
 }) => {
   const [burstKey, setBurstKey] = React.useState(0);
+  const [isEditDetailsOpen, setIsEditDetailsOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const triggerCelebration = () => {
     setBurstKey(prev => prev + 1);
+  };
+
+  const handleCopyPix = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (employee.pixKey) {
+      navigator.clipboard.writeText(employee.pixKey);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const formatLigaStartDate = (dateStr: string) => {
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length >= 2) {
+        const year = parseInt(parts[0]);
+        const monthIndex = parseInt(parts[1]) - 1;
+        const dateObj = new Date(year, monthIndex, 1);
+        return format(dateObj, "MMMM 'de' yyyy", { locale: ptBR });
+      }
+      return dateStr;
+    } catch {
+      return dateStr;
+    }
   };
 
   const monthWorkDays = (employee.workDays || []).filter(day => {
@@ -83,7 +112,9 @@ const EmployeeCard: React.FC<EmployeeCardProps> = ({
 
   const totalEarnings = monthWorkDays.reduce((acc, day) => {
     let dayBase = 0;
-    if (day.type === 'common') {
+    if (day.isReducedHours && day.customTotalPay !== undefined && day.customTotalPay >= 0) {
+      dayBase = day.customTotalPay;
+    } else if (day.type === 'common') {
       dayBase = day.dailyRateAtTime !== undefined ? day.dailyRateAtTime : employee.dailyRate;
     } else if (day.type === 'party') {
       dayBase = day.partyRateAtTime !== undefined ? day.partyRateAtTime : employee.partyRate;
@@ -127,10 +158,10 @@ const EmployeeCard: React.FC<EmployeeCardProps> = ({
         <div className="p-5 flex-1">
         <div className="flex justify-between items-start mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-logo-gradient animate-logo-border p-0.5 shrink-0 shadow-md">
-              <div className="w-full h-full bg-brand-card rounded-[10px] flex items-center justify-center font-extrabold text-sm text-brand-primary uppercase overflow-hidden">
+            <div className="w-12 h-12 rounded-full bg-logo-gradient animate-logo-border p-0.5 shrink-0 shadow-md">
+              <div className="w-full h-full bg-brand-card rounded-full flex items-center justify-center font-extrabold text-sm text-brand-primary uppercase overflow-hidden">
                 {employee.photoUrl ? (
-                  <img src={employee.photoUrl} alt={employee.name} className="w-full h-full object-cover rounded-[10px]" />
+                  <img src={employee.photoUrl} alt={employee.name} className="w-full h-full object-cover rounded-full" />
                 ) : (
                   <span>{employee.artisticName?.substring(0, 2) || employee.name?.substring(0, 2)}</span>
                 )}
@@ -160,18 +191,28 @@ const EmployeeCard: React.FC<EmployeeCardProps> = ({
               </div>
             </div>
           </div>
-          {!isReadOnly && (
+          <div className="flex items-center gap-1 shrink-0">
             <button 
-              onClick={() => onEdit(employee)}
-              className="p-2 text-brand-muted hover:text-brand-text hover:bg-brand-border/40 rounded-lg transition-all"
-              title="Editar funcionário"
+              onClick={() => setIsEditDetailsOpen(true)}
+              className="p-2 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg transition-all border border-amber-500/20"
+              title="Dados Pessoais, PIX, Uniforme e Contatos"
             >
-              <Edit2 size={18} />
+              <User size={18} />
             </button>
-          )}
+
+            {!isReadOnly && (
+              <button 
+                onClick={() => onEdit(employee)}
+                className="p-2 text-brand-muted hover:text-brand-text hover:bg-brand-border/40 rounded-lg transition-all"
+                title="Editar taxas financeiras e nível"
+              >
+                <Edit2 size={18} />
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="space-y-2 mb-6">
+        <div className="space-y-2 mb-4">
           <div className="flex justify-between text-sm">
             <span className="text-brand-muted">Diária CCSP:</span>
             <span className="font-bold text-brand-text">{formatCurrency(employee.dailyRate)}</span>
@@ -184,6 +225,47 @@ const EmployeeCard: React.FC<EmployeeCardProps> = ({
             <span className="text-brand-muted">Hora Extra:</span>
             <span className="font-bold text-brand-text">{formatCurrency(employee.extraHourRate)}</span>
           </div>
+        </div>
+
+        {/* Dados de Pagamento (PIX) */}
+        <div className="mb-5 pt-3 border-t border-brand-border/60">
+          {employee.pixKey ? (
+            <div className="bg-slate-900/60 border border-amber-500/20 rounded-xl p-2.5 flex flex-col gap-1 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase text-amber-400 tracking-wider flex items-center gap-1">
+                  <CreditCard size={12} />
+                  PIX ({employee.pixType?.toUpperCase() || 'CPF'})
+                </span>
+                <button
+                  onClick={handleCopyPix}
+                  className="text-[10px] font-bold text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/20 transition-colors flex items-center gap-1"
+                  title="Copiar Chave PIX"
+                >
+                  {copied ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
+                  <span>{copied ? 'Copiado!' : 'Copiar PIX'}</span>
+                </button>
+              </div>
+
+              <div className="font-mono text-xs font-bold text-brand-text truncate select-all">
+                {employee.pixKey}
+              </div>
+
+              {(employee.pixBank || employee.pixOwnerName) && (
+                <div className="text-[10px] text-brand-muted flex flex-wrap gap-x-2 gap-y-0.5 pt-1 border-t border-slate-800/80">
+                  {employee.pixBank && <span>Banco: <strong className="text-gray-200">{employee.pixBank}</strong></span>}
+                  {employee.pixOwnerName && <span>Titular: <strong className="text-gray-200">{employee.pixOwnerName}</strong></span>}
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsEditDetailsOpen(true)}
+              className="w-full py-2 px-3 bg-slate-900/40 hover:bg-slate-900/80 border border-dashed border-brand-border hover:border-amber-500/50 rounded-xl text-[11px] font-medium text-brand-muted hover:text-amber-400 transition-all flex items-center justify-center gap-1.5"
+            >
+              <CreditCard size={13} />
+              <span>+ Indicar Chave PIX e Banco</span>
+            </button>
+          )}
         </div>
 
         {monthPromotion && (
@@ -249,10 +331,10 @@ const EmployeeCard: React.FC<EmployeeCardProps> = ({
           <button 
             onClick={() => onViewStory(employee)}
             className="flex-1 flex items-center justify-center gap-1.5 bg-brand-primary/10 hover:bg-brand-primary text-brand-primary hover:text-brand-bg border border-brand-primary/30 hover:border-transparent text-xs font-extrabold py-2 px-3 rounded-lg transition-colors"
-            title="Ver história e conquistas"
+            title="Ver perfil e dados cadastrais"
           >
-            <Award size={14} />
-            História
+            <UserRound size={14} />
+            Perfil
           </button>
         )}
         {!isReadOnly && (
@@ -266,6 +348,17 @@ const EmployeeCard: React.FC<EmployeeCardProps> = ({
         )}
       </div>
       </div>
+
+      <EditPersonalDetailsModal
+        isOpen={isEditDetailsOpen}
+        onClose={() => setIsEditDetailsOpen(false)}
+        employee={employee}
+        onSave={async (employeeId, updatedFields) => {
+          if (onUpdateDetails) {
+            await onUpdateDetails(employeeId, updatedFields);
+          }
+        }}
+      />
     </div>
   );
 };

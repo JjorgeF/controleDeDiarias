@@ -35,6 +35,8 @@ interface NotificationCenterProps {
   customNotificationsDocs?: CustomNotificationDoc[];
   onDeleteCustomNotification?: (id: string) => Promise<void>;
   onOpenPushDiagnostics?: () => void;
+  userEmail?: string;
+  userName?: string;
 }
 
 export default function NotificationCenter({
@@ -48,7 +50,9 @@ export default function NotificationCenter({
   isAdmin,
   customNotificationsDocs = [],
   onDeleteCustomNotification,
-  onOpenPushDiagnostics
+  onOpenPushDiagnostics,
+  userEmail,
+  userName
 }: NotificationCenterProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread' | 'cancellation' | 'deadline' | 'sent_history'>('all');
@@ -80,7 +84,7 @@ export default function NotificationCenter({
     }
 
     try {
-      const result = await registerPushSubscription();
+      const result = await registerPushSubscription(userEmail, userName);
       if (typeof Notification !== 'undefined') {
         setBrowserPermission(Notification.permission);
       }

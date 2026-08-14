@@ -11,10 +11,12 @@ import {
   FileDown,
   Smartphone,
   BarChart3,
+  DollarSign,
   Settings,
   Send,
   Table,
-  Activity
+  Activity,
+  Sliders
 } from 'lucide-react';
 import { auth, googleProvider } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
@@ -44,6 +46,7 @@ interface HeaderProps {
   customNotificationsDocs?: CustomNotificationDoc[];
   onDeleteCustomNotification?: (id: string) => Promise<void>;
   onOpenPushDiagnostics?: () => void;
+  onOpenAdvancedSettingsModal?: () => void;
 }
 
 export default function Header({ 
@@ -65,7 +68,8 @@ export default function Header({
   onOpenSendNotificationModal,
   customNotificationsDocs = [],
   onDeleteCustomNotification,
-  onOpenPushDiagnostics
+  onOpenPushDiagnostics,
+  onOpenAdvancedSettingsModal
 }: HeaderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isStandalone, setIsStandalone] = useState(false);
@@ -183,16 +187,28 @@ export default function Header({
                 <Table size={18} />
               </button>
               {isAdmin && (
-                <button 
-                  onClick={() => setViewMode('dashboard')}
-                  className={cn(
-                    "p-1.5 rounded transition-colors border-l border-brand-border/40 pl-2 ml-1",
-                    viewMode === 'dashboard' ? "bg-brand-bg text-brand-primary" : "text-gray-400 hover:text-white"
-                  )}
-                  title="Dashboard de Estatísticas"
-                >
-                  <BarChart3 size={18} />
-                </button>
+                <>
+                  <button 
+                    onClick={() => setViewMode('payments')}
+                    className={cn(
+                      "p-1.5 rounded transition-colors border-l border-brand-border/40 pl-2 ml-1",
+                      viewMode === 'payments' ? "bg-brand-bg text-emerald-400 font-bold" : "text-gray-400 hover:text-white"
+                    )}
+                    title="Gestão Financeira & Pagamentos"
+                  >
+                    <DollarSign size={18} />
+                  </button>
+                  <button 
+                    onClick={() => setViewMode('dashboard')}
+                    className={cn(
+                      "p-1.5 rounded transition-colors",
+                      viewMode === 'dashboard' ? "bg-brand-bg text-brand-primary" : "text-gray-400 hover:text-white"
+                    )}
+                    title="Painel de Indicadores & KPIs"
+                  >
+                    <BarChart3 size={18} />
+                  </button>
+                </>
               )}
             </div>
           )}
@@ -226,6 +242,8 @@ export default function Header({
             customNotificationsDocs={customNotificationsDocs}
             onDeleteCustomNotification={onDeleteCustomNotification}
             onOpenPushDiagnostics={onOpenPushDiagnostics}
+            userEmail={user?.email || undefined}
+            userName={user?.displayName || undefined}
           />
 
           <button 
@@ -301,6 +319,19 @@ export default function Header({
                   >
                     <Send size={16} className="text-brand-primary" />
                     <span>Enviar Notificação</span>
+                  </button>
+                )}
+
+                {isAdmin && onOpenAdvancedSettingsModal && (
+                  <button
+                    onClick={() => {
+                      setIsSettingsOpen(false);
+                      onOpenAdvancedSettingsModal();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-cyan-300 hover:text-white hover:bg-cyan-500/10 rounded-lg transition-colors text-left"
+                  >
+                    <Sliders size={16} className="text-cyan-400" />
+                    <span>Configurações Avançadas</span>
                   </button>
                 )}
 
@@ -405,16 +436,28 @@ export default function Header({
               <Table size={18} />
             </button>
             {isAdmin && (
-              <button 
-                onClick={() => setViewMode('dashboard')}
-                className={cn(
-                  "p-1.5 rounded transition-colors border-l border-brand-border/40 pl-2 ml-1",
-                  viewMode === 'dashboard' ? "bg-brand-bg text-brand-primary" : "text-gray-400 hover:text-white"
-                )}
-                title="Dashboard de Estatísticas"
-              >
-                <BarChart3 size={18} />
-              </button>
+              <>
+                <button 
+                  onClick={() => setViewMode('payments')}
+                  className={cn(
+                    "p-1.5 rounded transition-colors border-l border-brand-border/40 pl-2 ml-1",
+                    viewMode === 'payments' ? "bg-brand-bg text-emerald-400 font-bold" : "text-gray-400 hover:text-white"
+                  )}
+                  title="Gestão Financeira & Pagamentos"
+                >
+                  <DollarSign size={18} />
+                </button>
+                <button 
+                  onClick={() => setViewMode('dashboard')}
+                  className={cn(
+                    "p-1.5 rounded transition-colors",
+                    viewMode === 'dashboard' ? "bg-brand-bg text-brand-primary" : "text-gray-400 hover:text-white"
+                  )}
+                  title="Dashboard de Estatísticas"
+                >
+                  <BarChart3 size={18} />
+                </button>
+              </>
             )}
           </div>
         </div>

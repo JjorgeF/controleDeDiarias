@@ -31,11 +31,20 @@ export interface WorkDay {
   cancelledAt?: string;
   cancellationViewed?: boolean;
   cancellationDismissed?: boolean;
+  cancellationIgnored?: boolean;
+  revertedAt?: string;
+  reversionReason?: string;
+  revertedBy?: string;
+  reversionMode?: 'restore_workday' | 'ignore_penalty_only';
   dailyRateAtTime?: number;
   partyRateAtTime?: number;
   extraHourRateAtTime?: number;
   levelAtTime?: EmployeeLevel;
   shift?: string; // e.g. "11h - 21h00" or "13h30 - 21h30"
+  isPaid?: boolean;
+  isReducedHours?: boolean; // When employee works reduced / custom agreed hours
+  customHoursText?: string; // e.g. "01h30m" or "1h30" or "4h"
+  customTotalPay?: number; // Total agreed payment e.g. 45.00
 }
 
 export interface Promotion {
@@ -68,9 +77,20 @@ export interface Employee {
   phone?: string;
   status?: 'active' | 'inactive';
   inactivatedAt?: string; // ISO timestamp when inactivated
+  pixType?: 'cpf' | 'phone' | 'email' | 'random' | 'cnpj';
+  pixKey?: string;
+  pixBank?: string; // Banco / Plataforma (ex: Nubank, Itaú)
+  pixOwnerName?: string; // Nome do titular da conta
+  startDateAtLiga?: string; // Data de inicio na Liga Positiva (YYYY-MM ou YYYY-MM-DD)
+  shirtSize?: 'PP' | 'P' | 'M' | 'G' | 'GG' | 'XGG';
+  shortsSize?: 'PP' | 'P' | 'M' | 'G' | 'GG' | 'XGG';
+  windbreakerSize?: 'PP' | 'P' | 'M' | 'G' | 'GG' | 'XGG';
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  paidDates?: string[]; // Array of YYYY-MM-DD or milestone date strings marked as paid by admin
 }
 
-export type ViewMode = 'grid' | 'list' | 'calendar' | 'dashboard' | 'master_schedule';
+export type ViewMode = 'grid' | 'list' | 'calendar' | 'dashboard' | 'master_schedule' | 'payments' | 'kpis';
 
 export interface CancellationLog {
   id: string;

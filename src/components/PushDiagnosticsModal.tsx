@@ -243,6 +243,12 @@ export default function PushDiagnosticsModal({
                   <p><strong className="text-purple-300">Auth:</strong> {info.subscription.keys?.auth ? '✅ Presente' : '❌ Ausente'}</p>
                 </div>
               )}
+
+              {/* Brave Browser Notice */}
+              <div className="mt-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200/90 leading-relaxed">
+                <p className="font-semibold text-amber-300 mb-1">💡 Dica para usuários do navegador BRAVE:</p>
+                <p>Por padrão de privacidade, o Brave bloqueia conexões do Google Push. Para permitir, acesse <code className="bg-brand-bg px-1 rounded text-amber-300 font-mono">brave://settings/privacy</code> e ative a opção <strong>"Usar os serviços do Google para mensagens push"</strong>.</p>
+              </div>
             </div>
           </div>
 

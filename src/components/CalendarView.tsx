@@ -49,7 +49,8 @@ import {
   ChevronUp,
   ExternalLink,
   UserCheck,
-  ShieldCheck
+  ShieldCheck,
+  RotateCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Employee, WorkDay, DayType, CancellationLog, DayConfig, PartyConfig } from '../types';
@@ -76,6 +77,7 @@ interface CalendarViewProps {
   onMarkCancellationRead?: (cancellationId: string) => void;
   sidebarTab?: 'availabilities' | 'cancellations';
   onSidebarTabChange?: React.Dispatch<React.SetStateAction<'availabilities' | 'cancellations'>>;
+  onOpenRevertCancellation?: (employeeId?: string, date?: string) => void;
 }
 
 interface Particle {
@@ -360,7 +362,8 @@ export default function CalendarView({
   onDismissCancellation,
   onMarkCancellationRead,
   sidebarTab = 'availabilities',
-  onSidebarTabChange
+  onSidebarTabChange,
+  onOpenRevertCancellation
 }: CalendarViewProps) {
   const getDayConfig = (dateStr: string): DayConfig & { parties: PartyConfig[] } => {
     const config = dayConfigs?.[dateStr];
@@ -487,6 +490,9 @@ export default function CalendarView({
 
   const handleConfirmNoAvailability = async () => {
     if (!myEmployee || !onUpdateAvailabilities) return;
+    const currentMonthKeyNow = format(new Date(), 'yyyy-MM');
+    if (!isAdmin && currentMonthKey < currentMonthKeyNow) return;
+
     setIsNoAvailLoading(true);
     try {
       const currentAvails = myEmployee.availabilities || [];
@@ -503,6 +509,9 @@ export default function CalendarView({
 
   const handleClearNoAvailability = async () => {
     if (!myEmployee || !onUpdateAvailabilities) return;
+    const currentMonthKeyNow = format(new Date(), 'yyyy-MM');
+    if (!isAdmin && currentMonthKey < currentMonthKeyNow) return;
+
     try {
       const currentAvails = myEmployee.availabilities || [];
       const newAvails = currentAvails.filter(s => s !== `no_avail_${currentMonthKey}`);
@@ -689,6 +698,23 @@ export default function CalendarView({
     onUpdateDays(employee.id, newDays);
   };
 
+  const updateReducedHoursConfig = (employee: Employee, isReduced: boolean, customHours?: string, customPay?: number) => {
+    if (!selectedDay) return;
+    const dateStr = format(selectedDay, 'yyyy-MM-dd');
+    const newDays = employee.workDays.map(d => {
+      if (d.date === dateStr) {
+        return {
+          ...d,
+          isReducedHours: isReduced,
+          customHoursText: isReduced ? (customHours !== undefined ? customHours : (d.customHoursText || '01h30m')) : undefined,
+          customTotalPay: isReduced ? (customPay !== undefined ? customPay : (d.customTotalPay !== undefined ? d.customTotalPay : 45.0)) : undefined
+        };
+      }
+      return d;
+    });
+    onUpdateDays(employee.id, newDays);
+  };
+
   const handleCopyTeam = () => {
     const teamIds = employeesWorking.map(emp => emp.id);
     setCopiedTeam(teamIds);
@@ -768,9 +794,19 @@ export default function CalendarView({
 
   const handleConfirmCancellation = async () => {
     if (!cancelTargetDate || !myEmployee || !onCancelWorkDay) return;
+    const dateStr = format(cancelTargetDate, 'yyyy-MM-dd');
+    const monthKey = format(cancelTargetDate, 'yyyy-MM');
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const currentMonthKeyNow = format(new Date(), 'yyyy-MM');
+
+    if (!isAdmin && (dateStr < todayStr || monthKey < currentMonthKeyNow)) {
+      setIsCancelModalOpen(false);
+      setCancelTargetDate(null);
+      return;
+    }
+
     setIsCancellingLoading(true);
     try {
-      const dateStr = format(cancelTargetDate, 'yyyy-MM-dd');
       const isScheduledParty = myEmployee.workDays?.some(d => d.date === dateStr && d.type === 'party');
       const type = isScheduledParty ? 'party' : 'common';
       const employeeName = myEmployee.artisticName || myEmployee.name;
@@ -861,6 +897,17 @@ export default function CalendarView({
       if (!myEmployee) return;
       
       const dayStr = format(day, 'yyyy-MM-dd');
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const monthKey = format(day, 'yyyy-MM');
+      const currentMonthKeyNow = format(new Date(), 'yyyy-MM');
+
+      const isPastDate = dayStr < todayStr;
+      const isClosedMonth = monthKey < currentMonthKeyNow;
+
+      // Proibir qualquer alteração ou cancelamento para funcionários comuns em datas passadas ou meses encerrados
+      if (!isAdmin && (isPastDate || isClosedMonth)) {
+        return;
+      }
       
       // Check if scheduled
       const isScheduledCommon = myEmployee.workDays?.some(d => d.date === dayStr && d.type === 'common');
@@ -873,7 +920,6 @@ export default function CalendarView({
         return;
       }
       
-      const monthKey = format(day, 'yyyy-MM');
       const deadlineVal = deadlines?.[monthKey];
       const isExpired = deadlineVal ? new Date() > new Date(deadlineVal) : false;
       const config = getDayConfig(dayStr);
@@ -990,9 +1036,14 @@ export default function CalendarView({
     if (!myEmployee) return 0;
     return scheduledDaysThisMonth.reduce((acc, d) => {
       const isParty = d.type === 'party';
-      const dayBase = isParty 
-        ? (d.partyRateAtTime !== undefined ? d.partyRateAtTime : myEmployee.partyRate) 
-        : (d.dailyRateAtTime !== undefined ? d.dailyRateAtTime : myEmployee.dailyRate);
+      let dayBase = 0;
+      if (d.isReducedHours && d.customTotalPay !== undefined && d.customTotalPay >= 0) {
+        dayBase = d.customTotalPay;
+      } else if (isParty) {
+        dayBase = d.partyRateAtTime !== undefined ? d.partyRateAtTime : myEmployee.partyRate;
+      } else {
+        dayBase = d.dailyRateAtTime !== undefined ? d.dailyRateAtTime : myEmployee.dailyRate;
+      }
       const extraRate = d.extraHourRateAtTime !== undefined ? d.extraHourRateAtTime : myEmployee.extraHourRate;
       const extra = (d.extraHours || 0) * extraRate;
       return acc + dayBase + extra;
@@ -1735,9 +1786,14 @@ export default function CalendarView({
                           }
                         }
 
-                        const dayBase = isParty 
-                          ? (d.partyRateAtTime !== undefined ? d.partyRateAtTime : myEmployee.partyRate) 
-                          : (d.dailyRateAtTime !== undefined ? d.dailyRateAtTime : myEmployee.dailyRate);
+                        let dayBase = 0;
+                        if (d.isReducedHours && d.customTotalPay !== undefined && d.customTotalPay >= 0) {
+                          dayBase = d.customTotalPay;
+                        } else if (isParty) {
+                          dayBase = d.partyRateAtTime !== undefined ? d.partyRateAtTime : myEmployee.partyRate;
+                        } else {
+                          dayBase = d.dailyRateAtTime !== undefined ? d.dailyRateAtTime : myEmployee.dailyRate;
+                        }
                         const extraRate = d.extraHourRateAtTime !== undefined ? d.extraHourRateAtTime : myEmployee.extraHourRate;
                         const extra = (d.extraHours || 0) * extraRate;
                         const dayTotal = dayBase + extra;
@@ -1755,22 +1811,26 @@ export default function CalendarView({
                             }}
                             className={cn(
                               "flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none hover:scale-[1.01] duration-150 group gap-3",
-                              isCoordination
-                                ? "bg-cyan-500/5 border-cyan-500/20 hover:border-cyan-500/45 hover:bg-cyan-500/10"
-                                : isParty 
-                                  ? "bg-purple-500/5 border-purple-500/20 hover:border-purple-500/45 hover:bg-purple-500/10" 
-                                  : "bg-brand-primary/5 border-brand-primary/20 hover:border-brand-primary/45 hover:bg-brand-primary/10"
+                              d.isReducedHours
+                                ? "bg-amber-500/10 border-amber-500/30 hover:border-amber-500/50 hover:bg-amber-500/15"
+                                : isCoordination
+                                  ? "bg-cyan-500/5 border-cyan-500/20 hover:border-cyan-500/45 hover:bg-cyan-500/10"
+                                  : isParty 
+                                    ? "bg-purple-500/5 border-purple-500/20 hover:border-purple-500/45 hover:bg-purple-500/10" 
+                                    : "bg-brand-primary/5 border-brand-primary/20 hover:border-brand-primary/45 hover:bg-brand-primary/10"
                             )}
                           >
                             <div className="flex items-center gap-3 animate-in fade-in duration-200 min-w-0">
                               {/* Date circle badge */}
                               <div className={cn(
                                 "w-11 h-11 rounded-xl flex flex-col items-center justify-center font-black shrink-0 shadow-md transition-all",
-                                isCoordination
-                                  ? "bg-cyan-500 text-slate-950 group-hover:bg-cyan-400"
-                                  : isParty 
-                                    ? "bg-purple-600 text-white group-hover:bg-purple-500" 
-                                    : "bg-brand-primary text-slate-900 group-hover:bg-brand-primary-hover"
+                                d.isReducedHours
+                                  ? "bg-amber-500 text-slate-950 group-hover:bg-amber-400"
+                                  : isCoordination
+                                    ? "bg-cyan-500 text-slate-950 group-hover:bg-cyan-400"
+                                    : isParty 
+                                      ? "bg-purple-600 text-white group-hover:bg-purple-500" 
+                                      : "bg-brand-primary text-slate-900 group-hover:bg-brand-primary-hover"
                               )}>
                                 <span className="text-sm leading-none">{format(dateObj, 'dd')}</span>
                                 <span className="text-[8px] uppercase tracking-wider leading-none mt-0.5 font-bold">
@@ -1785,8 +1845,12 @@ export default function CalendarView({
                                 </p>
 
                                 <div className="flex flex-wrap items-center gap-1.5">
-                                  {/* Onde é a escala (Festa, Coordenação ou CCSP) */}
-                                  {isCoordination ? (
+                                  {/* Horário Reduzido ou Onde é a escala (Festa, Coordenação ou CCSP) */}
+                                  {d.isReducedHours ? (
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/40 shadow-sm">
+                                      <Clock size={10} className="text-amber-300" /> Horário Reduzido ({d.customHoursText || 'Acordo'})
+                                    </span>
+                                  ) : isCoordination ? (
                                     <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-cyan-500/10 dark:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 px-2 py-0.5 rounded border border-cyan-500/20">
                                       <ShieldCheck size={10} className="shrink-0 text-cyan-300" /> Coordenação
                                     </span>
@@ -1820,11 +1884,15 @@ export default function CalendarView({
                                 <span className="block text-[8px] text-brand-muted font-bold uppercase tracking-wider">Turno / Horário</span>
                                 <span className={cn(
                                   "inline-block font-black text-[11px] md:text-xs px-2.5 py-1 rounded-lg shadow-sm border",
-                                  isParty
-                                    ? "bg-purple-500/10 dark:bg-purple-500/20 border-purple-500/30 text-purple-600 dark:text-purple-300"
-                                    : "bg-brand-primary/10 border-brand-primary/20 text-amber-700 dark:text-brand-primary"
+                                  d.isReducedHours
+                                    ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
+                                    : isParty
+                                      ? "bg-purple-500/10 dark:bg-purple-500/20 border-purple-500/30 text-purple-600 dark:text-purple-300"
+                                      : "bg-brand-primary/10 border-brand-primary/20 text-amber-700 dark:text-brand-primary"
                                 )}>
-                                  {isParty ? (partyTime || "A definir") : (d.shift || "CCSP Padrão")}
+                                  {d.isReducedHours 
+                                    ? `Reduzido: ${d.customHoursText || 'Acordado'}` 
+                                    : isParty ? (partyTime || "A definir") : (d.shift || "CCSP Padrão")}
                                 </span>
                               </div>
                               <span className="text-[9px] font-bold text-red-600 dark:text-red-400 group-hover:opacity-100 opacity-0 transition-opacity uppercase tracking-wider">
@@ -2100,34 +2168,89 @@ export default function CalendarView({
                           </div>
                           
                           {isExpanded && (hasCommon || hasParty) && (
-                            <div className="flex flex-wrap items-center gap-3 pt-2.5 mt-2 border-t border-brand-primary/10 animate-in fade-in slide-in-from-top-2">
-                              <label className="text-[10px] font-black text-brand-muted uppercase">Horas Extras:</label>
-                              <input 
-                                type="number"
-                                min="0"
-                                step="0.5"
-                                autoFocus
-                                value={dayData?.extraHours || ''}
-                                onChange={(e) => updateExtraHours(emp, Number(e.target.value))}
-                                placeholder="0"
-                                className="w-20 bg-brand-bg border border-brand-primary/20 rounded-lg py-1 px-2.5 text-xs focus:outline-none focus:border-brand-primary text-brand-text"
-                              />
-                              {(() => {
-                                const extraH = dayData?.extraHours || 0;
-                                const rate = dayData?.extraHourRateAtTime !== undefined ? dayData.extraHourRateAtTime : emp.extraHourRate;
-                                if (extraH > 0) {
-                                  return (
-                                    <span className="text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                                      = {formatCurrency(extraH * rate)} ({formatCurrency(rate)}/h)
-                                    </span>
-                                  );
-                                }
-                                return (
-                                  <span className="text-[10px] text-brand-muted italic">
-                                    (Taxa: {formatCurrency(rate)}/h)
-                                  </span>
-                                );
-                              })()}
+                            <div className="pt-2.5 mt-2 border-t border-brand-primary/10 animate-in fade-in slide-in-from-top-2 space-y-3">
+                              {/* Toggle Horário Reduzido (Acordo com a Administração) */}
+                              <div className="flex items-center justify-between bg-amber-500/10 p-2 rounded-lg border border-amber-500/30">
+                                <label className="flex items-center gap-1.5 text-xs font-bold text-amber-400 cursor-pointer">
+                                  <Clock size={13} className="text-amber-400" />
+                                  Horário Reduzido (Acordo de Horas e Valor)
+                                </label>
+                                <input 
+                                  type="checkbox"
+                                  checked={!!dayData?.isReducedHours}
+                                  onChange={(e) => updateReducedHoursConfig(emp, e.target.checked)}
+                                  className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 accent-amber-500 cursor-pointer"
+                                />
+                              </div>
+
+                              {dayData?.isReducedHours ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-brand-bg/60 p-3 rounded-lg border border-amber-500/20">
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-gray-300 uppercase mb-1">
+                                      Quantas Horas (Ex: 01h30m)
+                                    </label>
+                                    <input 
+                                      type="text"
+                                      value={dayData?.customHoursText || ''}
+                                      onChange={(e) => updateReducedHoursConfig(emp, true, e.target.value, dayData?.customTotalPay)}
+                                      placeholder="01h30m"
+                                      className="w-full bg-brand-card border border-amber-500/40 rounded-md py-1 px-2.5 text-xs font-medium text-white focus:outline-none focus:border-amber-400"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-gray-300 uppercase mb-1">
+                                      Valor Total de Horas (R$)
+                                    </label>
+                                    <div className="relative">
+                                      <span className="absolute left-2.5 top-1 text-xs text-gray-400 font-bold">R$</span>
+                                      <input 
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        value={dayData?.customTotalPay !== undefined ? dayData.customTotalPay : ''}
+                                        onChange={(e) => updateReducedHoursConfig(emp, true, dayData?.customHoursText, Number(e.target.value))}
+                                        placeholder="45.00"
+                                        className="w-full bg-brand-card border border-amber-500/40 rounded-md py-1 pl-8 pr-2.5 text-xs font-bold text-emerald-400 focus:outline-none focus:border-amber-400"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="col-span-full text-[10px] text-amber-300 font-medium bg-amber-500/10 p-1.5 rounded border border-amber-500/20">
+                                    Valor total acordado para este dia: <strong>{formatCurrency(dayData?.customTotalPay || 0)}</strong> ({dayData?.customHoursText || 'Horário Reduzido'}).
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex flex-wrap items-center gap-3">
+                                  <label className="text-[10px] font-black text-brand-muted uppercase">Horas Extras:</label>
+                                  <input 
+                                    type="number"
+                                    min="0"
+                                    step="0.5"
+                                    autoFocus
+                                    value={dayData?.extraHours || ''}
+                                    onChange={(e) => updateExtraHours(emp, Number(e.target.value))}
+                                    placeholder="0"
+                                    className="w-20 bg-brand-bg border border-brand-primary/20 rounded-lg py-1 px-2.5 text-xs focus:outline-none focus:border-brand-primary text-brand-text"
+                                  />
+                                  {(() => {
+                                    const extraH = dayData?.extraHours || 0;
+                                    const rate = dayData?.extraHourRateAtTime !== undefined ? dayData.extraHourRateAtTime : emp.extraHourRate;
+                                    if (extraH > 0) {
+                                      return (
+                                        <span className="text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                                          = {formatCurrency(extraH * rate)} ({formatCurrency(rate)}/h)
+                                        </span>
+                                      );
+                                    }
+                                    return (
+                                      <span className="text-[10px] text-brand-muted italic">
+                                        (Taxa: {formatCurrency(rate)}/h)
+                                      </span>
+                                    );
+                                  })()}
+                                </div>
+                              )}
                             </div>
                           )}
                         </motion.div>
@@ -2444,6 +2567,19 @@ export default function CalendarView({
               </div>
             ) : (
               <div className="overflow-y-auto max-h-[400px] pr-1 space-y-3 pt-2">
+                {onOpenRevertCancellation && cancellations.length > 0 && (
+                  <div className="pb-1">
+                    <button
+                      type="button"
+                      onClick={() => onOpenRevertCancellation()}
+                      className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-amber-500/20 via-brand-primary/15 to-amber-500/20 hover:from-amber-500/30 hover:to-amber-500/30 text-amber-400 hover:text-amber-300 border border-amber-500/40 rounded-xl text-xs font-black transition-all shadow-sm"
+                      title="Reverter cancelamentos e restaurar diárias"
+                    >
+                      <RotateCcw size={13} />
+                      <span>Reverter Cancelamento(s)</span>
+                    </button>
+                  </div>
+                )}
                 {cancellations.map(c => {
                   const isUnread = !c.viewedByAdmins;
                   return (
@@ -2468,6 +2604,17 @@ export default function CalendarView({
                         </div>
                         
                         <div className="flex items-center gap-1 shrink-0">
+                          {onOpenRevertCancellation && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenRevertCancellation(c.employeeId, c.date)}
+                              title="Reverter este cancelamento (anular falta ou restaurar diária)"
+                              className="px-2 py-1 bg-amber-500/15 hover:bg-amber-500 text-amber-400 hover:text-slate-950 border border-amber-500/30 rounded-lg text-[10px] font-black flex items-center gap-1 transition-all shadow-sm"
+                            >
+                              <RotateCcw size={11} />
+                              <span>Reverter</span>
+                            </button>
+                          )}
                           {isUnread && onMarkCancellationRead && (
                             <button 
                               onClick={() => onMarkCancellationRead(c.id)}
