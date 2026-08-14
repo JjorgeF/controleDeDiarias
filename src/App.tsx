@@ -420,21 +420,22 @@ export default function App() {
         const data = snapshot.data();
         const allItems: CustomNotificationDoc[] = data?.items || [];
         
-        // Mantém apenas notificações criadas no dia de hoje (limpeza automática no final do dia)
-        const todayItems = allItems.filter(item => {
+        // Mantém notificações recentes (últimos 3 dias ou até 25 itens)
+        const recentItems = allItems.filter(item => {
           try {
-            return isToday(parseISO(item.createdAt));
+            const itemDate = parseISO(item.createdAt);
+            return isToday(itemDate) || (new Date().getTime() - itemDate.getTime() < 3 * 24 * 60 * 60 * 1000);
           } catch {
             return true;
           }
         });
 
-        setCustomNotificationsDocs(todayItems);
+        setCustomNotificationsDocs(recentItems);
 
-        // Se existirem notificações antigas de dias anteriores, limpa silenciosamente no Firestore em segundo plano
-        if (isViewingAsAdmin && allItems.length !== todayItems.length) {
+        // Se existirem notificações antigas (mais de 3 dias), limpa silenciosamente no Firestore em segundo plano
+        if (isViewingAsAdmin && allItems.length !== recentItems.length) {
           try {
-            await setDoc(doc(db, 'settings', 'custom_notifications'), { items: todayItems }, { merge: true });
+            await setDoc(doc(db, 'settings', 'custom_notifications'), { items: recentItems }, { merge: true });
           } catch (e) {
             console.warn('Aviso ao purgar notificações antigas do Firestore:', e);
           }
@@ -603,7 +604,11 @@ export default function App() {
       const notifId = `custom_${cNotif.id}`;
       if (dismissedNotificationIds.includes(notifId)) return;
 
-      const isTargetedToMe = cNotif.targetType === 'all' || !cNotif.targetEmployeeId || (myRecord && cNotif.targetEmployeeId === myRecord.id);
+      const isTargetedToMe = 
+        cNotif.targetType === 'all' || 
+        !cNotif.targetEmployeeId || 
+        (myRecord && cNotif.targetEmployeeId === myRecord.id) ||
+        (userEmailLower && employees.some(e => e.id === cNotif.targetEmployeeId && (e.email || '').trim().toLowerCase() === userEmailLower));
 
       if (isViewingAsAdmin || isTargetedToMe) {
         let displayTitle = cNotif.title;
