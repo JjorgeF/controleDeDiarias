@@ -34,15 +34,10 @@ export default function Logo({ className = '', size = 32, animate = false }: Log
     <style>{`
       @keyframes logo-spin {
         0% { transform: rotate(0deg); }
-        77.78% { transform: rotate(-280deg); }
-        83.33% { transform: rotate(-356.25deg); }
-        88.89% { transform: rotate(-500deg); }
-        91.11% { transform: rotate(-561.28deg); }
-        94.44% { transform: rotate(-643.75deg); }
         100% { transform: rotate(-720deg); }
       }
       .animate-gentle-spin {
-        animation: logo-spin 9s linear infinite;
+        animation: logo-spin 8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
         transform-origin: center;
         will-change: transform;
       }
@@ -85,15 +80,10 @@ export default function Logo({ className = '', size = 32, animate = false }: Log
       <style>{`
         @keyframes logo-spin-svg {
           0% { transform: rotate(0deg); }
-          77.78% { transform: rotate(-280deg); }
-          83.33% { transform: rotate(-356.25deg); }
-          88.89% { transform: rotate(-500deg); }
-          91.11% { transform: rotate(-561.28deg); }
-          94.44% { transform: rotate(-643.75deg); }
           100% { transform: rotate(-720deg); }
         }
         .animate-gentle-spin {
-          animation: logo-spin-svg 9s linear infinite;
+          animation: logo-spin-svg 8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
           transform-origin: center;
           will-change: transform;
         }
