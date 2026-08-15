@@ -19,6 +19,7 @@ import {
 import { Employee } from '../types';
 import PaymentTimeline from './PaymentTimeline';
 import { formatCurrency } from '../lib/utils';
+import { AnimatedCurrency } from './AnimatedCurrency';
 import { format, isSameMonth, parseISO, addMonths, subMonths, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -242,7 +243,7 @@ export default function EmployeeEarningsView({
             </div>
           </div>
           <div>
-            <span className="text-xl md:text-2xl font-black text-amber-400">{formatCurrency(remainingToPay)}</span>
+            <AnimatedCurrency value={remainingToPay} className="text-xl md:text-2xl font-black text-amber-400 block" />
             <p className="text-[11px] font-medium text-gray-400 mt-1">
               {remainingToPay === 0 ? 'Tudo pago no mês!' : 'Pendente de quitação'}
             </p>
@@ -263,9 +264,7 @@ export default function EmployeeEarningsView({
             </div>
           </div>
           <div>
-            <span className="text-xl md:text-2xl font-black text-brand-text">
-              {formatCurrency(monthTotalEarnings)}
-            </span>
+            <AnimatedCurrency value={monthTotalEarnings} className="text-xl md:text-2xl font-black text-brand-text block" />
             <p className="text-[11px] font-medium text-gray-400 mt-1">
               CCSP + Festas + Extras
             </p>
