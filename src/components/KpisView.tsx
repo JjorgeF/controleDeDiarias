@@ -10,6 +10,7 @@ import {
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'motion/react';
+import { AnimatedCurrency } from './AnimatedCurrency';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -412,9 +413,6 @@ export function KpisView({ employees, monthConfigs, promotions = [], currentMont
             <div>
               <h2 className="text-xl font-black text-brand-text tracking-tight flex items-center gap-2">
                 Painel de Indicadores & KPIs
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center gap-1">
-                  <ShieldCheck size={12} /> Exclusivo Admin
-                </span>
               </h2>
               <p className="text-xs text-gray-400">
                 Análise orçamentária, volume de escalas e desempenho da equipe
@@ -466,7 +464,7 @@ export function KpisView({ employees, monthConfigs, promotions = [], currentMont
             </span>
           </div>
           <div className="text-2xl font-black text-brand-text tracking-tight mb-1">
-            {formatCurrency(monthStats.totalGrandCost)}
+            <AnimatedCurrency value={monthStats.totalGrandCost} />
           </div>
           <div className="flex items-center gap-1.5 text-xs">
             {costDiffPercent >= 0 ? (
@@ -484,15 +482,15 @@ export function KpisView({ employees, monthConfigs, promotions = [], currentMont
           <div className="mt-3 pt-3 border-t border-brand-border/40 grid grid-cols-3 text-[10px] gap-1 text-gray-400">
             <div>
               <span className="block text-emerald-400 font-bold">CCSP</span>
-              {formatCurrency(monthStats.totalCcspCost)}
+              <AnimatedCurrency value={monthStats.totalCcspCost} />
             </div>
             <div>
               <span className="block text-purple-400 font-bold">Festas</span>
-              {formatCurrency(monthStats.totalPartyCost)}
+              <AnimatedCurrency value={monthStats.totalPartyCost} />
             </div>
             <div>
               <span className="block text-amber-400 font-bold">Extras</span>
-              {formatCurrency(monthStats.totalExtraHoursCost)}
+              <AnimatedCurrency value={monthStats.totalExtraHoursCost} />
             </div>
           </div>
         </motion.div>
@@ -551,7 +549,7 @@ export function KpisView({ employees, monthConfigs, promotions = [], currentMont
 
           <div className="mt-3 pt-3 border-t border-brand-border/40 text-[10px] text-gray-400 flex items-center justify-between">
             <span>Ticket Média p/ Recreador:</span>
-            <span className="font-bold text-brand-text">{formatCurrency(monthStats.avgCostPerWorker)}</span>
+            <AnimatedCurrency value={monthStats.avgCostPerWorker} className="font-bold text-brand-text" />
           </div>
         </motion.div>
 
