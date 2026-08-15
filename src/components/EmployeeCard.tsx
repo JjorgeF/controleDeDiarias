@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Edit2, Pencil, User, UserRound, Calendar, Sparkles, Award, CreditCard, Copy, Check, Shirt, PhoneCall, Wind, CheckCircle2, DollarSign } from 'lucide-react';
 import { Employee } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
+import { AnimatedCurrency } from './AnimatedCurrency';
 import { format, startOfMonth, endOfMonth, isSameMonth, parseISO, lastDayOfMonth, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'motion/react';
@@ -215,15 +216,15 @@ const EmployeeCard: React.FC<EmployeeCardProps> = ({
         <div className="space-y-2 mb-4">
           <div className="flex justify-between text-sm">
             <span className="text-brand-muted">Diária CCSP:</span>
-            <span className="font-bold text-brand-text">{formatCurrency(employee.dailyRate)}</span>
+            <AnimatedCurrency value={employee.dailyRate} className="font-bold text-brand-text" />
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-brand-muted">Diária Festa:</span>
-            <span className="font-bold text-brand-text">{formatCurrency(employee.partyRate)}</span>
+            <AnimatedCurrency value={employee.partyRate} className="font-bold text-brand-text" />
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-brand-muted">Hora Extra:</span>
-            <span className="font-bold text-brand-text">{formatCurrency(employee.extraHourRate)}</span>
+            <AnimatedCurrency value={employee.extraHourRate} className="font-bold text-brand-text" />
           </div>
         </div>
 
@@ -320,7 +321,7 @@ const EmployeeCard: React.FC<EmployeeCardProps> = ({
               )}
             </p>
             <p className="text-2xl font-black text-brand-primary">
-              {formatCurrency(totalEarnings)}
+              <AnimatedCurrency value={totalEarnings} />
             </p>
           </div>
         </div>
