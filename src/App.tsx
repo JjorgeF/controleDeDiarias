@@ -1646,6 +1646,7 @@ export default function App() {
           onSend={handleSendCustomNotification}
           employees={activeEmployees}
         />
+        <WhatsNewModal isAdmin={isViewingAsAdmin} />
         <PWAInstallPrompt />
       </div>
     );
