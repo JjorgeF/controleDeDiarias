@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { Employee, WorkDay } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
+import { AnimatedCurrency } from './AnimatedCurrency';
 import { 
   format, 
   startOfMonth, 
@@ -300,9 +301,6 @@ export default function PaymentsView({
                 <h2 className="text-xl sm:text-2xl font-black text-brand-text font-playful tracking-wide">
                   Gestão Financeira & Pagamentos
                 </h2>
-                <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black uppercase px-2 py-0.5 rounded-full">
-                  Exclusivo Admin
-                </span>
               </div>
               <p className="text-xs sm:text-sm text-brand-muted mt-0.5">
                 Controle de quitação mensal (CCSP no Dia 15 e Festas em 7 dias após o evento)
@@ -347,9 +345,7 @@ export default function PaymentsView({
               <Calendar size={15} className="text-brand-primary" />
             </div>
             <div className="mt-2">
-              <span className="text-2xl font-black text-brand-text block">
-                {formatCurrency(stats.allTotalAmount)}
-              </span>
+              <AnimatedCurrency value={stats.allTotalAmount} className="text-2xl font-black text-brand-text block" />
               <span className="text-[11px] text-gray-400 font-semibold mt-0.5 block">
                 {stats.totalCount} {stats.totalCount === 1 ? 'pagamento cadastrado' : 'pagamentos cadastrados'}
               </span>
@@ -363,9 +359,7 @@ export default function PaymentsView({
               <CheckCircle2 size={15} className="text-emerald-400" />
             </div>
             <div className="mt-2">
-              <span className="text-2xl font-black text-emerald-400 block">
-                {formatCurrency(stats.paidTotalAmount)}
-              </span>
+              <AnimatedCurrency value={stats.paidTotalAmount} className="text-2xl font-black text-emerald-400 block" />
               <span className="text-[11px] text-emerald-500/80 font-semibold mt-0.5 block">
                 {stats.paidCount} de {stats.totalCount} quitados
               </span>
@@ -379,9 +373,7 @@ export default function PaymentsView({
               <Clock size={15} className="text-amber-400" />
             </div>
             <div className="mt-2">
-              <span className="text-2xl font-black text-amber-400 block">
-                {formatCurrency(stats.pendingTotalAmount)}
-              </span>
+              <AnimatedCurrency value={stats.pendingTotalAmount} className="text-2xl font-black text-amber-400 block" />
               <span className="text-[11px] text-amber-500/80 font-semibold mt-0.5 block">
                 {stats.pendingCount} {stats.pendingCount === 1 ? 'pagamento pendente' : 'pagamentos pendentes'}
               </span>
