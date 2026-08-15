@@ -1603,14 +1603,16 @@ export default function App() {
                   </div>
                 </div>
               ) : employeeActiveTab === 'master_schedule' ? (
-                <MonthlyScheduleView 
-                  employees={activeEmployees}
-                  currentMonth={currentMonth}
-                  setCurrentMonth={setCurrentMonth}
-                  currentEmployee={myEmployeeRecord}
-                  isAdmin={false}
-                  dayConfigs={dayConfigs}
-                />
+                <Suspense fallback={<ViewFallback />}>
+                  <MonthlyScheduleView 
+                    employees={activeEmployees}
+                    currentMonth={currentMonth}
+                    setCurrentMonth={setCurrentMonth}
+                    currentEmployee={myEmployeeRecord}
+                    isAdmin={false}
+                    dayConfigs={dayConfigs}
+                  />
+                </Suspense>
               ) : employeeActiveTab === 'earnings' ? (
                 <Suspense fallback={<ViewFallback />}>
                   <EmployeeEarningsView 
@@ -1619,18 +1621,20 @@ export default function App() {
                   />
                 </Suspense>
               ) : (
-                <EmployeeStoryView 
-                  employee={myEmployeeRecord}
-                  isAdmin={isViewingAsAdmin}
-                  onEditEmployee={() => {
-                    setSelectedEmployee(myEmployeeRecord);
-                    setIsEmployeeModalOpen(true);
-                  }}
-                  onUpdatePhoto={(photoUrl) => handleUpdatePhoto(myEmployeeRecord.id, photoUrl)}
-                  onUpdateDetails={handleUpdateEmployeeDetails}
-                  canEditPhoto={true}
-                  onNavigateToEarnings={() => setEmployeeActiveTab('earnings')}
-                />
+                <Suspense fallback={<ViewFallback />}>
+                  <EmployeeStoryView 
+                    employee={myEmployeeRecord}
+                    isAdmin={isViewingAsAdmin}
+                    onEditEmployee={() => {
+                      setSelectedEmployee(myEmployeeRecord);
+                      setIsEmployeeModalOpen(true);
+                    }}
+                    onUpdatePhoto={(photoUrl) => handleUpdatePhoto(myEmployeeRecord.id, photoUrl)}
+                    onUpdateDetails={handleUpdateEmployeeDetails}
+                    canEditPhoto={true}
+                    onNavigateToEarnings={() => setEmployeeActiveTab('earnings')}
+                  />
+                </Suspense>
               )}
             </div>
           ) : (
@@ -1640,12 +1644,18 @@ export default function App() {
             </div>
           )}
         </main>
-        <SendNotificationModal
-          isOpen={isSendNotificationModalOpen}
-          onClose={() => setIsSendNotificationModalOpen(false)}
-          onSend={handleSendCustomNotification}
-          employees={activeEmployees}
-        />
+        
+        {isSendNotificationModalOpen && (
+          <Suspense fallback={null}>
+            <SendNotificationModal
+              isOpen={isSendNotificationModalOpen}
+              onClose={() => setIsSendNotificationModalOpen(false)}
+              onSend={handleSendCustomNotification}
+              employees={activeEmployees}
+            />
+          </Suspense>
+        )}
+        
         <WhatsNewModal isAdmin={isViewingAsAdmin} />
         <PWAInstallPrompt />
       </div>
