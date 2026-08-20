@@ -95,6 +95,37 @@ export default function EmployeeList({
   setCurrentMonth
 }: EmployeeListProps) {
   const [activeTab, setActiveTab] = React.useState<'active' | 'inactive'>('active');
+  const [activeLimit, setActiveLimit] = React.useState(15);
+  const [inactiveLimit, setInactiveLimit] = React.useState(15);
+
+  const loaderRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (first.isIntersecting) {
+          if (activeTab === 'active') {
+            setActiveLimit((prev) => prev + 15);
+          } else {
+            setInactiveLimit((prev) => prev + 15);
+          }
+        }
+      },
+      { threshold: 0.1, rootMargin: '100px' }
+    );
+
+    const currentLoader = loaderRef.current;
+    if (currentLoader) {
+      observer.observe(currentLoader);
+    }
+
+    return () => {
+      if (currentLoader) {
+        observer.unobserve(currentLoader);
+      }
+    };
+  }, [activeTab]);
 
   const activeEmployees = React.useMemo(() => {
     return employees.filter(emp => emp.status !== 'inactive');
@@ -208,8 +239,9 @@ export default function EmployeeList({
                   </td>
                 </tr>
               ) : (
-                sortedActive.map((emp) => {
-                  const monthWorkDays = (emp.workDays || []).filter(day => {
+                <>
+                  {sortedActive.slice(0, activeLimit).map((emp) => {
+                    const monthWorkDays = (emp.workDays || []).filter(day => {
                     if (day.isCancelled) return false;
                     const date = parseISO(day.date);
                     return isSameMonth(date, currentMonth);
@@ -333,10 +365,16 @@ export default function EmployeeList({
                       </td>
                     </motion.tr>
                   );
-                })
+                })}
+                </>
               )}
             </tbody>
           </table>
+          {activeTab === 'active' && activeLimit < sortedActive.length && (
+            <div ref={loaderRef} className="py-6 flex justify-center items-center">
+              <div className="w-6 h-6 border-2 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          )}
         </div>
       ) : (
         /* Inactive Employees Tab */
@@ -357,7 +395,7 @@ export default function EmployeeList({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {sortedInactive.map((emp) => {
+              {sortedInactive.slice(0, inactiveLimit).map((emp) => {
                 const inactDate = emp.inactivatedAt ? new Date(emp.inactivatedAt) : new Date();
                 const now = new Date();
                 const daysInactive = Math.floor((now.getTime() - inactDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -455,6 +493,11 @@ export default function EmployeeList({
                   </div>
                 );
               })}
+            </div>
+          )}
+          {activeTab === 'inactive' && inactiveLimit < sortedInactive.length && (
+            <div ref={loaderRef} className="py-6 flex justify-center items-center">
+              <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
           )}
         </div>
