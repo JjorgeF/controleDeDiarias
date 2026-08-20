@@ -745,17 +745,37 @@ export default function App() {
 
   const handleUpdateEmployeeDetails = async (employeeId: string, updatedFields: Partial<Employee>) => {
     if (!db) return;
+    
+    // Optimistic UI Update
+    setEmployees(prev => prev.map(emp => emp.id === employeeId ? { ...emp, ...updatedFields } : emp));
+    if (selectedStoryEmployee?.id === employeeId) {
+      setSelectedStoryEmployee(prev => prev ? { ...prev, ...updatedFields } : null);
+    }
+
     try {
       const empRef = doc(db, 'employees', employeeId);
       await updateDoc(empRef, updatedFields);
-
-      setEmployees(prev => prev.map(emp => emp.id === employeeId ? { ...emp, ...updatedFields } : emp));
-      if (selectedStoryEmployee?.id === employeeId) {
-        setSelectedStoryEmployee(prev => prev ? { ...prev, ...updatedFields } : null);
-      }
     } catch (error: any) {
       console.error("Erro ao atualizar dados do funcionário:", error);
+      
+      // Revert on failure (fetch fresh data or just reload the window for safety in this simple implementation)
+      // A more robust implementation would store the previous state and revert it.
+      // For now, we will revert by triggering a re-fetch or informing the user.
       handleFirestoreError(error, OperationType.UPDATE, 'employees');
+      
+      // Simple revert (re-fetching the document to ensure consistency)
+      try {
+        const docSnap = await getDoc(doc(db, 'employees', employeeId));
+        if (docSnap.exists()) {
+          const freshData = { id: docSnap.id, ...docSnap.data() } as Employee;
+          setEmployees(prev => prev.map(emp => emp.id === employeeId ? freshData : emp));
+          if (selectedStoryEmployee?.id === employeeId) {
+            setSelectedStoryEmployee(freshData);
+          }
+        }
+      } catch (revertErr) {
+        console.error("Failed to revert state", revertErr);
+      }
     }
   };
 
@@ -1991,34 +2011,40 @@ export default function App() {
         )}
 
         {isPushDiagnosticsOpen && (
-          <PushDiagnosticsModal
-            isOpen={isPushDiagnosticsOpen}
-            onClose={() => setIsPushDiagnosticsOpen(false)}
-            userEmail={user?.email || undefined}
-            userName={user?.displayName || undefined}
-          />
+          <Suspense fallback={<ViewFallback />}>
+            <PushDiagnosticsModal
+              isOpen={isPushDiagnosticsOpen}
+              onClose={() => setIsPushDiagnosticsOpen(false)}
+              userEmail={user?.email || undefined}
+              userName={user?.displayName || undefined}
+            />
+          </Suspense>
         )}
 
         {isAdvancedSettingsOpen && (
-          <AdvancedSettingsModal
-            isOpen={isAdvancedSettingsOpen}
-            onClose={() => setIsAdvancedSettingsOpen(false)}
-            employees={employees}
-            dayConfigs={dayConfigs}
-            deadlines={deadlines}
-            onRestoreBackup={handleRestoreBackup}
-          />
+          <Suspense fallback={<ViewFallback />}>
+            <AdvancedSettingsModal
+              isOpen={isAdvancedSettingsOpen}
+              onClose={() => setIsAdvancedSettingsOpen(false)}
+              employees={employees}
+              dayConfigs={dayConfigs}
+              deadlines={deadlines}
+              onRestoreBackup={handleRestoreBackup}
+            />
+          </Suspense>
         )}
 
         {isRevertCancellationModalOpen && (
-          <RevertCancellationModal
-            isOpen={isRevertCancellationModalOpen}
-            onClose={() => setIsRevertCancellationModalOpen(false)}
-            employees={employees}
-            initialEmployeeId={revertCancellationTarget.employeeId}
-            initialDate={revertCancellationTarget.date}
-            onRevertCancellation={handleRevertCancellation}
-          />
+          <Suspense fallback={<ViewFallback />}>
+            <RevertCancellationModal
+              isOpen={isRevertCancellationModalOpen}
+              onClose={() => setIsRevertCancellationModalOpen(false)}
+              employees={employees}
+              initialEmployeeId={revertCancellationTarget.employeeId}
+              initialDate={revertCancellationTarget.date}
+              onRevertCancellation={handleRevertCancellation}
+            />
+          </Suspense>
         )}
       </Suspense>
       
