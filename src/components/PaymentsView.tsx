@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   DollarSign, 
   CheckCircle2, 
@@ -17,11 +17,15 @@ import {
   Filter,
   ArrowUpRight,
   Sparkles,
-  ShieldCheck
+  ShieldCheck,
+  Undo2,
+  CheckSquare
 } from 'lucide-react';
 import { Employee, WorkDay } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
 import { AnimatedCurrency } from './AnimatedCurrency';
+import { db } from '../lib/firebase';
+import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { 
   format, 
   startOfMonth, 
@@ -37,6 +41,13 @@ import {
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'motion/react';
+
+interface PaymentBatch {
+  id: string;
+  type: 'ccsp' | 'party';
+  timestamp: number;
+  items: { employeeId: string; dateStr: string }[];
+}
 
 interface PaymentsViewProps {
   employees: Employee[];
@@ -87,6 +98,29 @@ export default function PaymentsView({
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
+
+  // Bulk Payment States
+  const [lastBatch, setLastBatch] = useState<PaymentBatch | null>(null);
+  const [isConfirmBulkModalOpen, setIsConfirmBulkModalOpen] = useState(false);
+  const [bulkType, setBulkType] = useState<'ccsp' | 'party'>('ccsp');
+  const [isUndoModalOpen, setIsUndoModalOpen] = useState(false);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+
+  useEffect(() => {
+    if (!db) return;
+    const fetchBatch = async () => {
+      try {
+        const docRef = doc(db, 'settings', 'last_payment_batch');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setLastBatch(docSnap.data() as PaymentBatch);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar último lote de pagamento:', err);
+      }
+    };
+    fetchBatch();
+  }, [db]);
 
   // Month navigation handlers
   const handlePrevMonth = () => setCurrentMonth(prev => subMonths(prev, 1));
@@ -142,6 +176,11 @@ export default function PaymentsView({
       setIsProcessing(null);
     }
   };
+
+  // Process and compute all payment records for currentMonth
+  // Define this first or pass the items. Wait, I need ccspItems and partyItems to bulk process.
+  // I will define the handlers *after* ccspItems/partyItems or I can pass them in the render.
+  // Actually, I'll define them inside the component body, but I can use filteredCcspItems/filteredPartyItems when called.
 
 
 
@@ -285,7 +324,87 @@ export default function PaymentsView({
     });
   }, [partyItems, typeFilter, statusFilter, searchQuery]);
 
+  const handleConfirmBulkPay = async () => {
+    if (!db) return;
+    try {
+      setIsBulkProcessing(true);
+      const batchId = Date.now().toString();
+      const itemsToUpdate = bulkType === 'ccsp' 
+        ? filteredCcspItems.filter(i => !i.isPaid)
+        : filteredPartyItems.filter(i => !i.isPaid);
 
+      if (itemsToUpdate.length === 0) return;
+
+      const batchObj: PaymentBatch = {
+        id: batchId,
+        type: bulkType,
+        timestamp: Date.now(),
+        items: itemsToUpdate.map(i => ({ employeeId: i.employee.id, dateStr: i.dueDateStr }))
+      };
+
+      // Create a map to group updates by employee
+      const employeeUpdates = new Map<string, string[]>();
+      
+      itemsToUpdate.forEach(item => {
+        const emp = employees.find(e => e.id === item.employee.id);
+        if (!emp) return;
+        const paidDates = employeeUpdates.get(emp.id) || [...(emp.paidDates || [])];
+        if (!paidDates.includes(item.dueDateStr)) {
+          paidDates.push(item.dueDateStr);
+        }
+        employeeUpdates.set(emp.id, paidDates);
+      });
+
+      // Execute all updates sequentially (or Promise.all)
+      const updatePromises = Array.from(employeeUpdates.entries()).map(([empId, newPaidDates]) => {
+        return onUpdateDetails(empId, { paidDates: newPaidDates });
+      });
+
+      await Promise.all(updatePromises);
+      await setDoc(doc(db, 'settings', 'last_payment_batch'), batchObj);
+      setLastBatch(batchObj);
+      setIsConfirmBulkModalOpen(false);
+    } catch (err) {
+      console.error('Erro ao processar lote:', err);
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
+  const handleConfirmUndoBulk = async () => {
+    if (!db || !lastBatch) return;
+    try {
+      setIsBulkProcessing(true);
+      
+      const employeeUpdates = new Map<string, string[]>();
+
+      lastBatch.items.forEach(item => {
+        const emp = employees.find(e => e.id === item.employeeId);
+        if (!emp) return;
+        
+        let paidDates = employeeUpdates.get(emp.id);
+        if (!paidDates) {
+          paidDates = [...(emp.paidDates || [])];
+        }
+        
+        paidDates = paidDates.filter(d => d !== item.dateStr);
+        employeeUpdates.set(emp.id, paidDates);
+      });
+
+      const updatePromises = Array.from(employeeUpdates.entries()).map(([empId, newPaidDates]) => {
+        return onUpdateDetails(empId, { paidDates: newPaidDates });
+      });
+
+      await Promise.all(updatePromises);
+      await deleteDoc(doc(db, 'settings', 'last_payment_batch'));
+      setLastBatch(null);
+      setIsUndoModalOpen(false);
+    } catch (err) {
+      console.error('Erro ao desfazer lote:', err);
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -462,6 +581,46 @@ export default function PaymentsView({
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Ações em Massa */}
+      <div className="flex flex-col sm:flex-row items-center gap-3 bg-brand-card/50 border border-brand-primary/20 rounded-2xl p-4">
+        <div className="flex items-center gap-2 text-brand-primary shrink-0">
+          <CheckSquare size={18} />
+          <span className="font-bold text-sm">Ações em Massa:</span>
+        </div>
+        
+        <div className="flex flex-wrap items-center gap-2 flex-1">
+          <button
+            onClick={() => { setBulkType('ccsp'); setIsConfirmBulkModalOpen(true); }}
+            disabled={filteredCcspItems.filter(i => !i.isPaid).length === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary border border-brand-primary/30 rounded-xl text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Building2 size={14} />
+            Pagar Pendentes CCSP ({filteredCcspItems.filter(i => !i.isPaid).length})
+          </button>
+
+          <button
+            onClick={() => { setBulkType('party'); setIsConfirmBulkModalOpen(true); }}
+            disabled={filteredPartyItems.filter(i => !i.isPaid).length === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-xl text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <PartyPopper size={14} />
+            Pagar Pendentes Festas ({filteredPartyItems.filter(i => !i.isPaid).length})
+          </button>
+        </div>
+
+        {lastBatch && (
+          <button
+            onClick={() => setIsUndoModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-xl text-xs font-bold transition-colors ml-auto shrink-0 shadow-sm"
+            title="Desfazer último pagamento em massa"
+          >
+            <Undo2 size={14} />
+            <span className="hidden sm:inline">Desfazer Lote</span>
+            <span className="sm:hidden">Desfazer</span>
+          </button>
+        )}
       </div>
 
       {/* SEÇÃO 1: Lote Mensal CCSP (Previsão: Dia 15) */}
@@ -807,6 +966,121 @@ export default function PaymentsView({
           )}
         </div>
       )}
+      
+      {/* Confirm Bulk Modal */}
+      <AnimatePresence>
+        {isConfirmBulkModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }} 
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => !isBulkProcessing && setIsConfirmBulkModalOpen(false)}
+            />
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative bg-brand-card border border-brand-border rounded-3xl p-6 w-full max-w-md shadow-2xl overflow-hidden"
+            >
+              <div className="flex items-center gap-3 mb-4 text-brand-primary">
+                <AlertCircle size={28} />
+                <h3 className="text-xl font-black text-brand-text">Ação em Massa</h3>
+              </div>
+              <p className="text-brand-muted text-sm leading-relaxed mb-6">
+                Você está prestes a marcar <strong>
+                {bulkType === 'ccsp' 
+                  ? filteredCcspItems.filter(i => !i.isPaid).length 
+                  : filteredPartyItems.filter(i => !i.isPaid).length}
+                </strong> pagamentos como quitados.
+                Esta ação gerará um lote de pagamento e poderá ser desfeita posteriormente caso haja algum erro.
+                Deseja prosseguir?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsConfirmBulkModalOpen(false)}
+                  disabled={isBulkProcessing}
+                  className="flex-1 py-3 rounded-xl font-bold text-gray-400 bg-brand-bg/50 hover:bg-brand-bg transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleConfirmBulkPay}
+                  disabled={isBulkProcessing}
+                  className="flex-1 py-3 rounded-xl font-black text-slate-950 bg-brand-primary hover:bg-brand-primary/90 transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {isBulkProcessing ? (
+                    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
+                      <Clock size={18} />
+                    </motion.div>
+                  ) : (
+                    <>
+                      <CheckSquare size={18} />
+                      Confirmar
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Undo Bulk Modal */}
+      <AnimatePresence>
+        {isUndoModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }} 
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => !isBulkProcessing && setIsUndoModalOpen(false)}
+            />
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative bg-brand-card border border-brand-border rounded-3xl p-6 w-full max-w-md shadow-2xl overflow-hidden"
+            >
+              <div className="flex items-center gap-3 mb-4 text-amber-500">
+                <Undo2 size={28} />
+                <h3 className="text-xl font-black text-brand-text">Desfazer Ação em Massa</h3>
+              </div>
+              <p className="text-brand-muted text-sm leading-relaxed mb-6">
+                Deseja desfazer o último lote de pagamentos processado? 
+                Isso restaurará <strong>{lastBatch?.items.length || 0}</strong> funcionários para o status "Pendente", sem afetar aqueles que foram pagos manualmente.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsUndoModalOpen(false)}
+                  disabled={isBulkProcessing}
+                  className="flex-1 py-3 rounded-xl font-bold text-gray-400 bg-brand-bg/50 hover:bg-brand-bg transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleConfirmUndoBulk}
+                  disabled={isBulkProcessing}
+                  className="flex-1 py-3 rounded-xl font-black text-slate-950 bg-amber-500 hover:bg-amber-400 transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {isBulkProcessing ? (
+                    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
+                      <Clock size={18} />
+                    </motion.div>
+                  ) : (
+                    <>
+                      <Undo2 size={18} />
+                      Desfazer Lote
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
