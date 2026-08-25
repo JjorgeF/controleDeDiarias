@@ -15,7 +15,9 @@ import {
   Send,
   History,
   Zap,
-  Activity
+  Activity,
+  Filter,
+  ChevronDown
 } from 'lucide-react';
 import { AppNotification, NotificationType, CustomNotificationDoc } from '../types';
 import { format, parseISO } from 'date-fns';
@@ -55,11 +57,16 @@ export default function NotificationCenter({
   userName
 }: NotificationCenterProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread' | 'cancellation' | 'deadline' | 'sent_history'>('all');
   const [browserPermission, setBrowserPermission] = useState<NotificationPermission>(
     typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default'
   );
   const popoverRef = useRef<HTMLDivElement>(null);
+  const filterDropdownRef = useRef<HTMLDivElement>(null);
+  
+  const [notificationLimit, setNotificationLimit] = useState(15);
+  const loaderRef = useRef<HTMLDivElement>(null);
 
   // Close popover when clicking outside
   useEffect(() => {
@@ -67,14 +74,41 @@ export default function NotificationCenter({
       if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
+        setIsFilterOpen(false);
+      }
     }
-    if (isOpen) {
+    if (isOpen || isFilterOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isOpen]);
+  }, [isOpen, isFilterOpen]);
+
+  // Infinite Scroll Observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (first.isIntersecting) {
+          setNotificationLimit(prev => prev + 15);
+        }
+      },
+      { threshold: 0.1, rootMargin: '100px' }
+    );
+
+    const currentLoader = loaderRef.current;
+    if (currentLoader) {
+      observer.observe(currentLoader);
+    }
+
+    return () => {
+      if (currentLoader) {
+        observer.unobserve(currentLoader);
+      }
+    };
+  }, [isOpen, filter]);
 
   // Request browser & PWA background notification permission
   const handleEnableBrowserNotifications = async () => {
@@ -156,40 +190,9 @@ export default function NotificationCenter({
             <div className="flex items-center gap-2">
               <BellRing className="text-brand-primary" size={18} />
               <h3 className="font-bold text-brand-text text-sm">Notificações</h3>
-              {unreadCount > 0 && (
-                <span className="bg-red-500/20 text-red-500 border border-red-500/30 text-[10px] font-extrabold px-2 py-0.5 rounded-full">
-                  {unreadCount} não {unreadCount === 1 ? 'lida' : 'lidas'}
-                </span>
-              )}
             </div>
             
             <div className="flex items-center gap-1.5">
-              {onOpenPushDiagnostics && (
-                <button
-                  onClick={() => {
-                    onOpenPushDiagnostics();
-                    setIsOpen(false);
-                  }}
-                  className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 font-bold text-[11px] px-2 py-1 rounded-lg flex items-center gap-1 transition-colors"
-                  title="Diagnosticar e testar notificações push no dispositivo"
-                >
-                  <Activity size={12} />
-                  <span className="hidden sm:inline">Diagnóstico</span>
-                </button>
-              )}
-              {isAdmin && onOpenSendModal && (
-                <button
-                  onClick={() => {
-                    onOpenSendModal();
-                    setIsOpen(false);
-                  }}
-                  className="bg-brand-primary hover:bg-brand-primary-hover text-brand-bg font-extrabold text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors shadow-sm"
-                  title="Enviar notificação personalizada para a equipe"
-                >
-                  <Send size={12} />
-                  <span>Nova</span>
-                </button>
-              )}
               {unreadCount > 0 && (
                 <button
                   onClick={onMarkAllRead}
@@ -200,9 +203,45 @@ export default function NotificationCenter({
                   <span className="hidden sm:inline">Lidas</span>
                 </button>
               )}
+              
+              <div className="relative group">
+                <button
+                  className="p-1 text-brand-muted hover:text-brand-text rounded-lg hover:bg-brand-bg transition-colors flex items-center justify-center"
+                  title="Mais ações"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                </button>
+                <div className="absolute right-0 top-full mt-1 w-40 bg-brand-card border border-brand-border rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 flex flex-col overflow-hidden">
+                  {onOpenPushDiagnostics && (
+                    <button
+                      onClick={() => {
+                        onOpenPushDiagnostics();
+                        setIsOpen(false);
+                      }}
+                      className="text-left px-3 py-2 text-xs text-purple-300 hover:bg-purple-500/10 flex items-center gap-2 transition-colors"
+                    >
+                      <Activity size={14} />
+                      Diagnóstico
+                    </button>
+                  )}
+                  {isAdmin && onOpenSendModal && (
+                    <button
+                      onClick={() => {
+                        onOpenSendModal();
+                        setIsOpen(false);
+                      }}
+                      className="text-left px-3 py-2 text-xs text-brand-primary hover:bg-brand-primary/10 flex items-center gap-2 transition-colors border-t border-brand-border/50"
+                    >
+                      <Send size={14} />
+                      Nova Notificação
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <button
                 onClick={() => setIsOpen(false)}
-                className="p-1 text-brand-muted hover:text-brand-text rounded-lg hover:bg-brand-bg transition-colors"
+                className="p-1 text-brand-muted hover:text-brand-text rounded-lg hover:bg-brand-bg transition-colors ml-1"
               >
                 <X size={16} />
               </button>
@@ -224,69 +263,86 @@ export default function NotificationCenter({
             </div>
           )}
 
-          {/* Filter Tabs */}
-          <div className="flex items-center border-b border-brand-border/60 bg-brand-bg/40 text-xs px-2 pt-2 gap-1 overflow-x-auto">
-            <button
-              onClick={() => setFilter('all')}
-              className={cn(
-                "px-3 py-1.5 rounded-t-lg font-bold transition-colors whitespace-nowrap",
-                filter === 'all'
-                  ? "bg-brand-card text-brand-primary border-t-2 border-brand-primary shadow-sm"
-                  : "text-brand-muted hover:text-brand-text"
-              )}
-            >
-              Todas ({notifications.length})
-            </button>
-            <button
-              onClick={() => setFilter('unread')}
-              className={cn(
-                "px-3 py-1.5 rounded-t-lg font-bold transition-colors whitespace-nowrap",
-                filter === 'unread'
-                  ? "bg-brand-card text-brand-primary border-t-2 border-brand-primary shadow-sm"
-                  : "text-brand-muted hover:text-brand-text"
-              )}
-            >
-              Não lidas ({unreadCount})
-            </button>
-            {isAdmin && (
-              <button
-                onClick={() => setFilter('cancellation')}
-                className={cn(
-                  "px-3 py-1.5 rounded-t-lg font-bold transition-colors whitespace-nowrap",
-                  filter === 'cancellation'
-                    ? "bg-brand-card text-brand-primary border-t-2 border-brand-primary shadow-sm"
-                    : "text-brand-muted hover:text-brand-text"
-                )}
+          {/* Filter Tabs / Selector */}
+          <div className="flex items-center justify-between border-b border-brand-border/60 bg-brand-bg/40 px-3 py-2">
+            <div className="relative group" ref={filterDropdownRef}>
+              <button 
+                onClick={() => setIsFilterOpen(!isFilterOpen)}
+                className="flex items-center gap-1.5 text-xs font-bold text-brand-text bg-brand-card border border-brand-border px-3 py-1.5 rounded-lg shadow-sm hover:bg-brand-bg transition-colors"
               >
-                Cancelamentos
+                <Filter size={14} className="text-brand-primary" />
+                <span>
+                  {filter === 'all' && `Todas (${notifications.length})`}
+                  {filter === 'unread' && `Não lidas (${unreadCount})`}
+                  {filter === 'cancellation' && 'Cancelamentos'}
+                  {filter === 'deadline' && 'Prazos'}
+                </span>
+                <ChevronDown size={14} className="text-brand-muted ml-1" />
               </button>
-            )}
-            <button
-              onClick={() => setFilter('deadline')}
-              className={cn(
-                "px-3 py-1.5 rounded-t-lg font-bold transition-colors whitespace-nowrap",
-                filter === 'deadline'
-                  ? "bg-brand-card text-brand-primary border-t-2 border-brand-primary shadow-sm"
-                  : "text-brand-muted hover:text-brand-text"
+              
+              {/* Dropdown Menu */}
+              {isFilterOpen && (
+                <div className="absolute left-0 top-full mt-1 w-48 bg-brand-card border border-brand-border rounded-lg shadow-xl transition-all z-20 flex flex-col py-1 animate-in fade-in slide-in-from-top-1">
+                  <button
+                    onClick={() => {
+                      setFilter('all');
+                      setIsFilterOpen(false);
+                    }}
+                    className={cn(
+                      "text-left px-3 py-2 text-xs transition-colors flex items-center gap-2",
+                      filter === 'all' ? "text-brand-primary bg-brand-primary/10 font-bold" : "text-brand-text hover:bg-brand-bg"
+                    )}
+                  >
+                    <Bell size={14} />
+                    Todas ({notifications.length})
+                  </button>
+                  <button
+                    onClick={() => {
+                      setFilter('unread');
+                      setIsFilterOpen(false);
+                    }}
+                    className={cn(
+                      "text-left px-3 py-2 text-xs transition-colors flex items-center gap-2",
+                      filter === 'unread' ? "text-brand-primary bg-brand-primary/10 font-bold" : "text-brand-text hover:bg-brand-bg"
+                    )}
+                  >
+                    <div className="relative">
+                      <Bell size={14} />
+                      {unreadCount > 0 && <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-red-500 rounded-full"></div>}
+                    </div>
+                    Não lidas ({unreadCount})
+                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        setFilter('cancellation');
+                        setIsFilterOpen(false);
+                      }}
+                      className={cn(
+                        "text-left px-3 py-2 text-xs transition-colors flex items-center gap-2",
+                        filter === 'cancellation' ? "text-brand-primary bg-brand-primary/10 font-bold" : "text-brand-text hover:bg-brand-bg"
+                      )}
+                    >
+                      <AlertTriangle size={14} />
+                      Cancelamentos
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setFilter('deadline');
+                      setIsFilterOpen(false);
+                    }}
+                    className={cn(
+                      "text-left px-3 py-2 text-xs transition-colors flex items-center gap-2",
+                      filter === 'deadline' ? "text-brand-primary bg-brand-primary/10 font-bold" : "text-brand-text hover:bg-brand-bg"
+                    )}
+                  >
+                    <Clock size={14} />
+                    Prazos
+                  </button>
+                </div>
               )}
-            >
-              Prazos
-            </button>
-            {isAdmin && (
-              <button
-                onClick={() => setFilter('sent_history')}
-                className={cn(
-                  "px-3 py-1.5 rounded-t-lg font-bold transition-colors whitespace-nowrap flex items-center gap-1",
-                  filter === 'sent_history'
-                    ? "bg-brand-card text-brand-primary border-t-2 border-brand-primary shadow-sm"
-                    : "text-brand-muted hover:text-brand-text"
-                )}
-                title="Histórico de Notificações enviadas pela administração"
-              >
-                <History size={13} />
-                <span>Histórico ({customNotificationsDocs.length})</span>
-              </button>
-            )}
+            </div>
           </div>
 
           {/* Notifications List */}
@@ -341,74 +397,81 @@ export default function NotificationCenter({
           ) : (
             <div className="overflow-y-auto flex-1 divide-y divide-brand-border/40 p-1">
               {filteredNotifications.length > 0 ? (
-                filteredNotifications.map((notif) => (
-                  <div
-                    key={notif.id}
-                    className={cn(
-                      "p-3 rounded-lg transition-all duration-200 flex flex-col gap-2 my-1",
-                      !notif.isRead
-                        ? "bg-brand-primary/10 border border-brand-primary/30"
-                        : "hover:bg-brand-bg/60 border border-transparent"
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-start gap-2.5">
-                        {getNotificationIcon(notif.type)}
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="text-xs font-bold text-brand-text">
-                              {notif.title}
+                <>
+                  {filteredNotifications.slice(0, notificationLimit).map((notif) => (
+                    <div
+                      key={notif.id}
+                      className={cn(
+                        "p-3 rounded-lg transition-all duration-200 flex flex-col gap-2 my-1",
+                        !notif.isRead
+                          ? "bg-brand-primary/10 border border-brand-primary/30"
+                          : "hover:bg-brand-bg/60 border border-transparent"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2.5">
+                          {getNotificationIcon(notif.type)}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs font-bold text-brand-text">
+                                {notif.title}
+                              </p>
+                              {!notif.isRead && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-pulse shrink-0" />
+                              )}
+                            </div>
+                            <p className="text-xs text-brand-muted mt-1 leading-relaxed font-medium">
+                              {notif.message}
                             </p>
-                            {!notif.isRead && (
-                              <span className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-pulse shrink-0" />
-                            )}
+                            <p className="text-[10px] text-brand-muted/80 font-mono mt-1.5">
+                              {formatTimestamp(notif.date)}
+                            </p>
                           </div>
-                          <p className="text-xs text-brand-muted mt-1 leading-relaxed font-medium">
-                            {notif.message}
-                          </p>
-                          <p className="text-[10px] text-brand-muted/80 font-mono mt-1.5">
-                            {formatTimestamp(notif.date)}
-                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          {!notif.isRead && (
+                            <button
+                              onClick={() => onMarkRead(notif.id)}
+                              className="p-1 hover:bg-emerald-500/10 text-brand-muted hover:text-emerald-500 rounded transition-colors"
+                              title="Marcar como lida"
+                            >
+                              <Check size={14} />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => onDismiss(notif.id)}
+                            className="p-1 hover:bg-red-500/10 text-brand-muted hover:text-red-500 rounded transition-colors"
+                            title="Ocultar notificação"
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1 shrink-0">
-                        {!notif.isRead && (
+                      {/* Actions inside notification item */}
+                      {(notif.type === 'cancellation' || notif.type === 'extraordinary_avail') && onNavigateToCalendar && (
+                        <div className="flex justify-end pt-1">
                           <button
-                            onClick={() => onMarkRead(notif.id)}
-                            className="p-1 hover:bg-emerald-500/10 text-brand-muted hover:text-emerald-500 rounded transition-colors"
-                            title="Marcar como lida"
+                            onClick={() => {
+                              onNavigateToCalendar();
+                              setIsOpen(false);
+                            }}
+                            className="text-[11px] font-bold text-amber-500 hover:text-amber-400 dark:text-amber-400 hover:underline flex items-center gap-1"
                           >
-                            <Check size={14} />
+                            Ver no Calendário
+                            <ExternalLink size={12} />
                           </button>
-                        )}
-                        <button
-                          onClick={() => onDismiss(notif.id)}
-                          className="p-1 hover:bg-red-500/10 text-brand-muted hover:text-red-500 rounded transition-colors"
-                          title="Ocultar notificação"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
+                        </div>
+                      )}
                     </div>
-
-                    {/* Actions inside notification item */}
-                    {(notif.type === 'cancellation' || notif.type === 'extraordinary_avail') && onNavigateToCalendar && (
-                      <div className="flex justify-end pt-1">
-                        <button
-                          onClick={() => {
-                            onNavigateToCalendar();
-                            setIsOpen(false);
-                          }}
-                          className="text-[11px] font-bold text-amber-500 hover:text-amber-400 dark:text-amber-400 hover:underline flex items-center gap-1"
-                        >
-                          Ver no Calendário
-                          <ExternalLink size={12} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))
+                  ))}
+                  {notificationLimit < filteredNotifications.length && (
+                    <div ref={loaderRef} className="py-4 flex justify-center items-center">
+                      <div className="w-5 h-5 border-2 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
                   <Bell className="text-brand-muted opacity-60" size={32} />
