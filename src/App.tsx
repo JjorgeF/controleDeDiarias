@@ -1163,6 +1163,7 @@ export default function App() {
       const cleanConfig: Record<string, any> = {
         isCommon: !!config.isCommon,
         isParty: !!config.isParty,
+        partyDeadline: config.partyDeadline || '',
         partyTime: config.partyTime || '',
         parties: config.parties || [],
         isExtraordinaryOpen: !!config.isExtraordinaryOpen,
@@ -1176,7 +1177,7 @@ export default function App() {
       }
       const docRef = doc(db, 'settings', 'dayConfigs');
       await setDoc(docRef, { [dateStr]: cleanConfig }, { merge: true });
-    } catch (error) {
+          } catch (error) {
       console.error("Error updating day config:", error);
       handleFirestoreError(error, OperationType.WRITE, 'settings/dayConfigs');
     }
