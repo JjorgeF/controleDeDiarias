@@ -777,6 +777,54 @@ export default function DayManagementModal({
                         })}
                       </div>
                     )}
+
+                    {/* Individual Deadline for Parties */}
+                    {normalizedParties.length > 0 && (
+                      <div className="pt-2 border-t border-brand-border/50">
+                        <button 
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault(); 
+                            if (dayConfig.partyDeadline) {
+                              onUpdateDayConfig(selectedDayStr, { ...dayConfig, partyDeadline: '' });
+                            } else {
+                              onUpdateDayConfig(selectedDayStr, { ...dayConfig, partyDeadline: `${selectedDayStr}T23:59` });
+                            }
+                          }}
+                          className="flex items-center gap-2 text-xs select-none p-2 rounded-lg bg-brand-bg/50 border border-brand-border hover:border-brand-primary/50 transition-all w-full text-left"
+                        >
+                          <div className={cn(
+                            "w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors",
+                            dayConfig.partyDeadline ? "bg-brand-primary border-brand-primary text-brand-bg" : "bg-brand-bg border-brand-border"
+                          )}>
+                            {dayConfig.partyDeadline && (
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="w-2.5 h-2.5">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                              </svg>
+                            )}
+                          </div>
+                          <span className="font-bold text-gray-300">Definir limite de envio para Festas/Eventos?</span>
+                        </button>
+                        
+                        {dayConfig.partyDeadline && (
+                          <div className="mt-2 ml-1 p-2.5 bg-brand-bg/80 border border-brand-primary/30 rounded-lg flex flex-col sm:flex-row sm:items-center gap-2 animate-in fade-in slide-in-from-top-1">
+                            <Clock size={14} className="text-brand-primary shrink-0" />
+                            <div className="flex flex-wrap items-center gap-2 flex-1">
+                              <span className="text-[11px] font-bold text-brand-text">Prazo:</span>
+                              <input 
+                                type="datetime-local" 
+                                value={dayConfig.partyDeadline}
+                                onChange={(e) => onUpdateDayConfig(selectedDayStr, { ...dayConfig, partyDeadline: e.target.value })}
+                                className="bg-brand-card border border-brand-border rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-brand-primary font-mono flex-1 sm:flex-none"
+                              />
+                            </div>
+                            <span className="text-[10px] text-brand-muted leading-tight max-w-[200px]">
+                              Após este prazo, a opção de envio de disponibilidade para festas neste dia será bloqueada.
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
