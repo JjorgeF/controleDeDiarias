@@ -374,16 +374,11 @@ export default function CalendarView({
         parties = [{ id: 'default_party', name: 'Festa', time: config.partyTime || '' }];
       }
       return {
+        ...config,
         isCommon: !!config.isCommon,
         isParty: parties.length > 0 || !!config.isParty,
         partyTime: config.partyTime || (parties[0]?.time || ''),
         parties,
-        isExtraordinaryOpen: !!config.isExtraordinaryOpen,
-        extraordinaryDeadline: config.extraordinaryDeadline,
-        extraordinaryLockedAvailabilities: config.extraordinaryLockedAvailabilities,
-        extraordinaryScope: config.extraordinaryScope,
-        extraordinaryPartyIds: config.extraordinaryPartyIds,
-        extraordinaryCcspOpen: config.extraordinaryCcspOpen
       };
     }
 
@@ -925,8 +920,21 @@ export default function CalendarView({
       const config = getDayConfig(dayStr);
       const isExtraordinary = isExtraordinaryActive(config);
       
-      // If deadline is expired AND day is NOT extraordinarily open, click disabled
-      if (isExpired && !isExtraordinary) {
+      let isPartyDeadlinePassed = false;
+      if (config.partyDeadline) {
+        isPartyDeadlinePassed = new Date() > new Date(config.partyDeadline);
+      } else {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const eventStart = new Date(day);
+        eventStart.setHours(0, 0, 0, 0);
+        isPartyDeadlinePassed = todayStart > eventStart;
+      }
+      
+      const isPartyOpen = config.isParty && !isPartyDeadlinePassed;
+      
+      // If global deadline is expired AND day is NOT extraordinarily open AND Party is NOT open, click disabled
+      if (isExpired && !isExtraordinary && !isPartyOpen) {
         return;
       }
       
@@ -1093,7 +1101,7 @@ export default function CalendarView({
                 {isDeadlinePassed ? (
                   `Prazo Encerrado! O envio de disponibilidades para ${format(currentMonth, 'MMMM', { locale: ptBR })} expirou em ${format(deadlineDate!, "dd/MM/yyyy 'às' HH:mm")}.`
                 ) : deadlineDate ? (
-                  `Prazo Limite: Defina suas disponibilidades de ${format(currentMonth, 'MMMM', { locale: ptBR })} até ${format(deadlineDate, "dd/MM/yyyy 'às' HH:mm")}.`
+                  `Prazo Limite (CCSP): Defina suas disponibilidades de ${format(currentMonth, 'MMMM', { locale: ptBR })} até ${format(deadlineDate, "dd/MM/yyyy 'às' HH:mm")}.`
                 ) : (
                   `Disponibilidades de ${format(currentMonth, 'MMMM', { locale: ptBR })}: Sem prazo limite definido.`
                 )}
@@ -1547,7 +1555,14 @@ export default function CalendarView({
                   const isCurrentMonth = isSameMonth(day, monthStart);
                   const isSelected = selectedDay && isSameDay(day, selectedDay);
                   const isTodayDate = isToday(day);
-                  const isOpenForAvailability = isCurrentMonth && (config.isCommon || config.isParty || isExtraordinary) && (!isDeadlinePassed || isExtraordinary);
+                  
+                  const isPartyDeadlinePassed = config.partyDeadline 
+                    ? (new Date() > new Date(config.partyDeadline)) 
+                    : (new Date(new Date().setHours(0,0,0,0)) > new Date(new Date(day).setHours(0,0,0,0)));
+                  const isCcspOpen = config.isCommon && (!isDeadlinePassed || isExtraordinary);
+                  const isPartyOpen = config.isParty && (!isPartyDeadlinePassed || isExtraordinary);
+                  
+                  const isOpenForAvailability = isCurrentMonth && (isCcspOpen || isPartyOpen || isExtraordinary);
                   const showBeam = isCurrentMonth && !isMyScheduled && (isOpenForAvailability || (!isAdmin && isMyAvailable));
                   const isGreenBeam = !isAdmin && isMyAvailable;
                   const beamGradient = isGreenBeam
@@ -1570,10 +1585,10 @@ export default function CalendarView({
                         isCurrentMonth && (
                           isAdmin 
                             ? "hover:bg-brand-primary/5 cursor-pointer" 
-                            : (isDeadlinePassed && !isExtraordinary)
-                              ? "cursor-not-allowed opacity-80" 
+                            : isOpenForAvailability
+                              ? "hover:opacity-90 cursor-pointer"
                               : (config.isCommon || config.isParty || isExtraordinary)
-                                ? "hover:opacity-90 cursor-pointer"
+                                ? "cursor-not-allowed opacity-80" 
                                 : "cursor-not-allowed opacity-30"
                         ),
                         // Status styling for admin
@@ -2812,6 +2827,7 @@ export default function CalendarView({
                 const isCommonChecked = currentAvailabilities.includes(dateStr) || currentAvailabilities.includes(`${dateStr}_common`);
                 const isLocked = isCommonChecked && isOptionLockedForEmployee(dateStr, dateStr, myEmployee, config, isDeadlinePassed);
                 const isExcludedByScope = isOptionExcludedByExtraordinaryScope(dateStr, `${dateStr}_common`, config);
+                const isExtraordinary = isExtraordinaryActive(config);
 
                 return (
                   <motion.label 
@@ -2850,8 +2866,12 @@ export default function CalendarView({
                       <input 
                         type="checkbox"
                         checked={isCommonChecked}
-                        disabled={isExcludedByScope && !isCommonChecked}
+                        disabled={(isDeadlinePassed && !isExtraordinary) || (isExcludedByScope && !isCommonChecked)}
                         onChange={(e) => {
+                          if (e.target.checked && (isDeadlinePassed && !isExtraordinary)) {
+                            alert("Prazo CCSP encerrado.");
+                            return;
+                          }
                           if (e.target.checked && isExcludedByScope) {
                             alert("⚡ Esta Abertura Extra está restrita apenas para Festas/Eventos. Não é possível cadastrar disponibilidade para o CCSP.");
                             return;
@@ -2904,18 +2924,34 @@ export default function CalendarView({
               {/* Party Option(s) */}
               {(() => {
                 const dateStr = format(employeeChoiceDate, 'yyyy-MM-dd');
-                const monthKey = format(employeeChoiceDate, 'yyyy-MM');
-                const deadlineVal = deadlines?.[monthKey];
-                const isDeadlinePassed = deadlineVal ? new Date() > new Date(deadlineVal) : false;
-
                 const currentAvailabilities = myEmployee.availabilities || [];
                 const config = getDayConfig(dateStr);
                 const parties = config.parties && config.parties.length > 0 
                   ? config.parties 
                   : (config.isParty ? [{ id: 'default_party', name: 'Festa', time: config.partyTime }] : []);
                 
+                let isPartyDeadlinePassed = false;
+                let partyDeadlineDisplay = '';
+
+                if (config?.partyDeadline) {
+                  isPartyDeadlinePassed = new Date() > new Date(config.partyDeadline);
+                  partyDeadlineDisplay = `Envio até ${format(new Date(config.partyDeadline), "dd/MM 'às' HH:mm")}`;
+                } else {
+                  const todayStart = new Date();
+                  todayStart.setHours(0, 0, 0, 0);
+                  const eventStart = new Date(employeeChoiceDate);
+                  eventStart.setHours(0, 0, 0, 0);
+                  isPartyDeadlinePassed = todayStart > eventStart;
+                  partyDeadlineDisplay = 'Sem prazo limite';
+                }
+
+                if (isPartyDeadlinePassed && !config?.partyDeadline) {
+                  partyDeadlineDisplay = 'Evento encerrado';
+                }
+
                 const hasGeneralPartyKey = currentAvailabilities.includes(`${dateStr}_party`);
                 const hasAnySpecificPartyKeyForDate = parties.some(p => currentAvailabilities.includes(`${dateStr}_party_${p.id}`));
+                const isExtraordinary = isExtraordinaryActive(config);
 
                 return (
                   <>
@@ -2924,7 +2960,7 @@ export default function CalendarView({
                       const hasSpecificPartyKey = currentAvailabilities.includes(partyKey);
                       
                       const isPartyChecked = hasSpecificPartyKey || (hasGeneralPartyKey && (parties.length === 1 || !hasAnySpecificPartyKeyForDate));
-                      const isLocked = isPartyChecked && isOptionLockedForEmployee(dateStr, partyKey, myEmployee, config, isDeadlinePassed);
+                      const isLocked = isPartyChecked && isOptionLockedForEmployee(dateStr, partyKey, myEmployee, config, isPartyDeadlinePassed);
                       const isExcludedByScope = isOptionExcludedByExtraordinaryScope(dateStr, partyKey, config);
 
                       return (
@@ -2961,21 +2997,31 @@ export default function CalendarView({
                               )}
                             </span>
                             {(party.time || config.partyTime) ? (
-                              <div className="flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-300 font-extrabold bg-purple-500/15 border border-purple-500/30 px-2.5 py-1 rounded-lg w-fit mt-1">
-                                <Clock size={13} className="text-purple-400 shrink-0" />
-                                <span>Horário: {party.time || config.partyTime}</span>
+                              <div className="flex flex-col gap-1 mt-1">
+                                <div className="flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-300 font-extrabold bg-purple-500/15 border border-purple-500/30 px-2.5 py-1 rounded-lg w-fit">
+                                  <Clock size={13} className="text-purple-400 shrink-0" />
+                                  <span>Horário: {party.time || config.partyTime}</span>
+                                </div>
+                                <span className="text-[10px] font-mono text-brand-muted/80 italic">{partyDeadlineDisplay}</span>
                               </div>
                             ) : (
-                              <span className="text-xs text-brand-muted">Trabalhar em eventos e festas extras</span>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-xs text-brand-muted">Trabalhar em eventos e festas extras</span>
+                                <span className="text-[10px] font-mono text-brand-muted/80 italic">{partyDeadlineDisplay}</span>
+                              </div>
                             )}
                           </div>
                           <div className="relative flex items-center justify-center ml-3 shrink-0">
                             <input 
                               type="checkbox"
                               checked={isPartyChecked}
-                              disabled={isExcludedByScope && !isPartyChecked}
+                              disabled={(isPartyDeadlinePassed && !isExtraordinary) || (isExcludedByScope && !isPartyChecked)}
                               onChange={(e) => {
                                 const willBeChecked = e.target.checked;
+                                if (willBeChecked && (isPartyDeadlinePassed && !isExtraordinary)) {
+                                  alert("Prazo para esta festa encerrado.");
+                                  return;
+                                }
                                 if (willBeChecked && isExcludedByScope) {
                                   alert("⚡ Esta Abertura Extra não inclui este evento. Verifique o escopo liberado pela coordenação.");
                                   return;
