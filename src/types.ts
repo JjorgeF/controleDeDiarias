@@ -11,6 +11,7 @@ export interface PartyConfig {
 export interface DayConfig {
   isCommon: boolean;
   isParty?: boolean;
+  partyDeadline?: string; // Format: 'YYYY-MM-DDTHH:mm'
   partyTime?: string;
   parties?: PartyConfig[];
   isExtraordinaryOpen?: boolean;
