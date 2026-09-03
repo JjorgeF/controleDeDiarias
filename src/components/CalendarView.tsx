@@ -1060,15 +1060,36 @@ export default function CalendarView({
 
 
 
+  const toastTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const [deadlineToast, setDeadlineToast] = React.useState<{ show: boolean; message: string; submessage?: string; type: 'success' | 'info' } | null>(null);
+
+  const showDeadlineToast = (message: string, submessage?: string, type: 'success' | 'info' = 'success') => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setDeadlineToast({ show: true, message, submessage, type });
+    toastTimeoutRef.current = setTimeout(() => {
+      setDeadlineToast(null);
+    }, 3500);
+  };
+
   const handleSaveDeadline = () => {
     if (onUpdateDeadline && deadlineInputDate && deadlineInputTime) {
       onUpdateDeadline(currentMonthKey, `${deadlineInputDate}T${deadlineInputTime}`);
+      showDeadlineToast(
+        `Prazo de ${format(currentMonth, 'MMMM', { locale: ptBR })} salvo!`,
+        `Limite definido para ${format(new Date(`${deadlineInputDate}T${deadlineInputTime}`), "dd/MM/yyyy 'às' HH:mm")}`,
+        'success'
+      );
     }
   };
 
   const handleClearDeadline = () => {
     if (onUpdateDeadline) {
       onUpdateDeadline(currentMonthKey, '');
+      showDeadlineToast(
+        `Prazo de ${format(currentMonth, 'MMMM', { locale: ptBR })} removido!`,
+        'O envio de disponibilidades agora está sem prazo limite.',
+        'info'
+      );
     }
   };
 
@@ -1078,46 +1099,83 @@ export default function CalendarView({
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Toast Notification (slides from top downwards) */}
+      <AnimatePresence>
+        {deadlineToast && (
+          <div className="fixed top-4 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none">
+            <motion.div
+              initial={{ opacity: 0, y: -50, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -40, scale: 0.9 }}
+              transition={{ type: "spring", stiffness: 450, damping: 28 }}
+              className={cn(
+                "pointer-events-auto flex items-center gap-3.5 px-4 py-3 rounded-2xl shadow-[0_12px_36px_rgba(0,0,0,0.6)] border backdrop-blur-xl max-w-md w-full sm:w-auto",
+                deadlineToast.type === 'success'
+                  ? "bg-slate-900/95 dark:bg-slate-950/95 border-emerald-500/50 text-white"
+                  : "bg-slate-900/95 dark:bg-slate-950/95 border-amber-500/50 text-white"
+              )}
+            >
+              <div className={cn(
+                "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-inner",
+                deadlineToast.type === 'success' 
+                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" 
+                  : "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+              )}>
+                {deadlineToast.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+              </div>
+              <div className="flex-1 pr-1 min-w-0">
+                <p className="text-xs md:text-sm font-black tracking-tight leading-tight">{deadlineToast.message}</p>
+                {deadlineToast.submessage && (
+                  <p className="text-[10px] md:text-[11px] text-slate-400 font-medium leading-tight mt-0.5 truncate">{deadlineToast.submessage}</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeadlineToast(null)}
+                className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors shrink-0"
+              >
+                <X size={15} />
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
       {/* Deadline & Extraordinary Open Notification Banners */}
       <div className="space-y-3">
-        <div className={cn(
-          "border rounded-xl p-4 flex items-center justify-between shadow-md transition-all duration-200 animate-in fade-in slide-in-from-top-2",
-          isDeadlinePassed 
-            ? "bg-red-500/10 border-red-500/20 text-red-900 dark:text-red-200" 
-            : deadlineDate 
-              ? "bg-amber-500/10 border-amber-500/30 text-amber-950 dark:text-amber-200" 
-              : "bg-blue-500/10 border-blue-500/20 text-blue-900 dark:text-blue-200"
-        )}>
-          <div className="flex items-center gap-3">
-            {isDeadlinePassed ? (
-              <Lock className="text-red-600 dark:text-red-400 shrink-0 animate-bounce" size={20} />
-            ) : deadlineDate ? (
-              <Unlock className="text-amber-600 dark:text-yellow-400 shrink-0" size={20} />
-            ) : (
-              <Calendar className="text-blue-600 dark:text-blue-400 shrink-0" size={20} />
-            )}
-            <div>
-              <p className="text-xs md:text-sm font-black">
-                {isDeadlinePassed ? (
-                  `Prazo Encerrado! O envio de disponibilidades para ${format(currentMonth, 'MMMM', { locale: ptBR })} expirou em ${format(deadlineDate!, "dd/MM/yyyy 'às' HH:mm")}.`
-                ) : deadlineDate ? (
-                  `Prazo Limite (CCSP): Defina suas disponibilidades de ${format(currentMonth, 'MMMM', { locale: ptBR })} até ${format(deadlineDate, "dd/MM/yyyy 'às' HH:mm")}.`
-                ) : (
-                  `Disponibilidades de ${format(currentMonth, 'MMMM', { locale: ptBR })}: Sem prazo limite definido.`
+        {!isAdmin && (
+          <div className={cn(
+            "border rounded-xl p-4 flex items-center justify-between shadow-md transition-all duration-200 animate-in fade-in slide-in-from-top-2",
+            isDeadlinePassed 
+              ? "bg-red-500/10 border-red-500/20 text-red-900 dark:text-red-200" 
+              : deadlineDate 
+                ? "bg-amber-500/10 border-amber-500/30 text-amber-950 dark:text-amber-200" 
+                : "bg-blue-500/10 border-blue-500/20 text-blue-900 dark:text-blue-200"
+          )}>
+            <div className="flex items-center gap-3">
+              {isDeadlinePassed ? (
+                <Lock className="text-red-600 dark:text-red-400 shrink-0 animate-bounce" size={20} />
+              ) : deadlineDate ? (
+                <Unlock className="text-amber-600 dark:text-yellow-400 shrink-0" size={20} />
+              ) : (
+                <Calendar className="text-blue-600 dark:text-blue-400 shrink-0" size={20} />
+              )}
+              <div>
+                <p className="text-xs md:text-sm font-black">
+                  {isDeadlinePassed ? (
+                    `Prazo Encerrado! O envio de disponibilidades para ${format(currentMonth, 'MMMM', { locale: ptBR })} expirou em ${format(deadlineDate!, "dd/MM/yyyy 'às' HH:mm")}.`
+                  ) : deadlineDate ? (
+                    `Prazo Limite (CCSP): Defina suas disponibilidades de ${format(currentMonth, 'MMMM', { locale: ptBR })} até ${format(deadlineDate, "dd/MM/yyyy 'às' HH:mm")}.`
+                  ) : (
+                    `Disponibilidades de ${format(currentMonth, 'MMMM', { locale: ptBR })}: Sem prazo limite definido.`
+                  )}
+                </p>
+                {!isDeadlinePassed && (
+                  <p className="text-[10px] text-amber-900 dark:text-yellow-400/80 mt-0.5 font-bold">Toque nos dias do calendário para marcar/desmarcar os dias em que você pode trabalhar.</p>
                 )}
-              </p>
-              {!isAdmin && !isDeadlinePassed && (
-                <p className="text-[10px] text-amber-900 dark:text-yellow-400/80 mt-0.5 font-bold">Toque nos dias do calendário para marcar/desmarcar os dias em que você pode trabalhar.</p>
-              )}
-              {isAdmin && (
-                <p className="text-[10px] text-emerald-700 dark:text-emerald-400/80 mt-0.5 font-bold">⚡ Clique simples para ativar/desativar o dia de atividades CCSP. Clique duplo para gerenciar a equipe ou definir festa.</p>
-              )}
-              {!isAdmin && isDeadlinePassed && (
-                <p className="text-[10px] text-red-700 dark:text-red-400/80 mt-0.5 font-bold">As datas gerais deste mês foram travadas. Caso haja dias com abertura extraordinária (⚡), novos envios ainda são permitidos.</p>
-              )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Extraordinary Open Alert Banner & Details Section for current month */}
         {(() => {
@@ -1359,12 +1417,38 @@ export default function CalendarView({
 
       {/* Admin Deadline Setup Panel */}
       {isAdmin && (
-        <div className="bg-brand-card border border-brand-border rounded-xl p-4 md:p-6 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in duration-200">
+        <div className={cn(
+          "border rounded-xl p-4 md:p-6 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in duration-200 transition-all",
+          isDeadlinePassed 
+            ? "bg-red-500/[0.03] border-red-500/40 shadow-red-500/5" 
+            : "bg-brand-card border-brand-border"
+        )}>
           <div className="flex items-center gap-3">
-            <Clock className="text-brand-primary" size={24} />
+            <div className="relative">
+              {isDeadlinePassed ? (
+                <Lock className="text-red-500 shrink-0" size={24} />
+              ) : (
+                <Clock className="text-brand-primary shrink-0" size={24} />
+              )}
+            </div>
             <div>
-              <h3 className="text-sm font-bold text-brand-text">Prazo de Disponibilidades ({format(currentMonth, 'MMMM', { locale: ptBR })})</h3>
-              <p className="text-xs text-brand-muted">Defina até quando a equipe pode registrar disponibilidade</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm font-bold text-brand-text">Prazo de Disponibilidades ({format(currentMonth, 'MMMM', { locale: ptBR })})</h3>
+                {isDeadlinePassed ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30">
+                    <Lock size={10} className="shrink-0" /> Fechado
+                  </span>
+                ) : deadlineDate ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                    <Unlock size={10} className="shrink-0" /> Aberto
+                  </span>
+                ) : null}
+              </div>
+              <p className="text-xs text-brand-muted">
+                {isDeadlinePassed 
+                  ? `O prazo para envio de disponibilidades expirou em ${format(deadlineDate!, "dd/MM/yyyy 'às' HH:mm")}.`
+                  : "Defina até quando a equipe pode registrar disponibilidade"}
+              </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1372,17 +1456,23 @@ export default function CalendarView({
               type="date"
               value={deadlineInputDate}
               onChange={(e) => setDeadlineInputDate(e.target.value)}
-              className="bg-brand-bg border border-brand-border text-xs rounded-lg py-1.5 px-3 focus:outline-none focus:border-brand-primary text-brand-text"
+              className={cn(
+                "bg-brand-bg border text-xs rounded-lg py-1.5 px-3 focus:outline-none focus:border-brand-primary text-brand-text",
+                isDeadlinePassed ? "border-red-500/30" : "border-brand-border"
+              )}
             />
             <input 
               type="time"
               value={deadlineInputTime}
               onChange={(e) => setDeadlineInputTime(e.target.value)}
-              className="bg-brand-bg border border-brand-border text-xs rounded-lg py-1.5 px-3 focus:outline-none focus:border-brand-primary text-brand-text"
+              className={cn(
+                "bg-brand-bg border text-xs rounded-lg py-1.5 px-3 focus:outline-none focus:border-brand-primary text-brand-text",
+                isDeadlinePassed ? "border-red-500/30" : "border-brand-border"
+              )}
             />
             <button 
               onClick={handleSaveDeadline}
-              className="bg-brand-primary hover:bg-brand-primary-hover text-slate-900 text-xs font-bold py-1.5 px-4 rounded-lg flex items-center gap-1.5 transition-colors"
+              className="bg-brand-primary hover:bg-brand-primary-hover text-slate-900 text-xs font-bold py-1.5 px-4 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm active:scale-95"
             >
               <Save size={14} /> Salvar Prazo
             </button>
