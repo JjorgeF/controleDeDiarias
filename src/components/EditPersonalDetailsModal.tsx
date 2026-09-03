@@ -50,14 +50,14 @@ function CustomSelect<T extends string>({
     amber: 'focus:border-amber-400 border-amber-500/30 text-amber-300',
     cyan: 'focus:border-cyan-400 border-cyan-500/30 text-cyan-300',
     emerald: 'focus:border-emerald-400 border-emerald-500/30 text-emerald-300',
-    purple: 'focus:border-purple-400 border-purple-500/30 text-purple-300',
+    purple: 'focus:border-brand-party border-brand-party/30 text-brand-party',
   }[accentColor];
 
   const bgHoverClasses = {
     amber: 'hover:bg-amber-500/15 text-amber-300',
     cyan: 'hover:bg-cyan-500/15 text-cyan-300',
     emerald: 'hover:bg-emerald-500/15 text-emerald-300',
-    purple: 'hover:bg-purple-500/15 text-purple-300',
+    purple: 'hover:bg-brand-party/15 text-brand-party',
   }[accentColor];
 
   return (

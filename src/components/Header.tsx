@@ -135,101 +135,57 @@ export default function Header({
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-brand-border bg-brand-bg/80 backdrop-blur-sm">
-      <div className="max-w-7xl mx-auto px-2 md:px-4 h-14 md:h-16 flex items-center justify-between gap-2 md:gap-4">
-        <div className="flex items-center gap-2 md:gap-8">
-          <div className="flex items-center gap-2">
-            <Logo size={36} className="w-8 h-8 md:w-10 md:h-10 shrink-0" animate={true} />
-            <h1 className="text-lg md:text-2xl font-bold text-brand-primary whitespace-nowrap font-playful tracking-wide">
-              Liga Positiva{(import.meta.env.VITE_ENABLE_SIMULATION?.toLowerCase() === 'true' || import.meta.env.DEV) ? ' Dev2' : ''}
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
+        <div className="flex items-center gap-3">
+          <Logo size={36} className="w-8 h-8 sm:w-10 sm:h-10 shrink-0" animate={true} />
+          <div>
+            <h1 className="text-base sm:text-xl font-black text-brand-primary whitespace-nowrap font-playful tracking-wide flex items-center gap-1.5">
+              <span>Liga Positiva</span>
+              {(import.meta.env.VITE_ENABLE_SIMULATION?.toLowerCase() === 'true' || import.meta.env.DEV) && (
+                <span className="text-[10px] bg-brand-primary/20 text-brand-primary px-1.5 py-0.2 rounded-md font-sans">Dev</span>
+              )}
             </h1>
           </div>
-          
-          {!hideControls && (
-            <div className="hidden md:flex items-center bg-brand-card rounded-md border border-brand-border px-2 py-1">
+        </div>
+
+        {!hideControls && (viewMode === 'grid' || viewMode === 'list') && (
+          <div className="flex-1 max-w-md hidden sm:flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <input 
+                type="text"
+                placeholder="Buscar recreador..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-brand-card border border-brand-border rounded-xl py-1.5 pl-9 pr-3 text-xs sm:text-sm text-brand-text focus:outline-none focus:border-brand-primary transition-colors"
+              />
+            </div>
+            <div className="flex items-center bg-brand-card rounded-xl border border-brand-border p-0.5">
               <button 
                 onClick={() => setViewMode('grid')}
                 className={cn(
-                  "p-1.5 rounded transition-colors",
-                  viewMode === 'grid' ? "bg-brand-bg text-brand-primary" : "text-gray-400 hover:text-white"
+                  "p-1.5 rounded-lg transition-colors",
+                  viewMode === 'grid' ? "bg-brand-bg text-brand-primary shadow-sm" : "text-gray-400 hover:text-white"
                 )}
                 title="Visualização em Grade"
               >
-                <LayoutGrid size={18} />
+                <LayoutGrid size={16} />
               </button>
               <button 
                 onClick={() => setViewMode('list')}
                 className={cn(
-                  "p-1.5 rounded transition-colors",
-                  viewMode === 'list' ? "bg-brand-bg text-brand-primary" : "text-gray-400 hover:text-white"
+                  "p-1.5 rounded-lg transition-colors",
+                  viewMode === 'list' ? "bg-brand-bg text-brand-primary shadow-sm" : "text-gray-400 hover:text-white"
                 )}
                 title="Visualização em Lista"
               >
-                <List size={18} />
+                <List size={16} />
               </button>
-              <button 
-                onClick={() => setViewMode('calendar')}
-                className={cn(
-                  "p-1.5 rounded transition-colors",
-                  viewMode === 'calendar' ? "bg-brand-bg text-brand-primary" : "text-gray-400 hover:text-white"
-                )}
-                title="Calendário de Escalas"
-              >
-                <CalendarIcon size={18} />
-              </button>
-              <button 
-                onClick={() => setViewMode('master_schedule')}
-                className={cn(
-                  "p-1.5 rounded transition-colors",
-                  viewMode === 'master_schedule' ? "bg-brand-bg text-brand-primary font-bold" : "text-gray-400 hover:text-white"
-                )}
-                title="Escala Mensal Unificada"
-              >
-                <Table size={18} />
-              </button>
-              {isAdmin && (
-                <>
-                  <button 
-                    onClick={() => setViewMode('payments')}
-                    className={cn(
-                      "p-1.5 rounded transition-colors border-l border-brand-border/40 pl-2 ml-1",
-                      viewMode === 'payments' ? "bg-brand-bg text-emerald-400 font-bold" : "text-gray-400 hover:text-white"
-                    )}
-                    title="Gestão Financeira & Pagamentos"
-                  >
-                    <DollarSign size={18} />
-                  </button>
-                  <button 
-                    onClick={() => setViewMode('dashboard')}
-                    className={cn(
-                      "p-1.5 rounded transition-colors",
-                      viewMode === 'dashboard' ? "bg-brand-bg text-brand-primary" : "text-gray-400 hover:text-white"
-                    )}
-                    title="Painel de Indicadores & KPIs"
-                  >
-                    <BarChart3 size={18} />
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-
-        {!hideControls && (
-          <div className="flex-1 max-w-xl hidden sm:block">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input 
-                type="text"
-                placeholder="Buscar por nome..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-brand-card border border-brand-border rounded-md py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-brand-primary transition-colors"
-              />
             </div>
           </div>
         )}
 
-        <div className="flex items-center gap-1 md:gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           <NotificationCenter
             notifications={notifications}
             unreadCount={unreadNotificationsCount}
@@ -248,21 +204,21 @@ export default function Header({
 
           <button 
             onClick={toggleTheme}
-            className="p-2 text-gray-400 hover:text-brand-primary transition-colors rounded-lg hover:bg-brand-card"
+            className="p-2 text-gray-400 hover:text-brand-primary transition-colors rounded-xl hover:bg-brand-card"
             title={isDarkMode ? "Modo Claro" : "Modo Escuro"}
           >
-            {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
           </button>
 
           {/* Settings Menu Dropdown */}
           <div className="relative" ref={settingsRef}>
             <button
               onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              className="p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-brand-card focus:outline-none flex items-center justify-center"
+              className="p-2 text-gray-400 hover:text-white transition-colors rounded-xl hover:bg-brand-card focus:outline-none flex items-center justify-center"
               title="Configurações e Conta"
               aria-label="Configurações e Conta"
             >
-              <Settings size={20} className={cn("transition-transform duration-300", isSettingsOpen && "rotate-45 text-brand-primary")} />
+              <Settings size={18} className={cn("transition-transform duration-300", isSettingsOpen && "rotate-45 text-brand-primary")} />
             </button>
 
             {isSettingsOpen && (
@@ -302,9 +258,9 @@ export default function Header({
                       setIsSettingsOpen(false);
                       onOpenPushDiagnostics();
                     }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-purple-300 hover:text-purple-200 hover:bg-purple-500/10 rounded-lg transition-colors text-left"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-brand-party hover:text-brand-party hover:bg-brand-party/10 rounded-lg transition-colors text-left"
                   >
-                    <Activity size={16} className="text-purple-400" />
+                    <Activity size={16} className="text-brand-party" />
                     <span>Diagnóstico de Notificações</span>
                   </button>
                 )}
@@ -381,84 +337,40 @@ export default function Header({
         </div>
       </div>
       
-      {/* Mobile Search & View Toggle */}
-      {!hideControls && (
-        <div className="sm:hidden px-4 pb-3 flex flex-col gap-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+      {/* Mobile Search Bar for Grid / List View */}
+      {!hideControls && (viewMode === 'grid' || viewMode === 'list') && (
+        <div className="sm:hidden px-3 pb-2.5 flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             <input 
               type="text"
-              placeholder="Buscar por nome..."
+              placeholder="Buscar recreador..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-brand-card border border-brand-border rounded-md py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-brand-primary transition-colors"
+              className="w-full bg-brand-card border border-brand-border rounded-xl py-1.5 pl-9 pr-3 text-xs text-brand-text focus:outline-none focus:border-brand-primary transition-colors"
             />
           </div>
-          <div className="flex items-center bg-brand-card rounded-md border border-brand-border px-2 py-1 w-fit">
+          <div className="flex items-center bg-brand-card rounded-xl border border-brand-border p-0.5">
             <button 
               onClick={() => setViewMode('grid')}
               className={cn(
-                "p-1.5 rounded transition-colors",
-                viewMode === 'grid' ? "bg-brand-bg text-brand-primary" : "text-gray-400 hover:text-white"
+                "p-1.5 rounded-lg transition-colors",
+                viewMode === 'grid' ? "bg-brand-bg text-brand-primary shadow-sm" : "text-gray-400 hover:text-white"
               )}
               title="Visualização em Grade"
             >
-              <LayoutGrid size={18} />
+              <LayoutGrid size={15} />
             </button>
             <button 
               onClick={() => setViewMode('list')}
               className={cn(
-                "p-1.5 rounded transition-colors",
-                viewMode === 'list' ? "bg-brand-bg text-brand-primary" : "text-gray-400 hover:text-white"
+                "p-1.5 rounded-lg transition-colors",
+                viewMode === 'list' ? "bg-brand-bg text-brand-primary shadow-sm" : "text-gray-400 hover:text-white"
               )}
               title="Visualização em Lista"
             >
-              <List size={18} />
+              <List size={15} />
             </button>
-            <button 
-              onClick={() => setViewMode('calendar')}
-              className={cn(
-                "p-1.5 rounded transition-colors",
-                viewMode === 'calendar' ? "bg-brand-bg text-brand-primary" : "text-gray-400 hover:text-white"
-              )}
-              title="Calendário de Escalas"
-            >
-              <CalendarIcon size={18} />
-            </button>
-            <button 
-              onClick={() => setViewMode('master_schedule')}
-              className={cn(
-                "p-1.5 rounded transition-colors",
-                viewMode === 'master_schedule' ? "bg-brand-bg text-brand-primary font-bold" : "text-gray-400 hover:text-white"
-              )}
-              title="Escala Mensal Unificada"
-            >
-              <Table size={18} />
-            </button>
-            {isAdmin && (
-              <>
-                <button 
-                  onClick={() => setViewMode('payments')}
-                  className={cn(
-                    "p-1.5 rounded transition-colors border-l border-brand-border/40 pl-2 ml-1",
-                    viewMode === 'payments' ? "bg-brand-bg text-emerald-400 font-bold" : "text-gray-400 hover:text-white"
-                  )}
-                  title="Gestão Financeira & Pagamentos"
-                >
-                  <DollarSign size={18} />
-                </button>
-                <button 
-                  onClick={() => setViewMode('dashboard')}
-                  className={cn(
-                    "p-1.5 rounded transition-colors",
-                    viewMode === 'dashboard' ? "bg-brand-bg text-brand-primary" : "text-gray-400 hover:text-white"
-                  )}
-                  title="Dashboard de Estatísticas"
-                >
-                  <BarChart3 size={18} />
-                </button>
-              </>
-            )}
           </div>
         </div>
       )}

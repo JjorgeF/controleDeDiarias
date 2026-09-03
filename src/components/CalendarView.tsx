@@ -180,7 +180,7 @@ function EdgeParticleBurst({ isParty }: { isParty?: boolean; key?: React.Key }) 
         className={cn(
           "absolute inset-0 rounded-lg border pointer-events-none",
           isParty 
-            ? "border-purple-400/80 shadow-[0_0_12px_rgba(192,132,252,0.6)]" 
+            ? "border-brand-party/80 shadow-[0_0_12px_rgba(172,103,230,0.6)]" 
             : "border-amber-400/80 shadow-[0_0_12px_rgba(251,191,36,0.6)]"
         )}
       />
@@ -1307,8 +1307,8 @@ export default function CalendarView({
                                         </span>
                                       )}
                                       {partyDetails.map((pName, idx) => (
-                                        <span key={idx} className="text-[9px] font-black bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded flex items-center gap-1 max-w-full truncate shadow-2xs" title={`Festa: ${pName}`}>
-                                          <span className="text-purple-400">✓</span>
+                                        <span key={idx} className="text-[9px] font-black bg-brand-party/20 text-brand-party border border-brand-party/30 px-2 py-0.5 rounded flex items-center gap-1 max-w-full truncate shadow-2xs" title={`Festa: ${pName}`}>
+                                          <span className="text-brand-party">✓</span>
                                           <span className="truncate">{pName}</span>
                                         </span>
                                       ))}
@@ -1492,7 +1492,7 @@ export default function CalendarView({
                 ))}
               </div>
               
-              <AnimatePresence mode="wait" custom={direction} initial={false}>
+              <AnimatePresence mode="popLayout" custom={direction} initial={false}>
                 <motion.div
                   key={format(currentMonth, 'yyyy-MM')}
                   custom={direction}
@@ -1515,7 +1515,7 @@ export default function CalendarView({
                     duration: 0.22,
                     ease: [0.25, 0.1, 0.25, 1.0]
                   }}
-                  className="grid grid-cols-7 auto-rows-fr min-w-[320px] md:min-w-[700px]"
+                  className="grid grid-cols-7 auto-rows-fr min-w-[320px] md:min-w-[700px] w-full"
                 >
                   {calendarDays.map((day, idx) => {
                   const dayStr = format(day, 'yyyy-MM-dd');
@@ -1533,7 +1533,7 @@ export default function CalendarView({
                     emp.availabilities?.includes(dayStr) || emp.availabilities?.includes(`${dayStr}_common`)
                   ).length;
                   const availablesPartyCount = employees.filter(emp => 
-                    emp.availabilities?.includes(`${dayStr}_party`)
+                    emp.availabilities?.includes(`${dayStr}_party`) || emp.availabilities?.some(a => a.startsWith(`${dayStr}_party`))
                   ).length;
                   
                   const extraAvailCount = employees.filter(emp => 
@@ -1545,7 +1545,27 @@ export default function CalendarView({
                   const isMyCancelledParty = myEmployee?.workDays?.some(d => d.date === dayStr && d.type === 'party' && d.isCancelled);
                   const isCommonActive = config.isCommon || isExtraordinary;
                   const isMyAvailableCommon = isCommonActive && !isMyCancelledCommon && (myEmployee?.availabilities?.includes(dayStr) || myEmployee?.availabilities?.includes(`${dayStr}_common`));
-                  const isMyAvailableParty = config.isParty && !isMyCancelledParty && myEmployee?.availabilities?.includes(`${dayStr}_party`);
+                  
+                  // Calculate party availabilities with exact fraction
+                  const dayParties = (config.parties && config.parties.length > 0)
+                    ? config.parties
+                    : (config.isParty ? [{ id: 'default_party', name: 'Festa', time: config.partyTime }] : []);
+                  const totalDayParties = dayParties.length;
+
+                  let mySelectedPartiesCount = 0;
+                  if (config.isParty && !isMyCancelledParty && myEmployee?.availabilities) {
+                    if (myEmployee.availabilities.includes(`${dayStr}_party`)) {
+                      mySelectedPartiesCount = totalDayParties > 0 ? totalDayParties : 1;
+                    } else {
+                      mySelectedPartiesCount = dayParties.filter(p => 
+                        myEmployee.availabilities?.includes(`${dayStr}_party_${p.id}`)
+                      ).length;
+                      if (mySelectedPartiesCount === 0 && myEmployee.availabilities.some(a => a.startsWith(`${dayStr}_party`))) {
+                        mySelectedPartiesCount = 1;
+                      }
+                    }
+                  }
+                  const isMyAvailableParty = mySelectedPartiesCount > 0;
                   const isMyScheduledCommon = myEmployee?.workDays?.some(d => d.date === dayStr && d.type === 'common' && !d.isCancelled);
                   const isMyScheduledParty = myEmployee?.workDays?.some(d => d.date === dayStr && d.type === 'party' && !d.isCancelled);
 
@@ -1594,7 +1614,7 @@ export default function CalendarView({
                         // Status styling for admin
                         isAdmin && isSelected && !isReadOnly && "bg-brand-primary/10 ring-2 ring-brand-primary border-brand-primary z-10",
                         isAdmin && !isSelected && config.isCommon && "bg-emerald-500/[0.03] border-emerald-500/20",
-                        isAdmin && !isSelected && config.isParty && "bg-purple-500/[0.03] border-purple-500/20",
+                        isAdmin && !isSelected && config.isParty && "bg-brand-party/[0.03] border-brand-party/20",
                         isAdmin && isExtraordinary && "border-amber-500/40 bg-amber-500/[0.04]",
                         // Status styling for recreador when scheduled
                         !isAdmin && isMyScheduled && "bg-amber-100 dark:bg-[#f2d861]/25 border-2 border-amber-400 dark:border-[#f2d861] shadow-sm z-10",
@@ -1675,7 +1695,7 @@ export default function CalendarView({
                               
                               return (
                                 <span 
-                                  className="inline-flex items-center gap-0.5 text-[7px] md:text-[8px] bg-purple-600/15 dark:bg-purple-500/25 text-purple-900 dark:text-purple-300 border border-purple-500/30 px-1 py-0.2 rounded font-black uppercase tracking-wider truncate max-w-full"
+                                  className="inline-flex items-center gap-0.5 text-[7px] md:text-[8px] bg-brand-party/15 dark:bg-brand-party/25 text-brand-party dark:text-brand-party border border-brand-party/30 px-1 py-0.2 rounded font-black uppercase tracking-wider truncate max-w-full"
                                   title={tooltipTitle}
                                 >
                                   <span className="shrink-0">🎉</span>
@@ -1708,41 +1728,52 @@ export default function CalendarView({
                             {config.isParty && workersPartyCount > 0 && (
                               <div 
                                 title={`${workersPartyCount} escalados (Festa)`}
-                                className="bg-purple-500/10 dark:bg-purple-500/20 text-purple-600 dark:text-purple-300 px-1.5 py-0.5 rounded-full text-[8px] md:text-[10px] font-black shrink-0"
+                                className="bg-brand-party/10 dark:bg-brand-party/20 text-brand-party dark:text-brand-party px-1.5 py-0.5 rounded-full text-[8px] md:text-[10px] font-black shrink-0"
                               >
                                 {workersPartyCount} F 🥳
                               </div>
                             )}
                           </div>
                         ) : (
-                          <div className="flex flex-col gap-1 items-center w-full mt-auto">
+                          <div className="flex flex-wrap gap-0.5 md:gap-1 items-center justify-center w-full mt-auto">
                             {/* Common scheduling */}
                             {config.isCommon && isMyScheduledCommon && (
-                              <div className="bg-[#f2d861] text-slate-950 dark:bg-[#f2d861] dark:text-slate-950 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 w-full max-w-[54px] lg:max-w-none truncate shadow-sm">
+                              <div 
+                                title="Você está escalado para CCSP neste dia"
+                                className="bg-[#f2d861] text-slate-950 px-1 md:px-1.5 py-0.5 rounded text-[7px] md:text-[8.5px] font-black uppercase tracking-wider text-center shrink-0 shadow-xs whitespace-nowrap"
+                              >
                                 <span className="hidden lg:inline">Escalado</span>
                                 <span className="lg:hidden">Esc.</span>
                               </div>
                             )}
                             {config.isCommon && isMyAvailableCommon && !isMyScheduledCommon && (
-                              <div className="bg-emerald-600 text-white dark:bg-emerald-500 dark:text-slate-950 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 flex items-center justify-center gap-0.5 w-full max-w-[54px] lg:max-w-none truncate shadow-sm">
-                                <CheckCircle2 size={8} className="shrink-0" />
-                                <span className="hidden lg:inline">Disponível</span>
-                                <span className="lg:hidden">Disp.</span>
+                              <div 
+                                title="Disponibilidade confirmada para CCSP (1/1)"
+                                className="bg-emerald-600/95 text-white dark:bg-emerald-500 dark:text-slate-950 px-1 md:px-1.5 py-0.5 rounded text-[7px] md:text-[8.5px] font-black tracking-tight uppercase text-center shrink-0 flex items-center justify-center gap-0.5 shadow-xs whitespace-nowrap"
+                              >
+                                <span>CCSP</span>
+                                <span className="font-mono">1/1</span>
                               </div>
                             )}
                             
                             {/* Party scheduling */}
                             {config.isParty && isMyScheduledParty && (
-                              <div className="bg-purple-600 text-white dark:bg-purple-500 dark:text-slate-950 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 w-full max-w-[54px] lg:max-w-none truncate shadow-sm">
-                                <span className="hidden lg:inline">Escalado Festa</span>
-                                <span className="lg:hidden">Esc. F.</span>
+                              <div 
+                                title="Você está escalado para Festa neste dia"
+                                className="bg-brand-party text-white dark:bg-brand-party dark:text-slate-950 px-1 md:px-1.5 py-0.5 rounded text-[7px] md:text-[8.5px] font-black uppercase tracking-wider text-center shrink-0 shadow-xs whitespace-nowrap flex items-center gap-0.5"
+                              >
+                                <span>🎉</span>
+                                <span className="hidden lg:inline">Escalado</span>
+                                <span className="lg:hidden">Esc.</span>
                               </div>
                             )}
                             {config.isParty && isMyAvailableParty && !isMyScheduledParty && (
-                              <div className="bg-pink-600 text-white dark:bg-pink-500 dark:text-slate-950 px-1 md:px-2 py-0.5 rounded text-[7px] md:text-[9px] font-black uppercase tracking-wider text-center shrink-0 flex items-center justify-center gap-0.5 w-full max-w-[54px] lg:max-w-none truncate shadow-sm">
-                                <CheckCircle2 size={8} className="shrink-0" />
-                                <span className="hidden lg:inline">Disp. Festa</span>
-                                <span className="lg:hidden">Disp. F.</span>
+                              <div 
+                                title={`Disponibilidade confirmada para ${mySelectedPartiesCount} de ${totalDayParties} festa(s)`}
+                                className="bg-brand-party/95 text-white dark:bg-brand-party dark:text-slate-950 px-1 md:px-1.5 py-0.5 rounded text-[7px] md:text-[8.5px] font-black tracking-tight uppercase text-center shrink-0 flex items-center justify-center gap-0.5 shadow-xs whitespace-nowrap"
+                              >
+                                <span className="text-[8px] md:text-[9px] leading-none">🎉</span>
+                                <span className="font-mono">{mySelectedPartiesCount}/{totalDayParties}</span>
                               </div>
                             )}
                           </div>
@@ -1831,7 +1862,7 @@ export default function CalendarView({
                                 : isCoordination
                                   ? "bg-cyan-500/5 border-cyan-500/20 hover:border-cyan-500/45 hover:bg-cyan-500/10"
                                   : isParty 
-                                    ? "bg-purple-500/5 border-purple-500/20 hover:border-purple-500/45 hover:bg-purple-500/10" 
+                                    ? "bg-brand-party/5 border-brand-party/20 hover:border-brand-party/45 hover:bg-brand-party/10" 
                                     : "bg-brand-primary/5 border-brand-primary/20 hover:border-brand-primary/45 hover:bg-brand-primary/10"
                             )}
                           >
@@ -1844,7 +1875,7 @@ export default function CalendarView({
                                   : isCoordination
                                     ? "bg-cyan-500 text-slate-950 group-hover:bg-cyan-400"
                                     : isParty 
-                                      ? "bg-purple-600 text-white group-hover:bg-purple-500" 
+                                      ? "bg-brand-party text-white group-hover:bg-brand-party" 
                                       : "bg-brand-primary text-slate-900 group-hover:bg-brand-primary-hover"
                               )}>
                                 <span className="text-sm leading-none">{format(dateObj, 'dd')}</span>
@@ -1870,7 +1901,7 @@ export default function CalendarView({
                                       <ShieldCheck size={10} className="shrink-0 text-cyan-300" /> Coordenação
                                     </span>
                                   ) : isParty ? (
-                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-purple-500/10 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded border border-purple-500/20">
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-brand-party/10 dark:bg-brand-party/20 text-brand-party dark:text-brand-party px-2 py-0.5 rounded border border-brand-party/20">
                                       🎉 {partyName && partyName !== 'Festa' ? `Festa: ${partyName}` : 'Festa'}
                                     </span>
                                   ) : (
@@ -1902,7 +1933,7 @@ export default function CalendarView({
                                   d.isReducedHours
                                     ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
                                     : isParty
-                                      ? "bg-purple-500/10 dark:bg-purple-500/20 border-purple-500/30 text-purple-600 dark:text-purple-300"
+                                      ? "bg-brand-party/10 dark:bg-brand-party/20 border-brand-party/30 text-brand-party dark:text-brand-party"
                                       : "bg-brand-primary/10 border-brand-primary/20 text-amber-700 dark:text-brand-primary"
                                 )}>
                                   {d.isReducedHours 
@@ -1939,7 +1970,7 @@ export default function CalendarView({
                         
                         <div className="flex flex-col">
                           <span className="text-[10px] uppercase text-brand-muted font-extrabold tracking-wider">Dias Festa ({scheduledDaysThisMonth.filter(d => d.type === 'party').length}x)</span>
-                          <span className="text-sm text-purple-600 dark:text-purple-300 font-black mt-0.5">
+                          <span className="text-sm text-brand-party dark:text-brand-party font-black mt-0.5">
                             {formatCurrency(scheduledDaysThisMonth.filter(d => d.type === 'party').reduce((acc, d) => {
                               const rate = d.partyRateAtTime !== undefined ? d.partyRateAtTime : myEmployee.partyRate;
                               return acc + rate;
@@ -2124,10 +2155,10 @@ export default function CalendarView({
                                             isAssignedToThisParty 
                                               ? isCoord
                                                 ? "bg-cyan-500 text-slate-950 font-bold border-cyan-400 shadow-sm ring-1 ring-cyan-300"
-                                                : "bg-purple-600 text-white border-purple-500 shadow-sm ring-1 ring-purple-400" 
+                                                : "bg-brand-party text-white border-brand-party shadow-sm ring-1 ring-brand-party" 
                                               : isCoord
                                                 ? "bg-brand-bg text-cyan-300 border border-cyan-500/40 hover:border-cyan-400"
-                                                : "bg-brand-bg text-gray-400 border border-brand-border hover:border-purple-500/40"
+                                                : "bg-brand-bg text-gray-400 border border-brand-border hover:border-brand-party/40"
                                           )}
                                           title={`Escalar para ${party.name}${party.time ? ` (${party.time})` : ''}`}
                                         >
@@ -2374,7 +2405,7 @@ export default function CalendarView({
                                           "text-[10px] font-black px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 uppercase max-w-[130px] truncate border",
                                           isCoord
                                             ? "bg-cyan-500/10 hover:bg-cyan-500 text-cyan-300 hover:text-slate-950 border-cyan-500/30 hover:border-cyan-400"
-                                            : "bg-purple-500/10 hover:bg-purple-500 text-purple-600 dark:text-purple-300 hover:text-white border-purple-500/30 hover:border-purple-400"
+                                            : "bg-brand-party/10 hover:bg-brand-party text-brand-party dark:text-brand-party hover:text-white border-brand-party/30 hover:border-brand-party"
                                         )}
                                         title={`Escalar para ${party.name}${party.time ? ` (${party.time})` : ''}`}
                                       >
@@ -2389,7 +2420,7 @@ export default function CalendarView({
                                       whileHover={{ scale: 1.05 }}
                                       whileTap={{ scale: 0.95 }}
                                       onClick={() => toggleWorkDayType(emp, selectedDay!, 'party')}
-                                      className="text-[10px] font-black bg-purple-500/10 hover:bg-purple-500 text-purple-600 dark:text-purple-300 hover:text-white px-2.5 py-1 rounded-lg border border-purple-500/30 hover:border-transparent transition-colors flex items-center gap-1 uppercase"
+                                      className="text-[10px] font-black bg-brand-party/10 hover:bg-brand-party text-brand-party dark:text-brand-party hover:text-white px-2.5 py-1 rounded-lg border border-brand-party/30 hover:border-transparent transition-colors flex items-center gap-1 uppercase"
                                       title="Escalar para Festa (Optado pelo recreador)"
                                     >
                                       <UserPlus size={12} />
@@ -2476,7 +2507,7 @@ export default function CalendarView({
                                             "text-[10px] font-black bg-brand-bg border rounded-lg px-2.5 py-1 transition-colors flex items-center gap-1 uppercase max-w-[130px] truncate",
                                             isCoord
                                               ? "border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-400 hover:text-cyan-200"
-                                              : "border-brand-border text-gray-400 hover:bg-purple-500/10 hover:border-purple-500 hover:text-purple-400"
+                                              : "border-brand-border text-gray-400 hover:bg-brand-party/10 hover:border-brand-party hover:text-brand-party"
                                           )}
                                           title={`Escalar para ${party.name}${party.time ? ` (${party.time})` : ''}`}
                                         >
@@ -2491,7 +2522,7 @@ export default function CalendarView({
                                         whileHover={{ scale: 1.05 }}
                                         whileTap={{ scale: 0.95 }}
                                         onClick={() => toggleWorkDayType(emp, selectedDay!, 'party')}
-                                        className="text-[10px] font-black bg-brand-bg border border-brand-border hover:bg-purple-500/10 hover:border-purple-500 hover:text-purple-400 text-gray-400 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 uppercase"
+                                        className="text-[10px] font-black bg-brand-bg border border-brand-border hover:bg-brand-party/10 hover:border-brand-party hover:text-brand-party text-gray-400 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 uppercase"
                                       >
                                         <UserPlus size={12} />
                                         Festa
@@ -2975,7 +3006,7 @@ export default function CalendarView({
                               ? "bg-red-500/5 border-red-500/20 text-gray-500 cursor-not-allowed opacity-75"
                               : "cursor-pointer",
                             isPartyChecked 
-                              ? "bg-purple-500/15 border-purple-500/60 text-purple-600 dark:text-purple-300 ring-2 ring-purple-500/30" 
+                              ? "bg-brand-party/15 border-brand-party/60 text-brand-party dark:text-brand-party ring-2 ring-brand-party/30" 
                               : (!isExcludedByScope && "bg-brand-bg/40 border-brand-border text-brand-muted hover:border-brand-primary/30 hover:bg-brand-bg/70")
                           )}
                         >
@@ -2998,8 +3029,8 @@ export default function CalendarView({
                             </span>
                             {(party.time || config.partyTime) ? (
                               <div className="flex flex-col gap-1 mt-1">
-                                <div className="flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-300 font-extrabold bg-purple-500/15 border border-purple-500/30 px-2.5 py-1 rounded-lg w-fit">
-                                  <Clock size={13} className="text-purple-400 shrink-0" />
+                                <div className="flex items-center gap-1.5 text-xs text-brand-party dark:text-brand-party font-extrabold bg-brand-party/15 border border-brand-party/30 px-2.5 py-1 rounded-lg w-fit">
+                                  <Clock size={13} className="text-brand-party shrink-0" />
                                   <span>Horário: {party.time || config.partyTime}</span>
                                 </div>
                                 <span className="text-[10px] font-mono text-brand-muted/80 italic">{partyDeadlineDisplay}</span>
@@ -3063,8 +3094,8 @@ export default function CalendarView({
                             <motion.div 
                               animate={{
                                 scale: isPartyChecked ? [0.8, 1.25, 1] : 1,
-                                backgroundColor: isPartyChecked ? "#9333ea" : "rgba(255,255,255,0.05)",
-                                borderColor: isPartyChecked ? "#c084fc" : "rgba(255,255,255,0.2)"
+                                backgroundColor: isPartyChecked ? "#ac67e6" : "rgba(255,255,255,0.05)",
+                                borderColor: isPartyChecked ? "#ac67e6" : "rgba(255,255,255,0.2)"
                               }}
                               transition={{ duration: 0.3, ease: "easeOut" }}
                               className="w-6 h-6 rounded-lg border flex items-center justify-center shrink-0 shadow-sm"
@@ -3149,9 +3180,9 @@ export default function CalendarView({
                     Você está escalado para trabalhar no dia <span className="text-brand-primary font-bold">{format(cancelTargetDate, "dd/MM 'de' MMMM", { locale: ptBR })}</span>.
                   </p>
                   {isPartyDay && pName && (
-                    <div className="p-2.5 bg-purple-500/10 border border-purple-500/20 rounded-xl text-xs font-bold text-purple-600 dark:text-purple-300">
+                    <div className="p-2.5 bg-brand-party/10 border border-brand-party/20 rounded-xl text-xs font-bold text-brand-party dark:text-brand-party">
                       🎉 Festa: <span className="font-black text-brand-text">{pName}</span>
-                      {pTime && <span className="block text-[11px] text-purple-600 dark:text-purple-300/90 font-semibold mt-0.5">⏰ Horário: {pTime}</span>}
+                      {pTime && <span className="block text-[11px] text-brand-party dark:text-brand-party/90 font-semibold mt-0.5">⏰ Horário: {pTime}</span>}
                     </div>
                   )}
                   <p className="text-xs text-brand-muted">

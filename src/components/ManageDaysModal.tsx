@@ -228,7 +228,7 @@ export default function ManageDaysModal({ isOpen, onClose, employee, onUpdateDay
                       !isCurrentMonth && "opacity-20",
                       (!dayData || dayData.isCancelled) && isCurrentMonth && "hover:bg-white/5",
                       dayData?.type === 'common' && !dayData.isCancelled && !dayData.isReducedHours && "bg-brand-primary text-brand-bg",
-                      dayData?.type === 'party' && !dayData.isCancelled && !dayData.isReducedHours && "bg-purple-600 text-white",
+                      dayData?.type === 'party' && !dayData.isCancelled && !dayData.isReducedHours && "bg-brand-party text-white",
                       dayData?.isReducedHours && !dayData.isCancelled && "bg-amber-500 text-slate-950 font-bold",
                       isSelected && "ring-2 ring-white ring-offset-2 ring-offset-brand-card"
                     )}
@@ -262,7 +262,7 @@ export default function ManageDaysModal({ isOpen, onClose, employee, onUpdateDay
                     selectedDayData.isReducedHours
                       ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
                       : selectedDayData.type === 'party'
-                        ? "bg-purple-500/20 text-purple-300"
+                        ? "bg-brand-party/20 text-brand-party"
                         : "bg-brand-primary/20 text-brand-primary"
                   )}>
                     {selectedDayData.isReducedHours ? 'Horário Reduzido' : selectedDayData.type === 'party' ? 'Festa' : 'Dia CCSP'}
@@ -359,7 +359,7 @@ export default function ManageDaysModal({ isOpen, onClose, employee, onUpdateDay
                   <span>Dia CCSP Padrão</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
-                  <div className="w-3.5 h-3.5 rounded bg-purple-600"></div>
+                  <div className="w-3.5 h-3.5 rounded bg-brand-party"></div>
                   <span>Dia de Festa</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs">

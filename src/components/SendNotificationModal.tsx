@@ -203,7 +203,7 @@ export default function SendNotificationModal({
                   onClose();
                   onOpenDiagnostics();
                 }}
-                className="px-3 py-2 text-xs font-semibold text-purple-400 hover:text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 rounded-xl transition-all flex items-center gap-1.5"
+                className="px-3 py-2 text-xs font-semibold text-brand-party hover:text-brand-party bg-brand-party/10 hover:bg-brand-party/20 border border-brand-party/20 rounded-xl transition-all flex items-center gap-1.5"
               >
                 <Activity size={14} />
                 <span>Diagnosticar Push</span>

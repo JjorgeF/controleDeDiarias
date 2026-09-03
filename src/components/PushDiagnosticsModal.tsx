@@ -84,7 +84,7 @@ export default function PushDiagnosticsModal({
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-brand-border flex items-center justify-between bg-brand-bg/80">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400">
+            <div className="w-10 h-10 rounded-xl bg-brand-party/10 border border-brand-party/30 flex items-center justify-center text-brand-party">
               <Activity size={20} />
             </div>
             <div>
@@ -114,7 +114,7 @@ export default function PushDiagnosticsModal({
             <button
               onClick={loadDiagnostics}
               disabled={loading}
-              className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 font-semibold bg-purple-500/10 hover:bg-purple-500/20 px-3 py-1.5 rounded-lg border border-purple-500/20 transition-all disabled:opacity-50"
+              className="flex items-center gap-1.5 text-xs text-brand-party hover:text-brand-party font-semibold bg-brand-party/10 hover:bg-brand-party/20 px-3 py-1.5 rounded-lg border border-brand-party/20 transition-all disabled:opacity-50"
             >
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
               Atualizar Diagnóstico
@@ -142,7 +142,7 @@ export default function PushDiagnosticsModal({
                     Permissão de Notificação do Navegador
                   </p>
                   <p className="text-xs text-brand-muted">
-                    Status atual: <code className="px-1.5 py-0.5 rounded bg-brand-bg border border-brand-border text-purple-300">{info?.notificationPermission || 'carregando...'}</code>
+                    Status atual: <code className="px-1.5 py-0.5 rounded bg-brand-bg border border-brand-border text-brand-party">{info?.notificationPermission || 'carregando...'}</code>
                   </p>
                 </div>
               </div>
@@ -230,7 +230,7 @@ export default function PushDiagnosticsModal({
                 <button
                   onClick={handleRegisterDevice}
                   disabled={loading}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 font-semibold shrink-0"
+                  className="text-xs px-3 py-1.5 rounded-lg bg-brand-party/20 hover:bg-brand-party/30 text-brand-party border border-brand-party/30 font-semibold shrink-0"
                 >
                   Renovar Inscrição
                 </button>
@@ -238,9 +238,9 @@ export default function PushDiagnosticsModal({
 
               {info?.subscription && (
                 <div className="mt-2 p-2.5 rounded bg-brand-bg/70 border border-brand-border text-[11px] font-mono text-brand-muted break-all max-h-24 overflow-y-auto">
-                  <p><strong className="text-purple-300">Endpoint:</strong> {info.subscription.endpoint}</p>
-                  <p><strong className="text-purple-300">P256dh:</strong> {info.subscription.keys?.p256dh ? '✅ Presente' : '❌ Ausente'}</p>
-                  <p><strong className="text-purple-300">Auth:</strong> {info.subscription.keys?.auth ? '✅ Presente' : '❌ Ausente'}</p>
+                  <p><strong className="text-brand-party">Endpoint:</strong> {info.subscription.endpoint}</p>
+                  <p><strong className="text-brand-party">P256dh:</strong> {info.subscription.keys?.p256dh ? '✅ Presente' : '❌ Ausente'}</p>
+                  <p><strong className="text-brand-party">Auth:</strong> {info.subscription.keys?.auth ? '✅ Presente' : '❌ Ausente'}</p>
                 </div>
               )}
 
@@ -258,11 +258,11 @@ export default function PushDiagnosticsModal({
               2. Teste Direto de Comunicação Servidor PWA
             </h3>
 
-            <div className="p-4 rounded-xl border border-purple-500/30 bg-purple-500/5 space-y-3">
+            <div className="p-4 rounded-xl border border-brand-party/30 bg-brand-party/5 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h4 className="font-bold text-brand-text text-sm flex items-center gap-2">
-                    <Send size={16} className="text-purple-400" />
+                    <Send size={16} className="text-brand-party" />
                     Enviar Notificação de Teste Imediata
                   </h4>
                   <p className="text-xs text-brand-muted mt-0.5">
@@ -272,7 +272,7 @@ export default function PushDiagnosticsModal({
                 <button
                   onClick={handleSendTestPush}
                   disabled={testingPush || !info?.notificationPermission || info?.notificationPermission !== 'granted'}
-                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-purple-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 shrink-0"
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-brand-party to-indigo-600 hover:from-brand-party hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-brand-party/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 shrink-0"
                 >
                   {testingPush ? (
                     <>
@@ -335,7 +335,7 @@ export default function PushDiagnosticsModal({
           {/* Device Specific Guidelines */}
           <div className="space-y-3 pt-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-brand-muted flex items-center gap-1.5">
-              <Info size={14} className="text-purple-400" />
+              <Info size={14} className="text-brand-party" />
               3. Por que notificações podem atrasar com o app fechado?
             </h3>
 
@@ -363,7 +363,7 @@ export default function PushDiagnosticsModal({
                   🔑 Variáveis no Vercel (Produção):
                 </p>
                 <p className="pl-4">
-                  Confirme que no painel da Vercel você adicionou as duas chaves: <code className="text-purple-300">VITE_FIREBASE_VAPID_KEY</code> e <code className="text-purple-300">VAPID_PRIVATE_KEY</code> e efetuou um <strong>Redeploy</strong> do projeto.
+                  Confirme que no painel da Vercel você adicionou as duas chaves: <code className="text-brand-party">VITE_FIREBASE_VAPID_KEY</code> e <code className="text-brand-party">VAPID_PRIVATE_KEY</code> e efetuou um <strong>Redeploy</strong> do projeto.
                 </p>
               </div>
             </div>

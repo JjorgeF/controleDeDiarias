@@ -218,7 +218,7 @@ export default function NotificationCenter({
                         onOpenPushDiagnostics();
                         setIsOpen(false);
                       }}
-                      className="text-left px-3 py-2 text-xs text-purple-300 hover:bg-purple-500/10 flex items-center gap-2 transition-colors"
+                      className="text-left px-3 py-2 text-xs text-brand-party hover:bg-brand-party/10 flex items-center gap-2 transition-colors"
                     >
                       <Activity size={14} />
                       Diagnóstico

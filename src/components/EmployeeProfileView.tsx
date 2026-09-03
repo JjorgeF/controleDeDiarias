@@ -419,7 +419,7 @@ export default function EmployeeProfileView({
                 <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">
                   Corta Vento
                 </span>
-                <span className="text-xl font-black text-purple-300 bg-purple-500/15 border border-purple-500/30 px-3 py-1 rounded-lg">
+                <span className="text-xl font-black text-brand-party bg-brand-party/15 border border-brand-party/30 px-3 py-1 rounded-lg">
                   {employee.windbreakerSize || 'M'}
                 </span>
               </div>

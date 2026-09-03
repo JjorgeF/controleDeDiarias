@@ -403,7 +403,7 @@ export default function DayManagementModal({
                     </span>
                   )}
                   {normalizedParties.filter(p => !(p.name || '').toLowerCase().includes('coordena')).length > 0 && (
-                    <span className="text-[10px] font-bold text-purple-300 bg-purple-950/40 border border-purple-500/30 px-2 py-0.5 rounded-md flex items-center gap-1">
+                    <span className="text-[10px] font-bold text-brand-party bg-brand-party/40 border border-brand-party/30 px-2 py-0.5 rounded-md flex items-center gap-1">
                       <span>🎉</span>
                       <span>
                         {normalizedParties.filter(p => !(p.name || '').toLowerCase().includes('coordena')).length}{' '}
@@ -459,8 +459,8 @@ export default function DayManagementModal({
                               className={cn(
                                 "px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 border",
                                 hasRegularParties
-                                  ? "bg-purple-600/30 text-purple-200 border-purple-500/80 ring-1 ring-purple-500/30 shadow-sm shadow-purple-500/20"
-                                  : "bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border-purple-500/40"
+                                  ? "bg-brand-party/30 text-brand-party border-brand-party/80 ring-1 ring-brand-party/30 shadow-sm shadow-brand-party/20"
+                                  : "bg-brand-party/20 hover:bg-brand-party/30 text-brand-party border-brand-party/40"
                               )}
                             >
                               <Plus size={14} />
@@ -626,7 +626,7 @@ export default function DayManagementModal({
                                 );
 
                                 return (
-                                  <label key={p.id} className="flex items-center justify-between p-2 rounded-lg bg-purple-950/30 border border-purple-500/30 cursor-pointer hover:bg-purple-950/50 transition-all">
+                                  <label key={p.id} className="flex items-center justify-between p-2 rounded-lg bg-brand-party/30 border border-brand-party/30 cursor-pointer hover:bg-brand-party/50 transition-all">
                                     <div className="flex items-center gap-2">
                                       <input 
                                         type="checkbox"
@@ -668,14 +668,14 @@ export default function DayManagementModal({
                                             extraordinaryCcspOpen: isCcspActive
                                           });
                                         }}
-                                        className="rounded border-purple-400 text-purple-500 focus:ring-purple-500 w-4 h-4 cursor-pointer"
+                                        className="rounded border-brand-party text-brand-party focus:ring-brand-party w-4 h-4 cursor-pointer"
                                       />
-                                      <span className="text-xs font-bold text-purple-200">
+                                      <span className="text-xs font-bold text-brand-party">
                                         🎉 {p.name || 'Festa'}
                                       </span>
                                     </div>
                                     {p.time && (
-                                      <span className="text-[10px] text-purple-300/80 font-mono bg-purple-500/20 px-2 py-0.5 rounded-full">
+                                      <span className="text-[10px] text-brand-party/80 font-mono bg-brand-party/20 px-2 py-0.5 rounded-full">
                                         {p.time}
                                       </span>
                                     )}
@@ -716,7 +716,7 @@ export default function DayManagementModal({
                                 "flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl p-2.5 animate-in fade-in border",
                                 isCoord
                                   ? "bg-cyan-950/40 border-cyan-500/40"
-                                  : "bg-purple-950/25 border-purple-500/30"
+                                  : "bg-brand-party/25 border-brand-party/30"
                               )}
                             >
                               <div className="flex items-center gap-1.5 flex-1 min-w-[150px]">
@@ -732,7 +732,7 @@ export default function DayManagementModal({
                                   onChange={(e) => handleUpdateParty(party.id, 'name', e.target.value)}
                                   className={cn(
                                     "w-full bg-brand-bg border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-white font-bold placeholder-gray-500 focus:outline-none",
-                                    isCoord ? "focus:border-cyan-400 text-cyan-100" : "focus:border-purple-500 text-white"
+                                    isCoord ? "focus:border-cyan-400 text-cyan-100" : "focus:border-brand-party text-white"
                                   )}
                                 />
                               </div>
@@ -740,11 +740,11 @@ export default function DayManagementModal({
                               <div className="flex items-center justify-between sm:justify-start gap-2">
                                 <div className={cn(
                                   "flex items-center gap-1 bg-brand-bg border border-brand-border rounded-lg px-2 py-1 text-xs text-white font-semibold",
-                                  isCoord ? "focus-within:border-cyan-400" : "focus-within:border-purple-500"
+                                  isCoord ? "focus-within:border-cyan-400" : "focus-within:border-brand-party"
                                 )}>
                                   <span className={cn(
                                     "text-[10px] font-bold uppercase shrink-0 mr-0.5",
-                                    isCoord ? "text-cyan-300" : "text-purple-400"
+                                    isCoord ? "text-cyan-300" : "text-brand-party"
                                   )}>Horário:</span>
                                   <input 
                                     type="text"
@@ -858,7 +858,7 @@ export default function DayManagementModal({
                           isCoordination
                             ? "bg-cyan-950/20 border-cyan-500/30 hover:border-cyan-500/50"
                             : isParty
-                              ? "bg-purple-950/20 border-purple-500/30 hover:border-purple-500/50"
+                              ? "bg-brand-party/20 border-brand-party/30 hover:border-brand-party/50"
                               : "bg-brand-primary/5 border-brand-primary/20 hover:border-brand-primary/40"
                         )}
                       >
@@ -869,7 +869,7 @@ export default function DayManagementModal({
                               isCoordination
                                 ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
                                 : isParty
-                                  ? "bg-purple-500/20 text-purple-300 border-purple-500/40"
+                                  ? "bg-brand-party/20 text-brand-party border-brand-party/40"
                                   : "bg-brand-primary/20 text-brand-primary border-brand-primary/30"
                             )}>
                               {emp.photoUrl ? (
@@ -920,10 +920,10 @@ export default function DayManagementModal({
                                         isAssignedToThisParty 
                                           ? isCoord
                                             ? "bg-cyan-500 text-slate-950 font-bold border-cyan-400 shadow-md ring-1 ring-cyan-300"
-                                            : "bg-purple-600 text-white border-purple-500 shadow-md ring-1 ring-purple-400" 
+                                            : "bg-brand-party text-white border-brand-party shadow-md ring-1 ring-brand-party" 
                                           : isCoord
                                             ? "bg-cyan-950/40 border-cyan-500/50 text-cyan-300 hover:border-cyan-400 hover:bg-cyan-900/60"
-                                            : "bg-brand-bg border-brand-border text-gray-400 hover:border-purple-500/50 hover:text-purple-300"
+                                            : "bg-brand-bg border-brand-border text-gray-400 hover:border-brand-party/50 hover:text-brand-party"
                                       )}
                                       title={`Escalar para ${party.name}${party.time ? ` (${party.time})` : ''}`}
                                     >
@@ -1191,7 +1191,7 @@ export default function DayManagementModal({
                                         "text-[10px] font-black px-2 py-1 rounded-lg transition-all flex items-center gap-1 uppercase max-w-[130px] truncate border",
                                         isCoord
                                           ? "bg-cyan-500/20 hover:bg-cyan-500 text-cyan-300 hover:text-slate-950 border-cyan-500/40"
-                                          : "bg-purple-500/10 hover:bg-purple-500 text-purple-300 hover:text-white border-purple-500/30"
+                                          : "bg-brand-party/10 hover:bg-brand-party text-brand-party hover:text-white border-brand-party/30"
                                       )}
                                       title={`Escalar para ${party.name} (Optado pelo recreador)`}
                                     >
@@ -1204,7 +1204,7 @@ export default function DayManagementModal({
                                 hasAnyPartyAvail && dayConfig.isParty && (
                                   <button 
                                     onClick={() => assignEmployee(emp, 'party', { id: 'default_party', name: 'Festa' })}
-                                    className="text-[10px] font-black bg-purple-500/10 hover:bg-purple-500 text-purple-300 hover:text-white px-2 py-1 rounded-lg border border-purple-500/30 transition-all flex items-center gap-1 uppercase"
+                                    className="text-[10px] font-black bg-brand-party/10 hover:bg-brand-party text-brand-party hover:text-white px-2 py-1 rounded-lg border border-brand-party/30 transition-all flex items-center gap-1 uppercase"
                                     title="Escalar para Festa (Optado pelo recreador)"
                                   >
                                     <UserPlus size={12} />
@@ -1269,7 +1269,7 @@ export default function DayManagementModal({
                                     "text-[10px] font-black bg-brand-bg border rounded-lg px-2 py-1 transition-all flex items-center gap-1 uppercase max-w-[130px] truncate",
                                     isCoord
                                       ? "border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-400 hover:text-cyan-200"
-                                      : "border-brand-border text-gray-400 hover:bg-purple-500/10 hover:border-purple-500 hover:text-purple-400"
+                                      : "border-brand-border text-gray-400 hover:bg-brand-party/10 hover:border-brand-party hover:text-brand-party"
                                   )}
                                   title={`Escalar para ${party.name}`}
                                 >

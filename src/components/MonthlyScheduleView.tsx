@@ -242,7 +242,7 @@ export default function MonthlyScheduleView({
   return (
     <div className="space-y-6">
       {/* Top Header Card */}
-      <div className="bg-gradient-to-r from-brand-card via-brand-card to-purple-950/30 border border-brand-border rounded-2xl p-4 md:p-6 shadow-xl relative overflow-hidden">
+      <div className="bg-gradient-to-r from-brand-card via-brand-card to-brand-party/30 border border-brand-border rounded-2xl p-4 md:p-6 shadow-xl relative overflow-hidden">
         {/* Decorative background glow */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-brand-primary/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
         
@@ -306,7 +306,7 @@ export default function MonthlyScheduleView({
             </div>
 
             <div className="bg-brand-bg/50 border border-brand-border/80 p-3 rounded-xl flex items-center gap-3">
-              <div className="p-2.5 bg-purple-500/10 text-purple-400 rounded-xl border border-purple-500/20 shrink-0">
+              <div className="p-2.5 bg-brand-party/10 text-brand-party rounded-xl border border-brand-party/20 shrink-0">
                 <Users size={20} />
               </div>
               <div>
@@ -591,7 +591,7 @@ export default function MonthlyScheduleView({
                   className={cn(
                     "rounded-2xl transition-all duration-200 flex flex-col relative group shadow-md hover:shadow-xl",
                     isMyDay
-                      ? "bg-logo-gradient animate-logo-border p-[1.5px] shadow-sm shadow-purple-500/10"
+                      ? "bg-logo-gradient animate-logo-border p-[1.5px] shadow-sm shadow-brand-party/10"
                       : isCurrentToday
                       ? "bg-brand-card border border-brand-primary ring-1 ring-brand-primary/40"
                       : "bg-brand-card border border-brand-border hover:border-brand-primary/50"
@@ -601,7 +601,7 @@ export default function MonthlyScheduleView({
                     {/* Header of Day Card */}
                     <div className={cn(
                       "p-3 border-b flex items-center justify-between gap-2",
-                      isMyDay ? "bg-purple-950/10 border-purple-500/20" : "bg-brand-bg/60 border-brand-border/60"
+                      isMyDay ? "bg-brand-party/10 border-brand-party/20" : "bg-brand-bg/60 border-brand-border/60"
                     )}>
                       <div className="flex items-center gap-2">
                         <div className={cn(
@@ -611,7 +611,7 @@ export default function MonthlyScheduleView({
                             : isMyDay
                             ? "bg-amber-500 text-slate-950 border-amber-400"
                             : isWeekendDay
-                            ? "bg-purple-950/60 text-purple-200 border-purple-500/40"
+                            ? "bg-brand-party/60 text-brand-party border-brand-party/40"
                             : "bg-brand-bg text-white border-brand-border"
                         )}>
                           <span className="text-sm leading-none font-black tracking-tight">{format(day, 'dd')}</span>
@@ -631,7 +631,7 @@ export default function MonthlyScheduleView({
                               </span>
                             )}
                             {config?.parties && config.parties.length > 0 && (
-                              <span className="text-[9px] font-black text-purple-300 bg-purple-950/50 border border-purple-500/30 px-1.5 py-0.2 rounded-md flex items-center gap-1">
+                              <span className="text-[9px] font-black text-brand-party bg-brand-party/50 border border-brand-party/30 px-1.5 py-0.2 rounded-md flex items-center gap-1">
                                 <PartyPopper size={10} className="animate-bounce" />
                                 <span>{config.parties.length} {config.parties.length === 1 ? 'Festa' : 'Festas'}</span>
                               </span>
@@ -737,14 +737,14 @@ export default function MonthlyScheduleView({
                               <div className={cn(
                                 "flex items-center justify-between text-[10px] font-extrabold px-2.5 py-1 rounded-lg border transition-all shadow-sm",
                                 group.isParty
-                                  ? "bg-purple-900/80 text-purple-100 border-purple-500/60 ring-1 ring-purple-500/20"
+                                  ? "bg-brand-party/80 text-brand-party border-brand-party/60 ring-1 ring-brand-party/20"
                                   : isCoordination
                                     ? "bg-cyan-950/80 text-cyan-200 border-cyan-500/60 ring-1 ring-cyan-500/20"
                                     : "bg-brand-primary/10 text-brand-primary border-brand-primary/20"
                               )}>
                                 <span className="truncate flex items-center gap-1.5">
                                   {group.isParty ? (
-                                    <PartyPopper size={12} className="shrink-0 text-purple-300" />
+                                    <PartyPopper size={12} className="shrink-0 text-brand-party" />
                                   ) : isCoordination ? (
                                     <ShieldCheck size={12} className="shrink-0 text-cyan-300" />
                                   ) : (
@@ -752,7 +752,7 @@ export default function MonthlyScheduleView({
                                   )}
                                   <span className="truncate font-black">{headerText}</span>
                                 </span>
-                                <span className={cn("text-[9px] font-bold ml-1.5 shrink-0", group.isParty ? "text-purple-200/90" : isCoordination ? "text-cyan-200/90" : "text-gray-400")}>
+                                <span className={cn("text-[9px] font-bold ml-1.5 shrink-0", group.isParty ? "text-brand-party/90" : isCoordination ? "text-cyan-200/90" : "text-gray-400")}>
                                   {group.items.length} {group.items.length === 1 ? 'pessoa' : 'pessoas'}
                                 </span>
                               </div>
@@ -769,7 +769,7 @@ export default function MonthlyScheduleView({
                                         isThisHighlighted
                                           ? "bg-amber-500/20 border-amber-500/60 text-white font-bold ring-1 ring-amber-500/40 shadow-sm"
                                           : group.isParty
-                                            ? "bg-purple-950/40 border-purple-500/30 hover:border-purple-500/60 text-gray-200"
+                                            ? "bg-brand-party/40 border-brand-party/30 hover:border-brand-party/60 text-gray-200"
                                             : "bg-brand-bg/70 border-brand-border/60 hover:border-brand-primary/30 text-gray-200"
                                       )}
                                     >
@@ -817,7 +817,7 @@ export default function MonthlyScheduleView({
                                       </div>
 
                                       {!group.isParty && workDay.partyName && (
-                                        <span className="text-[10px] font-extrabold text-purple-200 bg-purple-900/80 border border-purple-500/50 px-2 py-0.5 rounded-md truncate max-w-[120px] shrink-0 shadow-sm">
+                                        <span className="text-[10px] font-extrabold text-brand-party bg-brand-party/80 border border-brand-party/50 px-2 py-0.5 rounded-md truncate max-w-[120px] shrink-0 shadow-sm">
                                           {workDay.partyName}
                                         </span>
                                       )}
@@ -832,12 +832,12 @@ export default function MonthlyScheduleView({
                             {unassignedParties.length > 0 && (
                               <div className="space-y-1.5 pt-1">
                                 {unassignedParties.map((p, idx) => (
-                                  <div key={p.id || idx} className="flex items-center justify-between text-[10px] font-extrabold px-2.5 py-1 rounded-lg border bg-purple-950/30 text-purple-200 border-purple-500/30">
+                                  <div key={p.id || idx} className="flex items-center justify-between text-[10px] font-extrabold px-2.5 py-1 rounded-lg border bg-brand-party/30 text-brand-party border-brand-party/30">
                                     <span className="truncate flex items-center gap-1.5">
-                                      <PartyPopper size={12} className="text-purple-300 shrink-0" />
+                                      <PartyPopper size={12} className="text-brand-party shrink-0" />
                                       <span className="truncate font-black">🎉 {p.name} {p.time ? `(${p.time})` : ''}</span>
                                     </span>
-                                    <span className="text-[9px] font-bold text-purple-300/60 shrink-0 ml-1">
+                                    <span className="text-[9px] font-bold text-brand-party/60 shrink-0 ml-1">
                                       0 escalados
                                     </span>
                                   </div>
@@ -892,7 +892,7 @@ export default function MonthlyScheduleView({
                   className={cn(
                     "rounded-2xl transition-all shadow-md relative overflow-hidden",
                     isMyDay
-                      ? "bg-logo-gradient animate-logo-border p-[1.5px] shadow-sm shadow-purple-500/10"
+                      ? "bg-logo-gradient animate-logo-border p-[1.5px] shadow-sm shadow-brand-party/10"
                       : "bg-brand-card border border-brand-border"
                   )}
                 >
@@ -918,7 +918,7 @@ export default function MonthlyScheduleView({
                               </span>
                             )}
                             {config?.parties?.map((p, idx) => (
-                              <span key={p.id || idx} className="text-[10px] font-black text-purple-300 bg-purple-950/50 border border-purple-500/30 px-2 py-0.5 rounded-md">
+                              <span key={p.id || idx} className="text-[10px] font-black text-brand-party bg-brand-party/50 border border-brand-party/30 px-2 py-0.5 rounded-md">
                                 🎉 {p.name} {p.time && `(${p.time})`}
                               </span>
                             ))}
@@ -988,7 +988,7 @@ export default function MonthlyScheduleView({
                             <span className={cn(
                               "text-[10px] font-bold px-2 py-1 rounded-lg border shrink-0 ml-2 truncate max-w-[150px]",
                               isParty
-                                ? "bg-purple-950/80 text-purple-200 border-purple-500/40"
+                                ? "bg-brand-party/80 text-brand-party border-brand-party/40"
                                 : "bg-brand-bg border-brand-border text-brand-primary"
                             )}>
                               {displayLabel}
@@ -1032,7 +1032,7 @@ export default function MonthlyScheduleView({
                         </span>
                       )}
                       {modalConfig?.parties && modalConfig.parties.length > 0 && (
-                        <span className="text-[10px] font-extrabold text-purple-300 bg-purple-950/60 border border-purple-500/40 px-2 py-0.5 rounded-md flex items-center gap-1">
+                        <span className="text-[10px] font-extrabold text-brand-party bg-brand-party/60 border border-brand-party/40 px-2 py-0.5 rounded-md flex items-center gap-1">
                           <PartyPopper size={11} />
                           <span>{modalConfig.parties.length} {modalConfig.parties.length === 1 ? 'Festa' : 'Festas'}</span>
                         </span>
@@ -1059,17 +1059,17 @@ export default function MonthlyScheduleView({
 
               {/* Day Events Info */}
               {modalConfig?.parties && modalConfig.parties.length > 0 && (
-                <div className="p-3 bg-purple-950/30 border-b border-purple-500/20 space-y-1.5">
-                  <p className="text-[11px] font-black text-purple-300 uppercase tracking-wider flex items-center gap-1">
+                <div className="p-3 bg-brand-party/30 border-b border-brand-party/20 space-y-1.5">
+                  <p className="text-[11px] font-black text-brand-party uppercase tracking-wider flex items-center gap-1">
                     <PartyPopper size={12} /> Festas & Eventos Agendados
                   </p>
                   {modalConfig.parties.map((p, idx) => (
-                    <div key={p.id || idx} className="flex items-center justify-between text-xs text-purple-200 bg-purple-900/30 p-2 rounded-xl border border-purple-500/20">
+                    <div key={p.id || idx} className="flex items-center justify-between text-xs text-brand-party bg-brand-party/30 p-2 rounded-xl border border-brand-party/20">
                       <span className="font-bold truncate flex items-center gap-1.5">
                         <span>🎉</span> {p.name}
                       </span>
                       {p.time && (
-                        <span className="text-xs font-mono font-bold text-purple-300 bg-purple-950 px-2 py-0.5 rounded-md border border-purple-500/30 shrink-0 ml-2">
+                        <span className="text-xs font-mono font-bold text-brand-party bg-brand-party px-2 py-0.5 rounded-md border border-brand-party/30 shrink-0 ml-2">
                           {p.time}
                         </span>
                       )}
@@ -1142,13 +1142,13 @@ export default function MonthlyScheduleView({
                               <span className={cn(
                                 "text-xs font-black px-2.5 py-1 rounded-lg border inline-block",
                                 isModalParty
-                                  ? "bg-purple-950 text-purple-200 border-purple-500/40"
+                                  ? "bg-brand-party text-brand-party border-brand-party/40"
                                   : "bg-brand-primary/15 text-brand-primary border-brand-primary/30"
                               )}>
                                 {workDay.shift || (isModalParty ? (modalPartyName ? `Festa: ${modalPartyName}` : 'Festa') : 'CCSP')}
                               </span>
                               {isModalParty && modalPartyName && workDay.shift && (
-                                <p className="text-[10px] text-purple-300 font-medium mt-0.5 truncate max-w-[140px]">
+                                <p className="text-[10px] text-brand-party font-medium mt-0.5 truncate max-w-[140px]">
                                   🎉 {modalPartyName}
                                 </p>
                               )}

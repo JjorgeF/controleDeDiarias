@@ -113,7 +113,7 @@ export function WhatsNewModal({ isAdmin }: WhatsNewModalProps) {
 
               <div className="bg-brand-bg/70 p-4 rounded-2xl border border-brand-border space-y-3.5">
                 <div className="flex items-start gap-3">
-                  <div className="p-2 bg-purple-500/10 text-purple-400 rounded-xl shrink-0 mt-0.5">
+                  <div className="p-2 bg-brand-party/10 text-brand-party rounded-xl shrink-0 mt-0.5">
                     <DollarSign size={18} />
                   </div>
                   <div>

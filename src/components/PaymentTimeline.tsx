@@ -235,11 +235,11 @@ export default function PaymentTimeline({ employee, currentDate = new Date() }: 
         };
       case 'past_work':
         return {
-          bg: 'bg-purple-500',
-          border: 'border-purple-400/80',
-          glow: 'shadow-lg shadow-purple-500/30',
-          textColor: 'text-purple-400',
-          badgeBg: 'bg-purple-500/10 border-purple-500/20 text-purple-300',
+          bg: 'bg-brand-party',
+          border: 'border-brand-party/80',
+          glow: 'shadow-lg shadow-brand-party/30',
+          textColor: 'text-brand-party',
+          badgeBg: 'bg-brand-party/10 border-brand-party/20 text-brand-party',
           icon: <TrendingUp size={13} className="text-white" />
         };
       case 'today':
@@ -375,7 +375,7 @@ export default function PaymentTimeline({ employee, currentDate = new Date() }: 
           <span>Escalado(a)</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-purple-500 inline-block" />
+          <span className="w-2 h-2 rounded-full bg-brand-party inline-block" />
           <span>Diária Realizada</span>
         </div>
       </div>
@@ -419,7 +419,7 @@ export default function PaymentTimeline({ employee, currentDate = new Date() }: 
               </div>
 
               <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 space-y-2">
-                <h4 className="font-black text-purple-400 uppercase tracking-wider flex items-center gap-1.5 text-xs">
+                <h4 className="font-black text-brand-party uppercase tracking-wider flex items-center gap-1.5 text-xs">
                   <PartyPopper size={14} />
                   Eventos & Festas
                 </h4>

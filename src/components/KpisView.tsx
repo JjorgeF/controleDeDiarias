@@ -485,7 +485,7 @@ export function KpisView({ employees, monthConfigs, promotions = [], currentMont
               <AnimatedCurrency value={monthStats.totalCcspCost} />
             </div>
             <div>
-              <span className="block text-purple-400 font-bold">Festas</span>
+              <span className="block text-brand-party font-bold">Festas</span>
               <AnimatedCurrency value={monthStats.totalPartyCost} />
             </div>
             <div>
@@ -499,10 +499,10 @@ export function KpisView({ employees, monthConfigs, promotions = [], currentMont
           whileHover={{ y: -2 }}
           className="bg-brand-card rounded-2xl border border-brand-border p-5 relative overflow-hidden shadow-2xs"
         >
-          <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-full blur-2xl -mr-6 -mt-6" />
+          <div className="absolute top-0 right-0 w-24 h-24 bg-brand-party/5 rounded-full blur-2xl -mr-6 -mt-6" />
           <div className="flex items-center justify-between text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">
             <span>Escalas Realizadas</span>
-            <span className="p-1.5 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20">
+            <span className="p-1.5 rounded-lg bg-brand-party/10 text-brand-party border border-brand-party/20">
               <Briefcase size={16} />
             </span>
           </div>
@@ -514,7 +514,7 @@ export function KpisView({ employees, monthConfigs, promotions = [], currentMont
             <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20">
               {monthStats.totalCcspDays} CCSP
             </span>
-            <span className="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 font-bold border border-purple-500/20">
+            <span className="px-1.5 py-0.5 rounded bg-brand-party/10 text-brand-party font-bold border border-brand-party/20">
               {monthStats.totalPartyDays} Festas
             </span>
           </div>
@@ -586,7 +586,7 @@ export function KpisView({ employees, monthConfigs, promotions = [], currentMont
 
           <div className="mt-3 pt-3 border-t border-brand-border/40 text-[10px] text-gray-400 flex items-center justify-between">
             <span>Dias Pico de Trabalho:</span>
-            <span className="font-bold text-purple-400">{monthStats.peakDays.length} dias intensos</span>
+            <span className="font-bold text-brand-party">{monthStats.peakDays.length} dias intensos</span>
           </div>
         </motion.div>
       </div>
@@ -603,7 +603,7 @@ export function KpisView({ employees, monthConfigs, promotions = [], currentMont
             </div>
             <div className="flex items-center gap-3 text-[10px] font-bold">
               <span className="flex items-center gap-1 text-emerald-400"><span className="w-2 h-2 rounded-full bg-emerald-500" /> CCSP</span>
-              <span className="flex items-center gap-1 text-purple-400"><span className="w-2 h-2 rounded-full bg-purple-500" /> Festas</span>
+              <span className="flex items-center gap-1 text-brand-party"><span className="w-2 h-2 rounded-full bg-brand-party" /> Festas</span>
               <span className="flex items-center gap-1 text-amber-400"><span className="w-2 h-2 rounded-full bg-amber-500" /> Extras</span>
             </div>
           </div>
@@ -754,11 +754,11 @@ export function KpisView({ employees, monthConfigs, promotions = [], currentMont
           <div className="p-4 rounded-xl bg-brand-bg/80 border border-brand-border/80 space-y-2">
             <div className="text-[11px] font-bold uppercase text-gray-400 flex items-center justify-between">
               <span>Festas / Eventos</span>
-              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${comparisonData.pctParty.startsWith('+') ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'}`}>
+              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${comparisonData.pctParty.startsWith('+') ? 'bg-brand-party/10 text-brand-party border border-brand-party/20' : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'}`}>
                 {comparisonData.pctParty}
               </span>
             </div>
-            <div className="text-xl font-black text-purple-400">
+            <div className="text-xl font-black text-brand-party">
               {monthStats.totalPartyDays} <span className="text-xs text-gray-400 font-normal">eventos</span>
             </div>
             <div className="text-[11px] text-gray-400 flex items-center justify-between pt-1 border-t border-brand-border/40">

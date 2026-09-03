@@ -315,7 +315,7 @@ export default function RevertCancellationModal({
                               <span
                                 className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase shrink-0 ${
                                   wd.type === 'party'
-                                    ? 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
+                                    ? 'bg-brand-party/15 text-brand-party border border-brand-party/30'
                                     : 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
                                 }`}
                               >

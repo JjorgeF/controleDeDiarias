@@ -603,7 +603,7 @@ export default function PaymentsView({
           <button
             onClick={() => { setBulkType('party'); setIsConfirmBulkModalOpen(true); }}
             disabled={filteredPartyItems.filter(i => !i.isPaid).length === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-xl text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-party/10 hover:bg-brand-party/20 text-brand-party border border-brand-party/30 rounded-xl text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <PartyPopper size={14} />
             Pagar Pendentes Festas ({filteredPartyItems.filter(i => !i.isPaid).length})

@@ -201,7 +201,7 @@ export default function EmployeeEarningsView({
             <div className="text-[11px] font-semibold text-gray-400 mt-1 flex items-center gap-1.5">
               <span className="text-brand-primary">{monthCcspDays.length} CCSP</span>
               <span>•</span>
-              <span className="text-purple-400">{monthPartyDays.length} Festas</span>
+              <span className="text-brand-party">{monthPartyDays.length} Festas</span>
             </div>
           </div>
         </motion.div>
@@ -224,7 +224,7 @@ export default function EmployeeEarningsView({
             <div className="text-[11px] font-semibold text-gray-400 mt-1 flex items-center gap-1.5">
               <span className="text-emerald-400">{paidCcspCount}/{monthCcspDays.length} CCSP</span>
               <span>•</span>
-              <span className="text-purple-400">{paidPartyCount}/{monthPartyDays.length} Festas</span>
+              <span className="text-brand-party">{paidPartyCount}/{monthPartyDays.length} Festas</span>
             </div>
           </div>
         </motion.div>
@@ -259,7 +259,7 @@ export default function EmployeeEarningsView({
         >
           <div className="flex items-center justify-between text-brand-muted mb-2">
             <span className="text-xs font-bold uppercase tracking-wider">Previsão do Mês</span>
-            <div className="p-2 bg-purple-500/10 text-purple-400 rounded-xl">
+            <div className="p-2 bg-brand-party/10 text-brand-party rounded-xl">
               <Sparkles size={18} />
             </div>
           </div>

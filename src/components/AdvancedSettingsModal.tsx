@@ -236,7 +236,7 @@ export default function AdvancedSettingsModal({
                     <span className="text-[10px] text-gray-400 font-medium">Escalas Registradas</span>
                   </div>
                   <div className="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800">
-                    <span className="block text-lg font-black text-purple-400">
+                    <span className="block text-lg font-black text-brand-party">
                       {employees.reduce((acc, e) => acc + (e.availabilities?.length || 0), 0)}
                     </span>
                     <span className="text-[10px] text-gray-400 font-medium">Disponividades</span>
@@ -301,7 +301,7 @@ export default function AdvancedSettingsModal({
                       <span className="text-[10px] text-gray-400 font-medium">Diárias/Escalas</span>
                     </div>
                     <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-700/60">
-                      <span className="block text-base font-black text-purple-300">
+                      <span className="block text-base font-black text-brand-party">
                         {previewData.stats.totalAvailabilities}
                       </span>
                       <span className="text-[10px] text-gray-400 font-medium">Disponibilidades</span>

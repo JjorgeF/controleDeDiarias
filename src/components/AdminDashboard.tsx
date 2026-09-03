@@ -643,7 +643,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                   className={cn(
                     "px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider rounded-lg transition-all",
                     rankMetric === 'availabilities' 
-                      ? "bg-purple-500 text-white shadow-md" 
+                      ? "bg-brand-party text-white shadow-md" 
                       : "text-brand-muted hover:text-brand-text"
                   )}
                 >
@@ -906,7 +906,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                               <span className={cn(
                                 "text-sm font-black",
                                 rankMetric === 'confirmed' ? "text-brand-primary" : 
-                                rankMetric === 'availabilities' ? "text-purple-400" : "text-rose-400"
+                                rankMetric === 'availabilities' ? "text-brand-party" : "text-rose-400"
                               )}>
                                 {activeValue} {
                                   rankMetric === 'confirmed' 
@@ -930,7 +930,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                                 rankMetric === 'confirmed' 
                                   ? "bg-gradient-to-r from-brand-primary/60 to-brand-primary shadow-[0_0_8px_rgba(251,191,36,0.3)]" 
                                   : rankMetric === 'availabilities'
-                                    ? "bg-gradient-to-r from-purple-500/60 to-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.3)]"
+                                    ? "bg-gradient-to-r from-brand-party/60 to-brand-party shadow-[0_0_8px_rgba(172,103,230,0.3)]"
                                     : "bg-gradient-to-r from-rose-500/60 to-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.3)]"
                               )}
                               style={{ width: `${percentage}%` }}
@@ -953,7 +953,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                                   className={cn(
                                     "px-1.5 py-0.5 rounded font-black border text-[9px] flex items-center gap-0.5",
                                     av.type === 'party' 
-                                      ? "bg-purple-500/10 border-purple-500/20 text-purple-300" 
+                                      ? "bg-brand-party/10 border-brand-party/20 text-brand-party" 
                                       : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
                                   )}
                                   title={av.type === 'party' ? `Disponibilidade de Festa para dia ${av.day}` : `Disponibilidade de CCSP para dia ${av.day}`}
@@ -1011,7 +1011,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
         <div className="lg:col-span-5 bg-brand-card border border-brand-border rounded-2xl p-6 shadow-md flex flex-col h-[650px]">
           <div className="pb-5 border-b border-brand-border/60 mb-5 space-y-4">
             <div className="flex items-center gap-2.5">
-              <History className="text-purple-400" size={20} />
+              <History className="text-brand-party" size={20} />
               <h3 className="text-lg font-bold text-brand-text uppercase tracking-wider font-playful">
                 Últimos Acessos e Logins
               </h3>
@@ -1042,7 +1042,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
               return (
                 <div key={log.id} className="group flex gap-3.5 p-3 rounded-xl bg-brand-bg/30 border border-brand-border/40 hover:bg-brand-bg/60 transition-colors">
                   {/* Initials badge */}
-                  <div className="w-9 h-9 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-600 dark:text-purple-300 flex items-center justify-center font-black text-xs shrink-0 uppercase">
+                  <div className="w-9 h-9 rounded-full bg-brand-party/10 border border-brand-party/20 text-brand-party dark:text-brand-party flex items-center justify-center font-black text-xs shrink-0 uppercase">
                     {log.name.substring(0, 2)}
                   </div>
 
@@ -1057,8 +1057,8 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                     <p className="text-[11px] text-gray-400 truncate">{log.email}</p>
                     
                     <div className="flex items-center gap-1.5 mt-2 pt-1.5 border-t border-brand-border/20 text-[10px] text-brand-muted font-semibold">
-                      <Clock size={11} className="text-purple-500 dark:text-purple-400" />
-                      <span className="text-purple-600 dark:text-purple-300" title={absolute}>{relative}</span>
+                      <Clock size={11} className="text-brand-party dark:text-brand-party" />
+                      <span className="text-brand-party dark:text-brand-party" title={absolute}>{relative}</span>
                       <span className="text-brand-muted">•</span>
                       <span className="truncate max-w-[140px]" title={absolute}>{format(parseISO(log.timestamp), 'dd/MM/yy HH:mm')}</span>
                     </div>
@@ -1152,7 +1152,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
           {/* Import/Restore Backup */}
           <div className="bg-brand-bg/50 border border-brand-border/80 rounded-xl p-4 flex flex-col justify-between gap-3">
             <div className="space-y-1">
-              <div className="flex items-center gap-2 text-purple-400 font-bold text-sm">
+              <div className="flex items-center gap-2 text-brand-party font-bold text-sm">
                 <Upload size={18} />
                 <span>Restaurar de Cópia (JSON)</span>
               </div>
@@ -1161,7 +1161,7 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
               </p>
             </div>
 
-            <label className="w-full bg-purple-500 hover:bg-purple-600 text-brand-bg font-bold py-2 px-3 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer">
+            <label className="w-full bg-brand-party hover:bg-brand-party text-brand-bg font-bold py-2 px-3 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer">
               <Upload size={14} />
               <span>{isImporting ? "Restaurando Dados..." : "Selecionar e Restaurar JSON"}</span>
               <input 
