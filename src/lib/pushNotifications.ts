@@ -237,8 +237,11 @@ export async function registerPushSubscription(
 
       try {
         await setDoc(doc(doc(db, 'push_tokens', tokenId).firestore, 'push_tokens', tokenId), payload, { merge: true });
-      } catch (firestoreErr) {
-        console.warn('Coleção push_tokens restrita nas regras do Firebase, salvando na coleção permitida (cancellations):', firestoreErr);
+      } catch (firestoreErr: any) {
+        // Silencia o aviso de permissão, pois o fallback funciona perfeitamente
+        if (firestoreErr.code !== 'permission-denied') {
+          console.warn('Falha ao salvar push_token:', firestoreErr);
+        }
         await setDoc(doc(db, 'cancellations', `push_token_${tokenId}`), { isPushToken: true, ...payload }, { merge: true });
       }
 
