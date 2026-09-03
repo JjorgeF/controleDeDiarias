@@ -57,7 +57,7 @@ interface KpisViewProps {
 const LEVEL_COLORS: Record<string, string> = {
   'Trainee': '#94a3b8',
   'Aprendiz': '#38bdf8',
-  'Recreador(a)': '#a855f7',
+  'Recreador(a)': '#c093ff',
   'Recreador(a) Experiente': '#f59e0b',
   'Coordenador(a)': '#06b6d4',
   'Motorista': '#10b981'
@@ -390,7 +390,7 @@ export function KpisView({ employees, monthConfigs, promotions = [], currentMont
       .map(([level, count]) => ({
         name: level,
         value: count,
-        color: LEVEL_COLORS[level] || '#a855f7'
+        color: LEVEL_COLORS[level] || '#c093ff'
       }));
   }, [monthStats.levelCounts]);
 
@@ -617,8 +617,8 @@ export function KpisView({ employees, monthConfigs, promotions = [], currentMont
                     <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                   </linearGradient>
                   <linearGradient id="colorParty" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#a855f7" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#a855f7" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#c093ff" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#c093ff" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} />
@@ -628,9 +628,9 @@ export function KpisView({ employees, monthConfigs, promotions = [], currentMont
                   contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#f8fafc', fontSize: '12px' }}
                   formatter={(value: any) => [formatCurrency(Number(value) || 0), '']}
                 />
-                <Area type="monotone" dataKey="CCSP" stackId="1" stroke="#10b981" fillOpacity={1} fill="url(#colorCcsp)" />
-                <Area type="monotone" dataKey="Festas" stackId="1" stroke="#a855f7" fillOpacity={1} fill="url(#colorParty)" />
-                <Area type="monotone" dataKey="Extras" stackId="1" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.3} />
+                <Area type="monotone" dataKey="CCSP" stroke="#10b981" fillOpacity={1} fill="url(#colorCcsp)" />
+                <Area type="monotone" dataKey="Festas" stroke="#c093ff" fillOpacity={1} fill="url(#colorParty)" />
+                <Area type="monotone" dataKey="Extras" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.3} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
