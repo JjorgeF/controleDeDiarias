@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'motion/react';
+import { motion, LayoutGroup } from 'motion/react';
 import { 
   Calendar as CalendarIcon, 
   PartyPopper, 
@@ -117,15 +117,16 @@ export default function NavigationDock({
 
   if (isAdmin) {
     return (
-      <div 
-        className="fixed bottom-0 left-0 w-full z-40 pointer-events-none pb-[env(safe-area-inset-bottom,0px)]"
-        style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 40 }}
-      >
-        <div className="w-full px-2 pb-2 pt-2 md:px-0 md:pb-6 md:pt-0 pointer-events-auto flex justify-center">
-          <nav 
-            aria-label="Menu principal de navegação do administrador"
-            className="w-full max-w-[600px] md:max-w-none md:w-max flex items-center justify-between md:justify-center gap-0.5 md:gap-1.5 rounded-2xl md:rounded-3xl bg-slate-900/95 dark:bg-slate-950/95 px-1 py-1.5 md:p-2 shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-xl border border-slate-700/80 dark:border-slate-800/90"
-          >
+      <LayoutGroup id="admin-dock">
+        <div 
+          className="fixed bottom-0 left-0 w-full z-40 pointer-events-none pb-[env(safe-area-inset-bottom,0px)]"
+          style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 40 }}
+        >
+          <div className="w-full px-2 pb-2 pt-2 md:px-0 md:pb-6 md:pt-0 pointer-events-auto flex justify-center">
+            <nav 
+              aria-label="Menu principal de navegação do administrador"
+              className="w-full max-w-[600px] md:max-w-none md:w-max flex items-center justify-between md:justify-center gap-0.5 md:gap-1.5 rounded-2xl md:rounded-3xl bg-slate-900/60 dark:bg-slate-950/60 px-1 py-1.5 md:p-2 shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-xl border border-slate-700/50 dark:border-slate-800/50"
+            >
             {adminItems.map((item) => {
               const Icon = item.icon;
               const isSelected = 
@@ -141,11 +142,18 @@ export default function NavigationDock({
                   className={cn(
                     "relative flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-0.5 md:px-3.5 py-1.5 md:py-2 md:rounded-2xl transition-all duration-200 group text-center flex-1 md:flex-initial min-w-0 md:min-w-fit outline-none rounded-xl",
                     isSelected
-                      ? "text-slate-950 font-black shadow-md bg-brand-primary"
+                      ? "text-slate-950 font-black shadow-sm"
                       : "text-slate-300 hover:text-white hover:bg-white/5 active:scale-95"
                   )}
                   title={item.label}
                 >
+                  {isSelected && (
+                    <motion.div
+                      layoutId="admin-dock-pill"
+                      className="absolute inset-0 bg-brand-primary rounded-xl md:rounded-2xl shadow-lg -z-0"
+                      transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                    />
+                  )}
                   <div className="relative z-10 flex items-center justify-center">
                     <Icon size={18} className={cn("transition-transform duration-200 group-hover:scale-110", isSelected ? "text-slate-950" : "text-brand-primary/90")} />
                     {item.badge !== undefined && (
@@ -171,11 +179,13 @@ export default function NavigationDock({
           </nav>
         </div>
       </div>
+      </LayoutGroup>
     );
   }
 
   // Employee Dock
   return (
+    <LayoutGroup id="employee-dock">
     <div 
       className="fixed bottom-0 left-0 w-full z-40 pointer-events-none pb-[env(safe-area-inset-bottom,0px)]"
       style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 40 }}
@@ -183,7 +193,7 @@ export default function NavigationDock({
       <div className="w-full px-2 pb-2 pt-2 md:px-0 md:pb-6 md:pt-0 pointer-events-auto flex justify-center">
         <nav 
           aria-label="Menu de navegação do funcionário"
-          className="w-full max-w-[400px] md:max-w-none md:w-max flex items-center justify-between md:justify-center gap-0.5 md:gap-1.5 rounded-2xl md:rounded-3xl bg-slate-900/95 dark:bg-slate-950/95 px-1 py-1.5 md:p-2 shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-xl border border-slate-700/80 dark:border-slate-800/90"
+          className="w-full max-w-[400px] md:max-w-none md:w-max flex items-center justify-between md:justify-center gap-0.5 md:gap-1.5 rounded-2xl md:rounded-3xl bg-slate-900/60 dark:bg-slate-950/60 px-1 py-1.5 md:p-2 shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-xl border border-slate-700/50 dark:border-slate-800/50"
         >
           {employeeItems.map((item) => {
             const Icon = item.icon;
@@ -197,11 +207,18 @@ export default function NavigationDock({
                 className={cn(
                   "relative flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 px-0.5 md:px-4 py-1.5 md:py-2 md:rounded-2xl transition-all duration-200 group text-center flex-1 md:flex-initial min-w-0 md:min-w-fit outline-none rounded-xl",
                   isSelected
-                    ? "text-slate-950 font-black shadow-md bg-brand-primary"
+                    ? "text-slate-950 font-black shadow-sm"
                     : "text-slate-300 hover:text-white hover:bg-white/5 active:scale-95"
                 )}
                 title={item.label}
               >
+                {isSelected && (
+                  <motion.div
+                    layoutId="employee-dock-pill"
+                    className="absolute inset-0 bg-brand-primary rounded-xl md:rounded-2xl shadow-lg -z-0"
+                    transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                  />
+                )}
                 <div className="relative z-10 flex items-center justify-center">
                   <Icon size={18} className={cn("transition-transform duration-200 group-hover:scale-110", isSelected ? "text-slate-950" : "text-brand-primary/90")} />
                 </div>
@@ -219,5 +236,6 @@ export default function NavigationDock({
         </nav>
       </div>
     </div>
+    </LayoutGroup>
   );
 }
