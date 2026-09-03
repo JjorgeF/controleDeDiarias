@@ -35,11 +35,17 @@ service cloud.firestore {
       // All signed-in users can read employees to view schedules and colleagues
       allow get, list: if isSignedIn();
 
-      // Admins can update any field. Employees can only update their own availabilities, userId, workDays, and photoUrl.
+      // Admins can update any field. Employees can update their own personal details.
       allow update: if isSignedIn() && (
         isAdmin() || (
           (resource.data.email.lower() == request.auth.token.email.lower() || ('userId' in resource.data && resource.data.userId == request.auth.uid)) &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['availabilities', 'userId', 'workDays', 'photoUrl'])
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'availabilities', 'userId', 'workDays', 'photoUrl',
+            'pixType', 'pixKey', 'pixBank', 'pixOwnerName',
+            'startDateAtLiga', 'startDate',
+            'shirtSize', 'shortsSize', 'windbreakerSize',
+            'emergencyContactName', 'emergencyContactPhone'
+          ])
         )
       );
     }
@@ -64,6 +70,11 @@ service cloud.firestore {
     // 7. push_tokens (dispositivos registrados para Notificações Push PWA)
     match /push_tokens/{tokenId} {
       allow read, write: if isSignedIn();
+    }
+
+    // 8. party_events (Gestão confidencial de festas & eventos - exclusivo Admins)
+    match /party_events/{eventId} {
+      allow read, write: if isAdmin();
     }
   }
 }

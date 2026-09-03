@@ -1,6 +1,6 @@
 {
   "name": "Liga Positiva",
-  "description": "Sistema de gestão de escalas e pagamentos para recreadores e funcionários.",
+  "description": "Sistema de gestão de escalas, festas, eventos e pagamentos para recreadores e funcionários.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
