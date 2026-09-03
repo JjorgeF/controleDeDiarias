@@ -2,6 +2,38 @@ export type EmployeeLevel = 'Trainee' | 'Aprendiz' | 'Coordenador(a)' | 'Recread
 
 export type DayType = 'common' | 'party';
 
+export interface PartyChecklistItem {
+  id: string;
+  label: string;
+  checked: boolean;
+  category?: 'audio' | 'painting' | 'games' | 'workshops' | 'custom' | string;
+}
+
+export interface PartyDetails {
+  id: string; // Key: `${date}_${partyId}` or unique ID
+  date: string; // YYYY-MM-DD
+  partyId: string; // Associated PartyConfig ID in dayConfigs
+  name: string;
+  time?: string;
+  endTime?: string;
+  setupTime?: string; // Horário de chegada / montagem da equipe
+  location?: string; // Local ou endereço completo
+  eventType?: 'Aniversário Infantil' | 'Casamento' | 'Corporativo' | 'Festa Temática' | 'Escola' | 'Outro' | string;
+  birthdayPersonName?: string;
+  birthdayPersonAge?: string | number;
+  theme?: string; // Tema da festa (ex: Super-Heróis, Safari, etc.)
+  contractorName?: string;
+  contractorPhone?: string;
+  contractorEmail?: string;
+  contractorNotes?: string; // Observações especiais, restrições ou alergias
+  services?: string[]; // Serviços contratados (ex: Pintura, Oficinas, Balões, etc.)
+  checklist?: PartyChecklistItem[];
+  totalPrice?: number;
+  assignedEmployeeIds?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface PartyConfig {
   id: string;
   name: string;
@@ -91,7 +123,7 @@ export interface Employee {
   paidDates?: string[]; // Array of YYYY-MM-DD or milestone date strings marked as paid by admin
 }
 
-export type ViewMode = 'grid' | 'list' | 'calendar' | 'dashboard' | 'master_schedule' | 'payments' | 'kpis';
+export type ViewMode = 'grid' | 'list' | 'calendar' | 'parties' | 'dashboard' | 'master_schedule' | 'payments' | 'kpis';
 
 export interface CancellationLog {
   id: string;

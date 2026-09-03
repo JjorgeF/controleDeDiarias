@@ -16,9 +16,10 @@ import {
 } from 'firebase/firestore';
 import { onAuthStateChanged, User, signInWithPopup, getRedirectResult } from 'firebase/auth';
 import { auth, db, googleProvider, isFirebaseConfigured, handleFirestoreError, OperationType } from './lib/firebase';
-import { Employee, ViewMode, WorkDay, CancellationLog, Promotion, AppNotification, CustomNotificationDoc, DayConfig } from './types';
+import { Employee, ViewMode, WorkDay, CancellationLog, Promotion, AppNotification, CustomNotificationDoc, DayConfig, PartyDetails } from './types';
 import { recalculateEmployeeTimeline } from './utils/promotionUtils';
 import Header from './components/Header';
+import NavigationDock from './components/NavigationDock';
 import EmployeeCard from './components/EmployeeCard';
 import EmployeeList from './components/EmployeeList';
 import CalendarView from './components/CalendarView';
@@ -28,19 +29,21 @@ import InAppBrowserGuide, { isInAppBrowser } from './components/InAppBrowserGuid
 import { registerPushSubscription, sendPushToAllTokens } from './lib/pushNotifications';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import { WhatsNewModal } from './components/WhatsNewModal';
+import { lazyWithRetry } from './lib/lazyWithRetry';
 
-// Lazy loaded heavy components for optimal bundle size & performance
-const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
-const KpisView = lazy(() => import('./components/KpisView').then(m => ({ default: m.KpisView })));
-const MonthlyScheduleView = lazy(() => import('./components/MonthlyScheduleView'));
-const PaymentsView = lazy(() => import('./components/PaymentsView'));
-const EmployeeStoryView = lazy(() => import('./components/EmployeeStoryView'));
-const EmployeeEarningsView = lazy(() => import('./components/EmployeeEarningsView'));
-const ManageDaysModal = lazy(() => import('./components/ManageDaysModal'));
-const SendNotificationModal = lazy(() => import('./components/SendNotificationModal'));
-const PushDiagnosticsModal = lazy(() => import('./components/PushDiagnosticsModal'));
-const AdvancedSettingsModal = lazy(() => import('./components/AdvancedSettingsModal'));
-const RevertCancellationModal = lazy(() => import('./components/RevertCancellationModal'));
+// Lazy loaded heavy components for optimal bundle size & performance with auto-retry
+const AdminDashboard = lazyWithRetry(() => import('./components/AdminDashboard'));
+const KpisView = lazyWithRetry(() => import('./components/KpisView').then(m => ({ default: m.KpisView })));
+const MonthlyScheduleView = lazyWithRetry(() => import('./components/MonthlyScheduleView'));
+const PaymentsView = lazyWithRetry(() => import('./components/PaymentsView'));
+const PartyManagementView = lazyWithRetry(() => import('./components/PartyManagementView'));
+const EmployeeStoryView = lazyWithRetry(() => import('./components/EmployeeStoryView'));
+const EmployeeEarningsView = lazyWithRetry(() => import('./components/EmployeeEarningsView'));
+const ManageDaysModal = lazyWithRetry(() => import('./components/ManageDaysModal'));
+const SendNotificationModal = lazyWithRetry(() => import('./components/SendNotificationModal'));
+const PushDiagnosticsModal = lazyWithRetry(() => import('./components/PushDiagnosticsModal'));
+const AdvancedSettingsModal = lazyWithRetry(() => import('./components/AdvancedSettingsModal'));
+const RevertCancellationModal = lazyWithRetry(() => import('./components/RevertCancellationModal'));
 
 const ViewFallback = () => (
   <div className="flex items-center justify-center p-12 text-brand-muted">
@@ -69,6 +72,7 @@ export default function App() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [deadlines, setDeadlines] = useState<Record<string, string>>({}); // Key: "yyyy-MM", Value: "yyyy-MM-ddTHH:mm"
   const [dayConfigs, setDayConfigs] = useState<Record<string, DayConfig>>({});
+  const [parties, setParties] = useState<PartyDetails[]>([]);
   const [sidebarTab, setSidebarTab] = useState<'availabilities' | 'cancellations'>('availabilities');
   const [isAdvancedSettingsOpen, setIsAdvancedSettingsOpen] = useState(false);
   
@@ -125,6 +129,27 @@ export default function App() {
     });
     return () => unsub();
   }, [db, user]);
+
+  useEffect(() => {
+    if (!db || !user || !isViewingAsAdmin) {
+      setParties([]);
+      return;
+    }
+    const unsub = onSnapshot(collection(db, 'party_events'), (snapshot) => {
+      const list = snapshot.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      })) as PartyDetails[];
+      setParties(list);
+    }, (error) => {
+      // Ignora silenciosamente o erro de permissão (Missing or insufficient permissions)
+      // para evitar poluir o console, pois as regras do Firebase podem não estar atualizadas
+      if (error.code !== 'permission-denied') {
+        console.warn("Aviso ao carregar eventos/festas:", error);
+      }
+    });
+    return () => unsub();
+  }, [db, user, isViewingAsAdmin]);
 
 
 
@@ -1177,9 +1202,118 @@ export default function App() {
       }
       const docRef = doc(db, 'settings', 'dayConfigs');
       await setDoc(docRef, { [dateStr]: cleanConfig }, { merge: true });
-          } catch (error) {
+    } catch (error) {
       console.error("Error updating day config:", error);
       handleFirestoreError(error, OperationType.WRITE, 'settings/dayConfigs');
+    }
+  };
+
+  const handleSaveParty = async (party: PartyDetails, assignedEmployeeIds: string[] = []) => {
+    if (!db || !user) return;
+    try {
+      const partyId = party.partyId || party.id || `p_${Date.now()}`;
+      const docId = `${party.date}_${partyId}`;
+      const partyDocRef = doc(db, 'party_events', docId);
+
+      const partyDataToSave: PartyDetails = {
+        ...party,
+        id: docId,
+        partyId,
+        assignedEmployeeIds,
+        updatedAt: new Date().toISOString()
+      };
+
+      await setDoc(partyDocRef, partyDataToSave, { merge: true });
+
+      // Sincroniza com as configurações do dia (dayConfigs)
+      const currentCfg = dayConfigs[party.date] || { isCommon: false, isParty: false };
+      const currentParties = currentCfg.parties || [];
+      const existingIndex = currentParties.findIndex(p => p.id === partyId);
+      
+      let updatedPartiesList = [...currentParties];
+      if (existingIndex >= 0) {
+        updatedPartiesList[existingIndex] = {
+          id: partyId,
+          name: party.name,
+          time: party.time || currentParties[existingIndex].time
+        };
+      } else {
+        updatedPartiesList.push({
+          id: partyId,
+          name: party.name,
+          time: party.time || ''
+        });
+      }
+
+      await handleUpdateDayConfig(party.date, {
+        ...currentCfg,
+        isParty: true,
+        partyTime: party.time || currentCfg.partyTime || '',
+        parties: updatedPartiesList
+      });
+
+      // Sincroniza os dias de trabalho (workDays) dos funcionários atribuídos a esta festa
+      for (const emp of employees) {
+        const isAssigned = assignedEmployeeIds.includes(emp.id);
+        const currentWorkDays = emp.workDays || [];
+        const hasPartyWorkDay = currentWorkDays.some(
+          d => d.date === party.date && d.type === 'party' && (d.partyId === partyId || (!d.partyId && d.partyName === party.name))
+        );
+
+        if (isAssigned && !hasPartyWorkDay) {
+          const newWorkDay: WorkDay = {
+            date: party.date,
+            type: 'party',
+            partyId,
+            partyName: party.name
+          };
+          await handleUpdateDays(emp.id, [...currentWorkDays, newWorkDay]);
+        } else if (!isAssigned && hasPartyWorkDay) {
+          const filtered = currentWorkDays.filter(
+            d => !(d.date === party.date && d.type === 'party' && (d.partyId === partyId || (!d.partyId && d.partyName === party.name)))
+          );
+          await handleUpdateDays(emp.id, filtered);
+        }
+      }
+    } catch (err: any) {
+      console.error("Erro ao salvar festa:", err);
+      alert("Erro ao salvar detalhes da festa: " + (err.message || String(err)));
+      throw err;
+    }
+  };
+
+  const handleDeleteParty = async (partyId: string, dateStr: string) => {
+    if (!db || !user) return;
+    try {
+      const docId = `${dateStr}_${partyId}`;
+      await deleteDoc(doc(db, 'party_events', docId));
+
+      // Atualiza o dayConfig removendo esta festa
+      const currentCfg = dayConfigs[dateStr];
+      if (currentCfg) {
+        const remainingParties = (currentCfg.parties || []).filter(p => p.id !== partyId);
+        await handleUpdateDayConfig(dateStr, {
+          ...currentCfg,
+          isParty: remainingParties.length > 0,
+          parties: remainingParties
+        });
+      }
+
+      // Remove dos workDays dos funcionários
+      for (const emp of employees) {
+        const hasPartyWorkDay = (emp.workDays || []).some(
+          d => d.date === dateStr && d.type === 'party' && (d.partyId === partyId)
+        );
+        if (hasPartyWorkDay) {
+          const filtered = (emp.workDays || []).filter(
+            d => !(d.date === dateStr && d.type === 'party' && d.partyId === partyId)
+          );
+          await handleUpdateDays(emp.id, filtered);
+        }
+      }
+    } catch (err: any) {
+      console.error("Erro ao excluir festa:", err);
+      alert("Erro ao excluir festa: " + (err.message || String(err)));
     }
   };
 
@@ -1491,7 +1625,7 @@ export default function App() {
         ) || employees[0]);
 
     return (
-      <div className="min-h-screen bg-brand-bg pb-12">
+      <div className="min-h-screen bg-brand-bg pb-28">
         {isSimulationEnabled && isAdmin && (
           <SimulationBanner 
             employees={employees}
@@ -1531,62 +1665,6 @@ export default function App() {
         <main className={`w-full mx-auto px-2 md:px-4 py-4 md:py-8 ${employeeActiveTab === 'master_schedule' ? 'max-w-7xl' : 'max-w-4xl'}`}>
           {myEmployeeRecord ? (
             <div className="space-y-6">
-              {/* Navegação de Abas da Interface do Funcionário (Ícones limpos no mobile / Texto completo em telas maiores) */}
-              <div className="grid grid-cols-4 gap-1.5 sm:gap-3 border-b border-brand-border pb-3 w-full">
-                <button
-                  type="button"
-                  onClick={() => setEmployeeActiveTab('schedule')}
-                  title="Meu Calendário & Disponibilidade"
-                  className={`flex items-center justify-center gap-2 px-2 sm:px-3 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all text-center ${
-                    employeeActiveTab === 'schedule'
-                      ? 'bg-brand-primary text-slate-900 shadow-md ring-1 ring-brand-primary/50'
-                      : 'bg-brand-card hover:bg-brand-primary/10 text-gray-700 dark:text-gray-300 hover:text-brand-text border border-brand-border'
-                  }`}
-                >
-                  <Calendar size={19} className="shrink-0" />
-                  <span className="hidden md:inline whitespace-nowrap">Meu Calendário</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEmployeeActiveTab('master_schedule')}
-                  title="Escala Geral Mensal"
-                  className={`flex items-center justify-center gap-2 px-2 sm:px-3 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all text-center ${
-                    employeeActiveTab === 'master_schedule'
-                      ? 'bg-brand-primary text-slate-900 shadow-md ring-1 ring-brand-primary/50'
-                      : 'bg-brand-card hover:bg-brand-primary/10 text-gray-700 dark:text-gray-300 hover:text-brand-text border border-brand-border'
-                  }`}
-                >
-                  <Table size={19} className="shrink-0" />
-                  <span className="hidden md:inline whitespace-nowrap">Escala Geral</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEmployeeActiveTab('profile')}
-                  title="Meu Perfil & Cadastro"
-                  className={`flex items-center justify-center gap-2 px-2 sm:px-3 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all text-center ${
-                    employeeActiveTab === 'profile'
-                      ? 'bg-brand-primary text-slate-900 shadow-md ring-1 ring-brand-primary/50'
-                      : 'bg-brand-card hover:bg-brand-primary/10 text-gray-700 dark:text-gray-300 hover:text-brand-text border border-brand-border'
-                  }`}
-                >
-                  <UserRound size={19} className="shrink-0" />
-                  <span className="hidden md:inline whitespace-nowrap">Perfil</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEmployeeActiveTab('earnings')}
-                  title="Ganhos & Pagamentos"
-                  className={`flex items-center justify-center gap-2 px-2 sm:px-3 py-2.5 rounded-xl font-bold text-xs md:text-sm transition-all text-center ${
-                    employeeActiveTab === 'earnings'
-                      ? 'bg-brand-primary text-slate-900 shadow-md ring-1 ring-brand-primary/50'
-                      : 'bg-brand-card hover:bg-brand-primary/10 text-gray-700 dark:text-gray-300 hover:text-brand-text border border-brand-border'
-                  }`}
-                >
-                  <DollarSign size={19} className="shrink-0" />
-                  <span className="hidden md:inline whitespace-nowrap">Ganhos</span>
-                </button>
-              </div>
-
               {employeeActiveTab === 'schedule' ? (
                 <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start">
                   <div className="w-full md:w-1/3">
@@ -1679,13 +1757,20 @@ export default function App() {
         
         <WhatsNewModal isAdmin={isViewingAsAdmin} />
         <PWAInstallPrompt />
+
+        {/* Floating Navigation Dock for Employees */}
+        <NavigationDock 
+          isAdmin={false}
+          employeeActiveTab={employeeActiveTab}
+          onEmployeeTabChange={(tab) => setEmployeeActiveTab(tab)}
+        />
       </div>
     );
   }
 
   // Interface do Admin
   return (
-    <div className="min-h-screen bg-brand-bg pb-12">
+    <div className="min-h-screen bg-brand-bg pb-28">
       {isSimulationEnabled && isAdmin && (
         <SimulationBanner 
           employees={activeEmployees}
@@ -1914,6 +1999,20 @@ export default function App() {
             />
           </Suspense>
         )}
+
+        {viewMode === 'parties' && isViewingAsAdmin && (
+          <Suspense fallback={<ViewFallback />}>
+            <PartyManagementView 
+              parties={parties}
+              dayConfigs={dayConfigs}
+              employees={employees}
+              onSaveParty={handleSaveParty}
+              onDeleteParty={handleDeleteParty}
+              currentMonth={currentMonth}
+              setCurrentMonth={setCurrentMonth}
+            />
+          </Suspense>
+        )}
       </main>
 
       <EmployeeModal 
@@ -2051,6 +2150,15 @@ export default function App() {
       
       <WhatsNewModal isAdmin={isViewingAsAdmin} />
       <PWAInstallPrompt />
+
+      {/* Floating Action Dock for Admin Navigation */}
+      <NavigationDock 
+        isAdmin={true}
+        adminViewMode={viewMode}
+        onAdminViewModeChange={(mode) => setViewMode(mode)}
+        partiesCount={parties.length}
+      />
+
       <SpeedInsights />
     </div>
   );
