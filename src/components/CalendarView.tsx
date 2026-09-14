@@ -469,6 +469,7 @@ export default function CalendarView({
   // Deadline Admin State
   const [deadlineInputDate, setDeadlineInputDate] = React.useState('');
   const [deadlineInputTime, setDeadlineInputTime] = React.useState('');
+  const [showDeadlineAdminCard, setShowDeadlineAdminCard] = React.useState(false);
 
   // Employee No Availability Modal State
   const [isNoAvailModalOpen, setIsNoAvailModalOpen] = React.useState(false);
@@ -1416,7 +1417,7 @@ export default function CalendarView({
       </div>
 
       {/* Admin Deadline Setup Panel */}
-      {isAdmin && (
+      {isAdmin && (!isDeadlinePassed || showDeadlineAdminCard) && (
         <div className={cn(
           "border rounded-xl p-4 md:p-6 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in duration-200 transition-all",
           isDeadlinePassed 
@@ -1505,9 +1506,23 @@ export default function CalendarView({
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: direction > 0 ? -25 : 25 }}
                       transition={{ duration: 0.2, ease: "easeOut" }}
-                      className="text-base md:text-xl font-black text-brand-text capitalize"
+                      className="text-base md:text-xl font-black text-brand-text flex items-center gap-2"
                     >
-                      {format(currentMonth, 'MMMM yyyy', { locale: ptBR })}
+                      <span className="capitalize">{format(currentMonth, 'MMMM yyyy', { locale: ptBR })}</span>
+                      {isAdmin && isDeadlinePassed && (
+                        <button 
+                          onClick={() => setShowDeadlineAdminCard(prev => !prev)}
+                          className={cn(
+                            "flex items-center justify-center p-1.5 rounded-md transition-all",
+                            showDeadlineAdminCard 
+                              ? "bg-red-500 text-white" 
+                              : "text-red-500 hover:text-red-400 bg-red-500/10 hover:bg-red-500/20"
+                          )}
+                          title={showDeadlineAdminCard ? "Esconder configurações de prazo" : "Prazo encerrado. Clique para reabrir configurações."}
+                        >
+                          <Lock size={14} className="shrink-0" />
+                        </button>
+                      )}
                     </motion.h2>
                   </AnimatePresence>
                 </div>
