@@ -810,6 +810,8 @@ export default function DayManagementModal({
                         {normalizedParties.map((party, idx) => {
                           const { start, end } = parsePartyTime(party.time);
                           const isCoord = (party.name || '').toLowerCase().includes('coordena');
+                          const isOffice = (party.name || '').toLowerCase().includes('escritório') || (party.name || '').toLowerCase().includes('escritorio');
+                          const isJanitor = (party.name || '').toLowerCase().includes('zelador');
 
                           const handleTimeUpdate = (newStart: string, newEnd: string) => {
                             let formatted = '';
@@ -832,23 +834,31 @@ export default function DayManagementModal({
                                 "flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl p-2.5 animate-in fade-in border",
                                 isCoord
                                   ? "bg-cyan-950/40 border-cyan-500/40"
-                                  : "bg-brand-party/25 border-brand-party/30"
+                                  : isOffice
+                                    ? "bg-blue-950/40 border-blue-500/40"
+                                    : isJanitor
+                                      ? "bg-zinc-950/40 border-zinc-500/40"
+                                      : "bg-brand-party/25 border-brand-party/30"
                               )}
                             >
                               <div className="flex items-center gap-1.5 flex-1 min-w-[150px]">
                                 {isCoord ? (
                                   <ShieldCheck size={18} className="text-cyan-300 shrink-0" />
+                                ) : isOffice ? (
+                                  <Briefcase size={18} className="text-blue-400 shrink-0" />
+                                ) : isJanitor ? (
+                                  <Wrench size={18} className="text-zinc-400 shrink-0" />
                                 ) : (
                                   <span className="text-sm select-none">🎉</span>
                                 )}
                                 <input 
                                   type="text"
-                                  placeholder={isCoord ? "Coordenação" : "Nome da Festa"}
+                                  placeholder={isCoord ? "Coordenação" : isOffice ? "Escritório" : isJanitor ? "Zeladoria" : "Nome da Festa"}
                                   value={party.name}
                                   onChange={(e) => handleUpdateParty(party.id, 'name', e.target.value)}
                                   className={cn(
                                     "w-full bg-brand-bg border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-white font-bold placeholder-gray-500 focus:outline-none",
-                                    isCoord ? "focus:border-cyan-400 text-cyan-100" : "focus:border-brand-party text-white"
+                                    isCoord ? "focus:border-cyan-400 text-cyan-100" : isOffice ? "focus:border-blue-400 text-blue-100" : isJanitor ? "focus:border-zinc-400 text-zinc-100" : "focus:border-brand-party text-white"
                                   )}
                                 />
                               </div>
@@ -856,11 +866,11 @@ export default function DayManagementModal({
                               <div className="flex items-center justify-between sm:justify-start gap-2">
                                 <div className={cn(
                                   "flex items-center gap-1 bg-brand-bg border border-brand-border rounded-lg px-2 py-1 text-xs text-white font-semibold",
-                                  isCoord ? "focus-within:border-cyan-400" : "focus-within:border-brand-party"
+                                  isCoord ? "focus-within:border-cyan-400" : isOffice ? "focus-within:border-blue-400" : isJanitor ? "focus-within:border-zinc-400" : "focus-within:border-brand-party"
                                 )}>
                                   <span className={cn(
                                     "text-[10px] font-bold uppercase shrink-0 mr-0.5",
-                                    isCoord ? "text-cyan-300" : "text-brand-party"
+                                    isCoord ? "text-cyan-300" : isOffice ? "text-blue-400" : isJanitor ? "text-zinc-400" : "text-brand-party"
                                   )}>Horário:</span>
                                   <input 
                                     type="text"
