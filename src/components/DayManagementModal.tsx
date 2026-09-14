@@ -449,12 +449,12 @@ export default function DayManagementModal({
                       CCSP
                     </span>
                   )}
-                  {normalizedParties.filter(p => !(p.name || '').toLowerCase().includes('coordena')).length > 0 && (
+                  {normalizedParties.filter(p => !(p.name || '').toLowerCase().includes('coordena') && !(p.name || '').toLowerCase().includes('escritório') && !(p.name || '').toLowerCase().includes('escritorio') && !(p.name || '').toLowerCase().includes('zelador')).length > 0 && (
                     <span className="text-[10px] font-bold text-brand-party bg-brand-party/40 border border-brand-party/30 px-2 py-0.5 rounded-md flex items-center gap-1">
                       <span>🎉</span>
                       <span>
-                        {normalizedParties.filter(p => !(p.name || '').toLowerCase().includes('coordena')).length}{' '}
-                        {normalizedParties.filter(p => !(p.name || '').toLowerCase().includes('coordena')).length === 1 ? 'Festa' : 'Festas'}
+                        {normalizedParties.filter(p => !(p.name || '').toLowerCase().includes('coordena') && !(p.name || '').toLowerCase().includes('escritório') && !(p.name || '').toLowerCase().includes('escritorio') && !(p.name || '').toLowerCase().includes('zelador')).length}{' '}
+                        {normalizedParties.filter(p => !(p.name || '').toLowerCase().includes('coordena') && !(p.name || '').toLowerCase().includes('escritório') && !(p.name || '').toLowerCase().includes('escritorio') && !(p.name || '').toLowerCase().includes('zelador')).length === 1 ? 'Festa' : 'Festas'}
                       </span>
                     </span>
                   )}
@@ -462,6 +462,18 @@ export default function DayManagementModal({
                     <span className="text-[10px] font-bold text-cyan-300 bg-cyan-950/40 border border-cyan-500/30 px-2 py-0.5 rounded-md flex items-center gap-1">
                       <ShieldCheck size={11} className="text-cyan-300" />
                       <span>Coordenação</span>
+                    </span>
+                  )}
+                  {normalizedParties.some(p => (p.name || '').toLowerCase().includes('escritório') || (p.name || '').toLowerCase().includes('escritorio')) && (
+                    <span className="text-[10px] font-bold text-blue-300 bg-blue-950/40 border border-blue-500/30 px-2 py-0.5 rounded-md flex items-center gap-1">
+                      <Briefcase size={11} className="text-blue-300" />
+                      <span>Escritório</span>
+                    </span>
+                  )}
+                  {normalizedParties.some(p => (p.name || '').toLowerCase().includes('zelador')) && (
+                    <span className="text-[10px] font-bold text-zinc-300 bg-zinc-950/40 border border-zinc-500/30 px-2 py-0.5 rounded-md flex items-center gap-1">
+                      <Wrench size={11} className="text-zinc-300" />
+                      <span>Zeladoria</span>
                     </span>
                   )}
                   {dayConfig.isExtraordinaryOpen && (
@@ -481,7 +493,7 @@ export default function DayManagementModal({
                     animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
                     transition={{ duration: 0.2 }}
-                    className="space-y-3 pt-3 max-h-[50vh] sm:max-h-[55vh] overflow-y-auto pr-1.5 custom-scrollbar"
+                    className="space-y-3 pt-3 pb-32 max-h-[50vh] sm:max-h-[55vh] overflow-y-auto pr-1.5 custom-scrollbar"
                   >
                     {/* Toggles & Add Party Button */}
                     <div className="flex flex-wrap items-center gap-2 max-w-full">
@@ -552,7 +564,7 @@ export default function DayManagementModal({
                                       animate={{ opacity: 1, y: 0, scale: 1 }}
                                       exit={{ opacity: 0, y: -5, scale: 0.95 }}
                                       transition={{ duration: 0.15 }}
-                                      className="absolute top-full left-0 mt-2 min-w-[180px] bg-slate-900 border border-brand-border p-1.5 rounded-xl shadow-2xl z-50 flex flex-col gap-1 overflow-hidden"
+                                      className="absolute top-full right-0 md:left-0 md:right-auto mt-2 min-w-[180px] bg-slate-900 border border-brand-border p-1.5 rounded-xl shadow-2xl z-50 flex flex-col gap-1 overflow-hidden"
                                     >
                                       <button
                                         onClick={handleAddCoordination}
@@ -787,7 +799,7 @@ export default function DayManagementModal({
                                         className="rounded border-brand-party text-brand-party focus:ring-brand-party w-4 h-4 cursor-pointer"
                                       />
                                       <span className="text-xs font-bold text-brand-party">
-                                        🎉 {p.name || 'Festa'}
+                                        {(p.name || '').toLowerCase().includes('coordena') ? '🛡️' : (p.name || '').toLowerCase().includes('escritório') || (p.name || '').toLowerCase().includes('escritorio') ? '💼' : (p.name || '').toLowerCase().includes('zelador') ? '🔧' : '🎉'} {p.name || 'Festa'}
                                       </span>
                                     </div>
                                     {p.time && (
@@ -1033,6 +1045,8 @@ export default function DayManagementModal({
                                   const isAssignedToThisParty = isParty && 
                                     (currentPartyId === party.id || (!currentPartyId && party.id === 'default_party') || currentPartyName === party.name);
                                   const isCoord = (party.name || '').toLowerCase().includes('coordena');
+                                  const isOffice = (party.name || '').toLowerCase().includes('escritório') || (party.name || '').toLowerCase().includes('escritorio');
+                                  const isJanitor = (party.name || '').toLowerCase().includes('zelador');
 
                                   return (
                                     <button
@@ -1044,16 +1058,24 @@ export default function DayManagementModal({
                                       className={cn(
                                         "text-[9px] font-black px-2.5 py-1 rounded-lg transition-all uppercase tracking-wider flex items-center gap-1 max-w-[200px] truncate border",
                                         isAssignedToThisParty 
-                                          ? isCoord
-                                            ? "bg-cyan-500 text-slate-950 font-bold border-cyan-400 shadow-md ring-1 ring-cyan-300"
-                                            : "bg-brand-party text-white border-brand-party shadow-md ring-1 ring-brand-party" 
-                                          : isCoord
-                                            ? "bg-cyan-950/40 border-cyan-500/50 text-cyan-300 hover:border-cyan-400 hover:bg-cyan-900/60"
-                                            : "bg-brand-bg border-brand-border text-gray-400 hover:border-brand-party/50 hover:text-brand-party"
+                                          ? isOffice
+                                            ? "bg-blue-500 text-white font-bold border-blue-400 shadow-md ring-1 ring-blue-300"
+                                            : isJanitor
+                                              ? "bg-zinc-500 text-white font-bold border-zinc-400 shadow-md ring-1 ring-zinc-300"
+                                              : isCoord
+                                                ? "bg-cyan-500 text-slate-950 font-bold border-cyan-400 shadow-md ring-1 ring-cyan-300"
+                                                : "bg-brand-party text-white border-brand-party shadow-md ring-1 ring-brand-party" 
+                                          : isOffice
+                                            ? "bg-blue-950/40 border-blue-500/50 text-blue-300 hover:border-blue-400 hover:bg-blue-900/60"
+                                            : isJanitor
+                                              ? "bg-zinc-950/40 border-zinc-500/50 text-zinc-300 hover:border-zinc-400 hover:bg-zinc-900/60"
+                                              : isCoord
+                                                ? "bg-cyan-950/40 border-cyan-500/50 text-cyan-300 hover:border-cyan-400 hover:bg-cyan-900/60"
+                                                : "bg-brand-bg border-brand-border text-gray-400 hover:border-brand-party/50 hover:text-brand-party"
                                       )}
                                       title={`Escalar para ${party.name}${party.time ? ` (${party.time})` : ''}`}
                                     >
-                                      {isCoord ? <ShieldCheck size={11} className={cn("shrink-0", isAssignedToThisParty ? "text-slate-950" : "text-cyan-300")} /> : <span>🎉</span>}
+                                      {isOffice ? <Briefcase size={11} className={cn("shrink-0", isAssignedToThisParty ? "text-white" : "text-blue-300")} /> : isJanitor ? <Wrench size={11} className={cn("shrink-0", isAssignedToThisParty ? "text-white" : "text-zinc-300")} /> : isCoord ? <ShieldCheck size={11} className={cn("shrink-0", isAssignedToThisParty ? "text-slate-950" : "text-cyan-300")} /> : <span>🎉</span>}
                                       <span className="truncate">{party.name}</span>
                                     </button>
                                   );
@@ -1387,19 +1409,26 @@ export default function DayManagementModal({
 
                             {normalizedParties.map(party => {
                               const isCoord = (party.name || '').toLowerCase().includes('coordena');
+                              const isOffice = (party.name || '').toLowerCase().includes('escritório') || (party.name || '').toLowerCase().includes('escritorio');
+                              const isJanitor = (party.name || '').toLowerCase().includes('zelador');
+                              
                               return (
                                 <button 
                                   key={party.id}
                                   onClick={() => assignEmployee(emp, 'party', party)}
                                   className={cn(
                                     "text-[10px] font-black bg-brand-bg border rounded-lg px-2 py-1 transition-all flex items-center gap-1 uppercase max-w-[130px] truncate",
-                                    isCoord
-                                      ? "border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-400 hover:text-cyan-200"
-                                      : "border-brand-border text-gray-400 hover:bg-brand-party/10 hover:border-brand-party hover:text-brand-party"
+                                    isOffice
+                                      ? "border-blue-500/40 text-blue-300 hover:bg-blue-500/20 hover:border-blue-400 hover:text-blue-200"
+                                      : isJanitor
+                                        ? "border-zinc-500/40 text-zinc-300 hover:bg-zinc-500/20 hover:border-zinc-400 hover:text-zinc-200"
+                                        : isCoord
+                                          ? "border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-400 hover:text-cyan-200"
+                                          : "border-brand-border text-gray-400 hover:bg-brand-party/10 hover:border-brand-party hover:text-brand-party"
                                   )}
                                   title={`Escalar para ${party.name}`}
                                 >
-                                  {isCoord ? <ShieldCheck size={12} className="shrink-0 text-cyan-300" /> : <UserPlus size={12} />}
+                                  {isOffice ? <Briefcase size={12} className="shrink-0 text-blue-300" /> : isJanitor ? <Wrench size={12} className="shrink-0 text-zinc-300" /> : isCoord ? <ShieldCheck size={12} className="shrink-0 text-cyan-300" /> : <UserPlus size={12} />}
                                   <span className="truncate">{party.name}</span>
                                 </button>
                               );
