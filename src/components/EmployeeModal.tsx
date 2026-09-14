@@ -40,6 +40,8 @@ export default function EmployeeModal({
     dailyRate: 70,
     partyRate: 70,
     extraHourRate: 0,
+    officeHourRate: 20,
+    janitorRate: 70,
     workDays: [],
     email: '',
   });
@@ -66,6 +68,8 @@ export default function EmployeeModal({
         dailyRate: 70,
         partyRate: 70,
         extraHourRate: 0,
+        officeHourRate: 20,
+        janitorRate: 70,
         workDays: [],
         email: '',
       });
@@ -259,14 +263,36 @@ export default function EmployeeModal({
             * Os valores de diária e festa são fixos de acordo com o nível selecionado.
           </p>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">Valor da Hora Extra (R$)</label>
-            <input
-              type="number"
-              value={formData.extraHourRate}
-              onChange={(e) => setFormData({ ...formData, extraHourRate: Number(e.target.value) })}
-              className="w-full bg-brand-bg border border-brand-border rounded-lg py-2 px-4 text-white focus:outline-none focus:border-brand-primary"
-            />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-1">Valor da Hora Extra (R$)</label>
+              <input
+                type="number"
+                value={formData.extraHourRate}
+                onChange={(e) => setFormData({ ...formData, extraHourRate: Number(e.target.value) })}
+                className="w-full bg-brand-bg border border-brand-border rounded-lg py-2 px-4 text-white focus:outline-none focus:border-brand-primary"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-1">Hora de Escritório (R$)</label>
+              <input
+                type="number"
+                value={formData.officeHourRate !== undefined ? formData.officeHourRate : 20}
+                onChange={(e) => setFormData({ ...formData, officeHourRate: Number(e.target.value) })}
+                className="w-full bg-brand-bg border border-brand-border rounded-lg py-2 px-4 text-white focus:outline-none focus:border-brand-primary"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-1">Diária de Zeladoria (R$)</label>
+              <input
+                type="number"
+                value={formData.janitorRate !== undefined ? formData.janitorRate : 70}
+                onChange={(e) => setFormData({ ...formData, janitorRate: Number(e.target.value) })}
+                className="w-full bg-brand-bg border border-brand-border rounded-lg py-2 px-4 text-white focus:outline-none focus:border-brand-primary"
+              />
+            </div>
           </div>
 
           <div>
