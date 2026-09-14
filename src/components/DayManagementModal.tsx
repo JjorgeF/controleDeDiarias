@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Search, UserPlus, UserMinus, Clock, Copy, ClipboardPaste, Users, Plus, Trash2, PartyPopper, ChevronDown, ChevronUp, Zap, Lock, ShieldCheck, Target } from 'lucide-react';
+import { X, Search, UserPlus, UserMinus, Clock, Copy, ClipboardPaste, Users, Plus, Trash2, PartyPopper, ChevronDown, ChevronUp, Zap, Lock, ShieldCheck, Target, Check, Wrench, Briefcase } from 'lucide-react';
 import { Employee, WorkDay, DayType, DayConfig, PartyConfig } from '../types';
 import { format, isSunday, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -36,6 +36,7 @@ export default function DayManagementModal({
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [expandedEmployeeId, setExpandedEmployeeId] = React.useState<string | null>(null);
   const [isEventsExpanded, setIsEventsExpanded] = React.useState(true);
+  const [isApoioMenuOpen, setIsApoioMenuOpen] = React.useState(false);
 
   const selectedDayStr = selectedDay ? format(selectedDay, 'yyyy-MM-dd') : '';
 
@@ -85,6 +86,7 @@ export default function DayManagementModal({
     const existing = normalizedParties.find(p => (p.name || '').toLowerCase().includes('coordena'));
     if (existing) {
       setIsEventsExpanded(true);
+      setIsApoioMenuOpen(false);
       return;
     }
     const newCoord: PartyConfig = {
@@ -99,6 +101,51 @@ export default function DayManagementModal({
       parties: updatedParties
     });
     setIsEventsExpanded(true);
+    setIsApoioMenuOpen(false);
+  };
+
+  const handleAddOffice = () => {
+    const existing = normalizedParties.find(p => (p.name || '').toLowerCase().includes('escritório') || (p.name || '').toLowerCase().includes('escritorio'));
+    if (existing) {
+      setIsEventsExpanded(true);
+      setIsApoioMenuOpen(false);
+      return;
+    }
+    const newOffice: PartyConfig = {
+      id: 'p_office_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 5),
+      name: 'Escritório',
+      time: ''
+    };
+    const updatedParties = [...normalizedParties, newOffice];
+    onUpdateDayConfig(selectedDayStr, {
+      ...dayConfig,
+      isParty: true,
+      parties: updatedParties
+    });
+    setIsEventsExpanded(true);
+    setIsApoioMenuOpen(false);
+  };
+
+  const handleAddJanitor = () => {
+    const existing = normalizedParties.find(p => (p.name || '').toLowerCase().includes('zelador'));
+    if (existing) {
+      setIsEventsExpanded(true);
+      setIsApoioMenuOpen(false);
+      return;
+    }
+    const newJanitor: PartyConfig = {
+      id: 'p_janitor_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 5),
+      name: 'Zeladoria',
+      time: ''
+    };
+    const updatedParties = [...normalizedParties, newJanitor];
+    onUpdateDayConfig(selectedDayStr, {
+      ...dayConfig,
+      isParty: true,
+      parties: updatedParties
+    });
+    setIsEventsExpanded(true);
+    setIsApoioMenuOpen(false);
   };
 
   const handleUpdateParty = (partyId: string, field: 'name' | 'time', value: string) => {
@@ -438,19 +485,33 @@ export default function DayManagementModal({
                   >
                     {/* Toggles & Add Party Button */}
                     <div className="flex flex-wrap items-center gap-2 max-w-full">
-                      <label className="flex items-center gap-1.5 cursor-pointer text-xs text-white select-none bg-brand-bg px-3 py-1.5 rounded-xl border border-brand-border hover:border-brand-primary transition-all">
-                        <input 
-                          type="checkbox"
-                          checked={!!dayConfig.isCommon}
-                          onChange={(e) => onUpdateDayConfig(selectedDayStr, { ...dayConfig, isCommon: e.target.checked })}
-                          className="rounded border-brand-border text-brand-primary bg-brand-bg focus:ring-brand-primary w-3.5 h-3.5 cursor-pointer"
-                        />
-                        <span className="font-bold">CCSP</span>
-                      </label>
+                      <button
+                        onClick={() => onUpdateDayConfig(selectedDayStr, { ...dayConfig, isCommon: !dayConfig.isCommon })}
+                        className={cn(
+                          "px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all active:scale-95 border",
+                          dayConfig.isCommon !== false
+                            ? "bg-emerald-600/30 text-emerald-300 border-emerald-500/80 ring-1 ring-emerald-500/30 shadow-sm shadow-emerald-500/20"
+                            : "bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500/70 border-emerald-500/30 hover:border-emerald-500/40"
+                        )}
+                      >
+                        <div className={cn(
+                          "flex items-center justify-center w-4 h-4 rounded-[4px] transition-all",
+                          dayConfig.isCommon !== false 
+                            ? "bg-emerald-500 text-slate-900 shadow-sm" 
+                            : "bg-emerald-950/50 border border-emerald-500/40 text-transparent"
+                        )}>
+                          <Check size={12} strokeWidth={4} />
+                        </div>
+                        <span>CCSP</span>
+                      </button>
 
                       {(() => {
-                        const hasRegularParties = normalizedParties.some(p => !(p.name || '').toLowerCase().includes('coordena'));
+                        const hasRegularParties = normalizedParties.some(p => !(p.name || '').toLowerCase().includes('coordena') && !(p.name || '').toLowerCase().includes('escritório') && !(p.name || '').toLowerCase().includes('escritorio') && !(p.name || '').toLowerCase().includes('zelador'));
                         const hasCoordination = normalizedParties.some(p => (p.name || '').toLowerCase().includes('coordena'));
+                        const hasOffice = normalizedParties.some(p => (p.name || '').toLowerCase().includes('escritório') || (p.name || '').toLowerCase().includes('escritorio'));
+                        const hasJanitor = normalizedParties.some(p => (p.name || '').toLowerCase().includes('zelador'));
+                        
+                        const hasAnyApoio = hasCoordination || hasOffice || hasJanitor;
 
                         return (
                           <>
@@ -467,58 +528,113 @@ export default function DayManagementModal({
                               <span>Festa</span>
                             </button>
 
-                            <button
-                              onClick={handleAddCoordination}
-                              className={cn(
-                                "px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 border",
-                                hasCoordination
-                                  ? "bg-cyan-600/30 text-cyan-200 border-cyan-500/80 ring-1 ring-cyan-500/30 shadow-sm shadow-cyan-500/20"
-                                  : "bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border-cyan-500/40"
-                              )}
-                            >
-                              <Plus size={14} />
-                              <span>Coordenação</span>
-                            </button>
+                            <div className="relative">
+                              <button
+                                onClick={() => setIsApoioMenuOpen(p => !p)}
+                                className={cn(
+                                  "px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 border",
+                                  hasAnyApoio
+                                    ? "bg-slate-600/30 text-slate-200 border-slate-500/80 ring-1 ring-slate-500/30 shadow-sm shadow-slate-500/20"
+                                    : "bg-slate-600/20 hover:bg-slate-600/30 text-slate-300 border-slate-500/40"
+                                )}
+                              >
+                                <Plus size={14} />
+                                <span>Atividades Extras</span>
+                                <ChevronDown size={14} className={cn("transition-transform ml-0.5", isApoioMenuOpen && "rotate-180")} />
+                              </button>
+
+                              <AnimatePresence>
+                                {isApoioMenuOpen && (
+                                  <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setIsApoioMenuOpen(false)} />
+                                    <motion.div
+                                      initial={{ opacity: 0, y: -5, scale: 0.95 }}
+                                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                                      exit={{ opacity: 0, y: -5, scale: 0.95 }}
+                                      transition={{ duration: 0.15 }}
+                                      className="absolute top-full left-0 mt-2 min-w-[180px] bg-slate-900 border border-brand-border p-1.5 rounded-xl shadow-2xl z-50 flex flex-col gap-1 overflow-hidden"
+                                    >
+                                      <button
+                                        onClick={handleAddCoordination}
+                                        className={cn(
+                                          "w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors",
+                                          hasCoordination ? "bg-cyan-500/15 text-cyan-300" : "hover:bg-slate-800 text-slate-300"
+                                        )}
+                                      >
+                                        <ShieldCheck size={15} className={hasCoordination ? "text-cyan-400" : "text-slate-400"} /> 
+                                        Coordenação
+                                      </button>
+                                      
+                                      <button
+                                        onClick={handleAddOffice}
+                                        className={cn(
+                                          "w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors",
+                                          hasOffice ? "bg-blue-500/15 text-blue-300" : "hover:bg-slate-800 text-slate-300"
+                                        )}
+                                      >
+                                        <Briefcase size={15} className={hasOffice ? "text-blue-400" : "text-slate-400"} /> 
+                                        Escritório
+                                      </button>
+
+                                      <button
+                                        onClick={handleAddJanitor}
+                                        className={cn(
+                                          "w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors",
+                                          hasJanitor ? "bg-zinc-500/20 text-zinc-300" : "hover:bg-slate-800 text-slate-300"
+                                        )}
+                                      >
+                                        <Wrench size={15} className={hasJanitor ? "text-zinc-400" : "text-slate-400"} /> 
+                                        Zeladoria
+                                      </button>
+                                    </motion.div>
+                                  </>
+                                )}
+                              </AnimatePresence>
+                            </div>
                           </>
                         );
                       })()}
 
-                      <label 
+                      <div className="hidden sm:block w-px h-6 bg-brand-border/60 mx-1" />
+
+                      <button
+                        onClick={() => {
+                          const isOpening = !dayConfig.isExtraordinaryOpen;
+                          let lockedMap = dayConfig.extraordinaryLockedAvailabilities;
+                          if (isOpening && !lockedMap) {
+                            lockedMap = {};
+                            employees.forEach(emp => {
+                              const dateStr = selectedDayStr;
+                              const empAvails = (emp.availabilities || []).filter(a => a === dateStr || a.startsWith(`${dateStr}_`));
+                              if (empAvails.length > 0) {
+                                lockedMap![emp.id] = empAvails;
+                              }
+                            });
+                          }
+                          onUpdateDayConfig(selectedDayStr, { 
+                            ...dayConfig, 
+                            isExtraordinaryOpen: isOpening,
+                            extraordinaryLockedAvailabilities: lockedMap
+                          });
+                        }}
                         className={cn(
-                          "flex items-center gap-1.5 cursor-pointer text-xs select-none px-3 py-1.5 rounded-xl border transition-all",
+                          "px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all active:scale-95 border",
                           dayConfig.isExtraordinaryOpen
-                            ? "bg-amber-500/20 border-amber-500/60 text-amber-300 font-bold shadow-sm shadow-amber-500/10"
-                            : "bg-brand-bg text-gray-400 border-brand-border hover:border-amber-500/40 hover:text-amber-200"
+                            ? "bg-amber-500/30 text-amber-300 border-amber-500/80 ring-1 ring-amber-500/30 shadow-sm shadow-amber-500/20"
+                            : "bg-amber-600/10 hover:bg-amber-600/20 text-amber-500/70 border-amber-500/30 hover:border-amber-500/40"
                         )}
                         title="Abre este dia para novos envios de disponibilidade, porém trava remoções de quem já enviou."
                       >
-                        <input 
-                          type="checkbox"
-                          checked={!!dayConfig.isExtraordinaryOpen}
-                          onChange={(e) => {
-                            const isOpening = e.target.checked;
-                            let lockedMap = dayConfig.extraordinaryLockedAvailabilities;
-                            if (isOpening && !lockedMap) {
-                              lockedMap = {};
-                              employees.forEach(emp => {
-                                const dateStr = selectedDayStr;
-                                const empAvails = (emp.availabilities || []).filter(a => a === dateStr || a.startsWith(`${dateStr}_`));
-                                if (empAvails.length > 0) {
-                                  lockedMap![emp.id] = empAvails;
-                                }
-                              });
-                            }
-                            onUpdateDayConfig(selectedDayStr, { 
-                              ...dayConfig, 
-                              isExtraordinaryOpen: isOpening,
-                              extraordinaryLockedAvailabilities: lockedMap
-                            });
-                          }}
-                          className="rounded border-brand-border text-amber-500 bg-brand-bg focus:ring-amber-500 w-3.5 h-3.5 cursor-pointer"
-                        />
-                        <Zap size={13} className={dayConfig.isExtraordinaryOpen ? "text-amber-400 fill-amber-400" : "text-gray-400"} />
+                        <div className={cn(
+                          "flex items-center justify-center w-4 h-4 rounded-[4px] transition-all",
+                          dayConfig.isExtraordinaryOpen 
+                            ? "bg-amber-500 text-amber-950 shadow-sm" 
+                            : "bg-amber-950/50 border border-amber-500/40 text-transparent"
+                        )}>
+                          <Check size={12} strokeWidth={4} />
+                        </div>
                         <span>Abertura Extra</span>
-                      </label>
+                      </button>
                     </div>
 
                     {/* Integrated Abertura Extra Details & Deadline */}
