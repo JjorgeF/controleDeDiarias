@@ -50,7 +50,9 @@ import {
   ExternalLink,
   UserCheck,
   ShieldCheck,
-  RotateCcw
+  RotateCcw,
+  Briefcase,
+  Wrench
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Employee, WorkDay, DayType, CancellationLog, DayConfig, PartyConfig } from '../types';
@@ -634,6 +636,48 @@ export default function CalendarView({
       }
 
       const filtered = employee.workDays.filter(d => d.date !== dateStr);
+      const isOffice = (selectedParty.name || '').toLowerCase().includes('escritório') || (selectedParty.name || '').toLowerCase().includes('escritorio');
+      const isJanitor = (selectedParty.name || '').toLowerCase().includes('zelador');
+      
+      let customTotalPay: number | undefined = undefined;
+      let isReducedHours = false;
+      let customHoursText = '';
+
+      if (isOffice) {
+        const timeStr = selectedParty.time || getDayConfig(dateStr).partyTime || '';
+        const parts = timeStr.split(/\s*até\s*/i);
+        let hours = 0;
+        
+        if (parts.length === 2) {
+          const s = parts[0].replace(/h$/i, '').trim();
+          const e = parts[1].replace(/h$/i, '').trim();
+          
+          const parseTime = (t: string) => {
+            const [h, m] = t.split(':').map(Number);
+            return (h || 0) + (m || 0) / 60;
+          };
+          
+          if (s.includes(':') && e.includes(':')) {
+            const startH = parseTime(s);
+            const endH = parseTime(e);
+            if (endH >= startH) {
+              hours = endH - startH;
+            } else {
+              hours = (endH + 24) - startH;
+            }
+          }
+        }
+        
+        isReducedHours = true;
+        const formattedHours = hours > 0 ? hours.toString().replace('.', ',') + 'h' : 'Acordo';
+        customHoursText = `${formattedHours} (Escritório)`;
+        customTotalPay = hours > 0 ? hours * (employee.officeHourRate || 0) : 0;
+      } else if (isJanitor) {
+        isReducedHours = true;
+        customHoursText = 'Zeladoria';
+        customTotalPay = employee.janitorRate || 0;
+      }
+
       const newDays: WorkDay[] = [...filtered, { 
         date: dateStr, 
         type: 'party', 
@@ -644,7 +688,12 @@ export default function CalendarView({
         dailyRateAtTime: employee.dailyRate,
         partyRateAtTime: employee.partyRate,
         extraHourRateAtTime: employee.extraHourRate,
-        levelAtTime: employee.level
+        levelAtTime: employee.level,
+        ...((isOffice || isJanitor) && {
+          isReducedHours,
+          customHoursText,
+          customTotalPay
+        })
       }];
       onUpdateDays(employee.id, newDays);
     }
@@ -1952,6 +2001,8 @@ export default function CalendarView({
                         const formattedDateClean = rawDateStr.replace(/-feira/gi, '').replace(/\s+feira/gi, '');
 
                         const isCoordination = isParty && (partyName || '').toLowerCase().includes('coordena');
+                        const isOfficeMode = isParty && ((partyName || '').toLowerCase().includes('escritório') || (partyName || '').toLowerCase().includes('escritorio'));
+                        const isJanitorMode = isParty && (partyName || '').toLowerCase().includes('zelador');
 
                         return (
                           <div 
@@ -1962,26 +2013,34 @@ export default function CalendarView({
                             }}
                             className={cn(
                               "flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none hover:scale-[1.01] duration-150 group gap-3",
-                              d.isReducedHours
-                                ? "bg-amber-500/10 border-amber-500/30 hover:border-amber-500/50 hover:bg-amber-500/15"
-                                : isCoordination
-                                  ? "bg-cyan-500/5 border-cyan-500/20 hover:border-cyan-500/45 hover:bg-cyan-500/10"
-                                  : isParty 
-                                    ? "bg-brand-party/5 border-brand-party/20 hover:border-brand-party/45 hover:bg-brand-party/10" 
-                                    : "bg-brand-primary/5 border-brand-primary/20 hover:border-brand-primary/45 hover:bg-brand-primary/10"
+                              isOfficeMode
+                                ? "bg-blue-500/5 border-blue-500/20 hover:border-blue-500/45 hover:bg-blue-500/10"
+                                : isJanitorMode
+                                  ? "bg-zinc-500/5 border-zinc-500/20 hover:border-zinc-500/45 hover:bg-zinc-500/10"
+                                  : d.isReducedHours
+                                    ? "bg-amber-500/10 border-amber-500/30 hover:border-amber-500/50 hover:bg-amber-500/15"
+                                    : isCoordination
+                                      ? "bg-cyan-500/5 border-cyan-500/20 hover:border-cyan-500/45 hover:bg-cyan-500/10"
+                                      : isParty 
+                                        ? "bg-brand-party/5 border-brand-party/20 hover:border-brand-party/45 hover:bg-brand-party/10" 
+                                        : "bg-brand-primary/5 border-brand-primary/20 hover:border-brand-primary/45 hover:bg-brand-primary/10"
                             )}
                           >
                             <div className="flex items-center gap-3 animate-in fade-in duration-200 min-w-0">
                               {/* Date circle badge */}
                               <div className={cn(
                                 "w-11 h-11 rounded-xl flex flex-col items-center justify-center font-black shrink-0 shadow-md transition-all",
-                                d.isReducedHours
-                                  ? "bg-amber-500 text-slate-950 group-hover:bg-amber-400"
-                                  : isCoordination
-                                    ? "bg-cyan-500 text-slate-950 group-hover:bg-cyan-400"
-                                    : isParty 
-                                      ? "bg-brand-party text-white group-hover:bg-brand-party" 
-                                      : "bg-brand-primary text-slate-900 group-hover:bg-brand-primary-hover"
+                                isOfficeMode
+                                  ? "bg-blue-500 text-white group-hover:bg-blue-400"
+                                  : isJanitorMode
+                                    ? "bg-zinc-500 text-white group-hover:bg-zinc-400"
+                                    : d.isReducedHours
+                                      ? "bg-amber-500 text-slate-950 group-hover:bg-amber-400"
+                                      : isCoordination
+                                        ? "bg-cyan-500 text-slate-950 group-hover:bg-cyan-400"
+                                        : isParty 
+                                          ? "bg-brand-party text-white group-hover:bg-brand-party" 
+                                          : "bg-brand-primary text-slate-900 group-hover:bg-brand-primary-hover"
                               )}>
                                 <span className="text-sm leading-none">{format(dateObj, 'dd')}</span>
                                 <span className="text-[8px] uppercase tracking-wider leading-none mt-0.5 font-bold">
@@ -1997,7 +2056,15 @@ export default function CalendarView({
 
                                 <div className="flex flex-wrap items-center gap-1.5">
                                   {/* Horário Reduzido ou Onde é a escala (Festa, Coordenação ou CCSP) */}
-                                  {d.isReducedHours ? (
+                                  {isOfficeMode ? (
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-blue-500/10 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded border border-blue-500/20">
+                                      <Briefcase size={10} className="shrink-0 text-blue-400" /> Escritório {d.customHoursText ? `(${d.customHoursText.replace(' (Escritório)', '')})` : ''}
+                                    </span>
+                                  ) : isJanitorMode ? (
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-zinc-500/10 dark:bg-zinc-500/20 text-zinc-700 dark:text-zinc-300 px-2 py-0.5 rounded border border-zinc-500/20">
+                                      <Wrench size={10} className="shrink-0 text-zinc-400" /> Zeladoria
+                                    </span>
+                                  ) : d.isReducedHours ? (
                                     <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/40 shadow-sm">
                                       <Clock size={10} className="text-amber-300" /> Horário Reduzido ({d.customHoursText || 'Acordo'})
                                     </span>
@@ -2477,7 +2544,7 @@ export default function CalendarView({
                               </div>
                             </div>
                             
-                            <div className="flex items-center gap-1.5 shrink-0">
+                            <div className="flex flex-wrap justify-end items-center gap-1.5 shrink-0 max-w-[180px] sm:max-w-[240px] md:max-w-none">
                               {showCcspBtn && (
                                 <motion.button 
                                   whileHover={{ scale: 1.05 }}
@@ -2500,6 +2567,8 @@ export default function CalendarView({
                                 return dayParties.length > 0 ? (
                                   dayParties.map((party) => {
                                     const isCoord = (party.name || '').toLowerCase().includes('coordena');
+                                    const isOffice = (party.name || '').toLowerCase().includes('escritório') || (party.name || '').toLowerCase().includes('escritorio');
+                                    const isJanitor = (party.name || '').toLowerCase().includes('zelador');
                                     return (
                                       <motion.button 
                                         key={party.id}
@@ -2508,13 +2577,17 @@ export default function CalendarView({
                                         onClick={() => toggleWorkDayType(emp, selectedDay!, 'party', party)}
                                         className={cn(
                                           "text-[10px] font-black px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 uppercase max-w-[130px] truncate border",
-                                          isCoord
-                                            ? "bg-cyan-500/10 hover:bg-cyan-500 text-cyan-300 hover:text-slate-950 border-cyan-500/30 hover:border-cyan-400"
-                                            : "bg-brand-party/10 hover:bg-brand-party text-brand-party dark:text-brand-party hover:text-white border-brand-party/30 hover:border-brand-party"
+                                          isOffice
+                                            ? "bg-blue-500/10 hover:bg-blue-500 text-blue-300 hover:text-white border-blue-500/30 hover:border-blue-400"
+                                            : isJanitor
+                                              ? "bg-zinc-500/10 hover:bg-zinc-500 text-zinc-300 hover:text-white border-zinc-500/30 hover:border-zinc-400"
+                                              : isCoord
+                                                ? "bg-cyan-500/10 hover:bg-cyan-500 text-cyan-300 hover:text-slate-950 border-cyan-500/30 hover:border-cyan-400"
+                                                : "bg-brand-party/10 hover:bg-brand-party text-brand-party dark:text-brand-party hover:text-white border-brand-party/30 hover:border-brand-party"
                                         )}
                                         title={`Escalar para ${party.name}${party.time ? ` (${party.time})` : ''}`}
                                       >
-                                        {isCoord ? <ShieldCheck size={12} className="shrink-0 text-cyan-300" /> : <UserPlus size={12} className="shrink-0" />}
+                                        {isOffice ? <Briefcase size={12} className="shrink-0" /> : isJanitor ? <Wrench size={12} className="shrink-0" /> : isCoord ? <ShieldCheck size={12} className="shrink-0 text-cyan-300" /> : <UserPlus size={12} className="shrink-0" />}
                                         <span className="truncate">{party.name}</span>
                                       </motion.button>
                                     );
@@ -2580,7 +2653,7 @@ export default function CalendarView({
                                 </div>
                               </div>
                               
-                              <div className="flex items-center gap-1.5 shrink-0">
+                              <div className="flex flex-wrap justify-end items-center gap-1.5 shrink-0 max-w-[180px] sm:max-w-[240px] md:max-w-none">
                                 {showCcspBtn && (
                                   <motion.button 
                                     whileHover={{ scale: 1.05 }}
@@ -2602,6 +2675,8 @@ export default function CalendarView({
                                   return dayParties.length > 0 ? (
                                     dayParties.map((party) => {
                                       const isCoord = (party.name || '').toLowerCase().includes('coordena');
+                                      const isOffice = (party.name || '').toLowerCase().includes('escritório') || (party.name || '').toLowerCase().includes('escritorio');
+                                      const isJanitor = (party.name || '').toLowerCase().includes('zelador');
                                       return (
                                         <motion.button 
                                           key={party.id}
@@ -2610,13 +2685,17 @@ export default function CalendarView({
                                           onClick={() => toggleWorkDayType(emp, selectedDay!, 'party', party)}
                                           className={cn(
                                             "text-[10px] font-black bg-brand-bg border rounded-lg px-2.5 py-1 transition-colors flex items-center gap-1 uppercase max-w-[130px] truncate",
-                                            isCoord
-                                              ? "border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-400 hover:text-cyan-200"
-                                              : "border-brand-border text-gray-400 hover:bg-brand-party/10 hover:border-brand-party hover:text-brand-party"
+                                            isOffice
+                                              ? "border-blue-500/40 text-blue-300 hover:bg-blue-500/20 hover:border-blue-400 hover:text-blue-200"
+                                              : isJanitor
+                                                ? "border-zinc-500/40 text-zinc-300 hover:bg-zinc-500/20 hover:border-zinc-400 hover:text-zinc-200"
+                                                : isCoord
+                                                  ? "border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-400 hover:text-cyan-200"
+                                                  : "border-brand-border text-gray-400 hover:bg-brand-party/10 hover:border-brand-party hover:text-brand-party"
                                           )}
                                           title={`Escalar para ${party.name}${party.time ? ` (${party.time})` : ''}`}
                                         >
-                                          {isCoord ? <ShieldCheck size={12} className="shrink-0 text-cyan-300" /> : <UserPlus size={12} className="shrink-0" />}
+                                          {isOffice ? <Briefcase size={12} className="shrink-0" /> : isJanitor ? <Wrench size={12} className="shrink-0" /> : isCoord ? <ShieldCheck size={12} className="shrink-0 text-cyan-300" /> : <UserPlus size={12} className="shrink-0" />}
                                           <span className="truncate">{party.name}</span>
                                         </motion.button>
                                       );
