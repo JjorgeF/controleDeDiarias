@@ -99,6 +99,8 @@ export interface Employee {
   dailyRate: number;
   partyRate: number;
   extraHourRate: number;
+  officeHourRate?: number;
+  janitorRate?: number;
   workDays: WorkDay[];
   availabilities?: string[]; // Date strings 'YYYY-MM-DD'
   userId: string; // To associate with the logged in user
