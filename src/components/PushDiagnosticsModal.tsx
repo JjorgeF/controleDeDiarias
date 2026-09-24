@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Activity, CheckCircle2, AlertTriangle, XCircle, RefreshCw, Send, Smartphone, ShieldCheck, Key, Info } from 'lucide-react';
+import { X, Activity, CheckCircle2, AlertTriangle, XCircle, RefreshCw, Send, Smartphone, ShieldCheck, Key, Info, Copy, Check } from 'lucide-react';
 import { getPushDiagnosticsInfo, sendTestPushToCurrentDevice, registerPushSubscription } from '../lib/pushNotifications';
 
 interface PushDiagnosticsModalProps {
@@ -19,6 +19,30 @@ export default function PushDiagnosticsModal({
   const [info, setInfo] = useState<any>(null);
   const [testResult, setTestResult] = useState<any>(null);
   const [testingPush, setTestingPush] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyReport = () => {
+    const reportText = `[DIAGNÓSTICO PWA PUSH]
+Data: ${new Date().toLocaleString('pt-BR')}
+Dispositivo: ${navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop'}
+User-Agent: ${navigator.userAgent}
+Permissão Notificação: ${info?.notificationPermission || 'desconhecido'}
+Service Worker: ${info?.swActive ? 'Ativo (' + info?.swScope + ')' : 'Inativo'}
+Chave Pública VAPID: ${info?.vapidKeyPublic || 'N/A'} (Válida 65 bytes: ${info?.vapidKeyValid ? 'SIM' : 'NÃO'})
+Inscrição PushManager: ${info?.hasActiveSubscription ? 'Ativa' : 'Ausente'}
+Endpoint Sanitizado: ${info?.subscription?.endpoint ? info.subscription.endpoint.slice(0, 30) + '...' + info.subscription.endpoint.slice(-8) : 'N/A'}
+Último Teste de Servidor:
+- Sucesso Real: ${testResult ? (testResult.success ? 'SIM' : 'NÃO') : 'Não testado'}
+- Modo Simulação: ${testResult ? (testResult.simulationMode ? 'SIM (chaves ausentes no backend)' : 'NÃO (envio real para FCM)') : 'Não testado'}
+- Código HTTP Servidor: ${testResult?.status || 'N/A'}
+- Retorno da API: ${testResult?.resBody ? JSON.stringify(testResult.resBody, null, 2) : 'Nenhum'}
+Logs do Service Worker (push events):
+${info?.recentPushEvents?.length ? JSON.stringify(info.recentPushEvents, null, 2) : 'Nenhum evento registrado pelo SW nesta sessão'}`;
+
+    navigator.clipboard.writeText(reportText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
 
   const loadDiagnostics = async () => {
     setLoading(true);
@@ -107,18 +131,28 @@ export default function PushDiagnosticsModal({
         {/* Content */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-5 text-sm">
           {/* Refresh Action */}
-          <div className="flex items-center justify-between bg-brand-bg/50 p-3 rounded-xl border border-brand-border">
+          <div className="flex flex-wrap items-center justify-between gap-2 bg-brand-bg/50 p-3 rounded-xl border border-brand-border">
             <span className="text-xs text-brand-muted font-medium">
               Dispositivo: <strong className="text-brand-text">{navigator.userAgent.includes('Mobile') ? 'Celular / Mobile' : 'Computador / Desktop'}</strong>
             </span>
-            <button
-              onClick={loadDiagnostics}
-              disabled={loading}
-              className="flex items-center gap-1.5 text-xs text-brand-party hover:text-brand-party font-semibold bg-brand-party/10 hover:bg-brand-party/20 px-3 py-1.5 rounded-lg border border-brand-party/20 transition-all disabled:opacity-50"
-            >
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-              Atualizar Diagnóstico
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopyReport}
+                className="flex items-center gap-1.5 text-xs text-brand-text hover:text-white font-semibold bg-brand-bg hover:bg-brand-card px-3 py-1.5 rounded-lg border border-brand-border transition-all"
+                title="Copiar relatório completo para enviar ao suporte"
+              >
+                {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                {copied ? 'Copiado!' : 'Copiar Relatório'}
+              </button>
+              <button
+                onClick={loadDiagnostics}
+                disabled={loading}
+                className="flex items-center gap-1.5 text-xs text-brand-party hover:text-brand-party font-semibold bg-brand-party/10 hover:bg-brand-party/20 px-3 py-1.5 rounded-lg border border-brand-party/20 transition-all disabled:opacity-50"
+              >
+                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                Atualizar Diagnóstico
+              </button>
+            </div>
           </div>
 
           {/* Checklist */}
@@ -290,28 +324,64 @@ export default function PushDiagnosticsModal({
 
               {/* Test Result Display */}
               {testResult && (
-                <div className={`p-3.5 rounded-xl border text-xs space-y-2 animate-in fade-in duration-200 ${
+                <div className={`p-3.5 rounded-xl border text-xs space-y-2.5 animate-in fade-in duration-200 ${
                   testResult.success
                     ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
+                    : testResult.simulationMode
+                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-200'
                     : 'bg-rose-500/10 border-rose-500/30 text-rose-200'
                 }`}>
                   <div className="flex items-start gap-2 font-bold text-sm">
                     {testResult.success ? (
                       <CheckCircle2 className="text-emerald-400 shrink-0 mt-0.5" size={18} />
+                    ) : testResult.simulationMode ? (
+                      <AlertTriangle className="text-amber-400 shrink-0 mt-0.5" size={18} />
                     ) : (
                       <XCircle className="text-rose-400 shrink-0 mt-0.5" size={18} />
                     )}
                     <span>{testResult.message}</span>
                   </div>
 
-                  {testResult.status && (
-                    <p className="text-brand-muted text-[11px]">
-                      Status HTTP: <strong className="text-brand-text">{testResult.status}</strong> | Tempo de resposta: <strong className="text-brand-text">{testResult.roundtripMs}ms</strong>
-                    </p>
+                  {/* Mode Indicator Pill */}
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {testResult.simulationMode ? (
+                      <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30 text-[11px]">
+                        ⚠️ Modo Simulação (VAPID_PRIVATE_KEY ausente na Vercel)
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30 text-[11px]">
+                        🚀 Envio Real Ativo (simulationMode: false)
+                      </span>
+                    )}
+
+                    {testResult.status && (
+                      <span className="px-2 py-0.5 rounded bg-brand-bg text-brand-text font-mono border border-brand-border text-[11px]">
+                        API Status: {testResult.status} ({testResult.roundtripMs}ms)
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Per Token FCM Results if available */}
+                  {Array.isArray(testResult.resBody?.details) && testResult.resBody.details.length > 0 && (
+                    <div className="mt-2 space-y-1.5 pt-2 border-t border-brand-border/40">
+                      <p className="font-bold text-[11px] text-brand-text">Retorno por Dispositivo / FCM:</p>
+                      {testResult.resBody.details.map((d: any, idx: number) => (
+                        <div key={idx} className="p-2 rounded bg-brand-bg/80 border border-brand-border text-[11px] font-mono space-y-0.5">
+                          <p className="text-brand-muted">Endpoint: <span className="text-brand-text">{d.endpoint}</span></p>
+                          <p>
+                            Status: <strong className={d.status === 'enviado' ? 'text-emerald-400' : 'text-rose-400'}>{d.status}</strong>
+                            {' '}| Código FCM: <strong className="text-brand-text">{d.pushServiceStatusCode || 'Nenhum (simulado)'}</strong>
+                          </p>
+                          {d.error && (
+                            <p className="text-rose-300">Erro: {d.error}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   )}
 
                   {testResult.resBody && (
-                    <div className="mt-2 p-2 rounded bg-black/40 border border-white/10 font-mono text-[11px] overflow-x-auto text-brand-text">
+                    <div className="mt-2 p-2 rounded bg-black/40 border border-white/10 font-mono text-[10px] overflow-x-auto text-brand-text max-h-36 overflow-y-auto">
                       <pre>{JSON.stringify(testResult.resBody, null, 2)}</pre>
                     </div>
                   )}
@@ -320,16 +390,41 @@ export default function PushDiagnosticsModal({
                     <div className="mt-2 text-xs bg-emerald-950/40 p-2.5 rounded-lg border border-emerald-500/20 text-emerald-300 space-y-1">
                       <p className="font-bold flex items-center gap-1.5">
                         <ShieldCheck size={14} />
-                        Servidor de Push respondeu com SUCESSO!
+                        Serviço FCM aceitou a notificação!
                       </p>
                       <p className="text-emerald-200/90 text-[11px]">
-                        Agora minimize ou feche o aplicativo PWA no seu celular e solicite outro teste. Se a notificação não vibrar/apitar com o app fechado, siga as orientações de sistema do Android/iOS abaixo.
+                        Agora minimize ou feche o PWA no celular e realize outro teste. Se a notificação não vibrar com app fechado, verifique os registros do Service Worker abaixo e as permissões do sistema.
                       </p>
                     </div>
                   )}
                 </div>
               )}
             </div>
+
+            {/* Service Worker Push Event History */}
+            {Array.isArray(info?.recentPushEvents) && info.recentPushEvents.length > 0 && (
+              <div className="p-4 rounded-xl border border-indigo-500/30 bg-indigo-500/5 space-y-2">
+                <h4 className="font-bold text-brand-text text-xs flex items-center gap-1.5">
+                  <Activity size={14} className="text-indigo-400" />
+                  Histórico de Eventos Push no Service Worker (sw.js)
+                </h4>
+                <div className="space-y-1.5 max-h-40 overflow-y-auto font-mono text-[11px]">
+                  {info.recentPushEvents.map((ev: any, idx: number) => (
+                    <div key={idx} className="p-2 rounded bg-brand-bg/70 border border-brand-border flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-brand-text font-semibold">{ev.title}</p>
+                        <p className="text-brand-muted text-[10px]">{new Date(ev.timestamp).toLocaleTimeString('pt-BR')}</p>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        ev.status === 'showNotification_ok' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                      }`}>
+                        {ev.status === 'showNotification_ok' ? 'showNotification: OK' : 'showNotification: FALHA'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Device Specific Guidelines */}
