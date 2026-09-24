@@ -1754,6 +1754,17 @@ export default function App() {
             />
           </Suspense>
         )}
+
+        {isPushDiagnosticsOpen && (
+          <Suspense fallback={<ViewFallback />}>
+            <PushDiagnosticsModal
+              isOpen={isPushDiagnosticsOpen}
+              onClose={() => setIsPushDiagnosticsOpen(false)}
+              userEmail={user?.email || undefined}
+              userName={user?.displayName || undefined}
+            />
+          </Suspense>
+        )}
         
         <WhatsNewModal isAdmin={isViewingAsAdmin} />
         <PWAInstallPrompt />
