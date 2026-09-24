@@ -113,14 +113,35 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+// Store recent push diagnostic events in memory for diagnostics panel
+let recentPushEvents = [];
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'GET_SW_PUSH_DIAGNOSTICS' && event.ports && event.ports[0]) {
+    event.ports[0].postMessage({
+      active: true,
+      scope: self.registration.scope,
+      recentPushEvents: recentPushEvents
+    });
+  }
+});
+
 // Handle Web Push / Background Push Notifications when PWA is closed or in background
 self.addEventListener('push', (event) => {
+  const timestamp = new Date().toISOString();
+  console.log('[SW-PUSH] Evento PUSH recebido pelo Service Worker em segundo plano!', {
+    hasData: Boolean(event.data),
+    timestamp
+  });
+
   let data = {
     title: 'Liga Positiva',
     body: 'Você possui uma nova notificação do sistema!',
     icon: '/logo.svg',
     url: '/'
   };
+
+  let payloadParseError = null;
 
   if (event.data) {
     try {
@@ -133,6 +154,7 @@ self.addEventListener('push', (event) => {
         data = { ...data, ...json };
       }
     } catch (e) {
+      payloadParseError = e?.message || 'Falha ao decodificar JSON';
       data.body = event.data.text();
     }
   }
@@ -153,9 +175,30 @@ self.addEventListener('push', (event) => {
     ]
   };
 
-  event.waitUntil(
-    self.registration.showNotification(data.title, options)
-  );
+  const notificationPromise = self.registration.showNotification(data.title, options)
+    .then(() => {
+      console.log('[SW-PUSH] ✅ showNotification() executado com sucesso no sistema operacional!');
+      recentPushEvents.unshift({
+        timestamp,
+        title: data.title,
+        status: 'showNotification_ok',
+        payloadParseError
+      });
+      if (recentPushEvents.length > 10) recentPushEvents.pop();
+    })
+    .catch((err) => {
+      console.error('[SW-PUSH] ❌ Erro ao chamar showNotification():', err);
+      recentPushEvents.unshift({
+        timestamp,
+        title: data.title,
+        status: 'showNotification_error',
+        error: err?.message || String(err),
+        payloadParseError
+      });
+      if (recentPushEvents.length > 10) recentPushEvents.pop();
+    });
+
+  event.waitUntil(notificationPromise);
 });
 
 // Handle notification click on mobile devices
