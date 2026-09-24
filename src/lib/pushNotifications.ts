@@ -291,6 +291,24 @@ export async function getPushDiagnosticsInfo() {
     }
   }
 
+  let recentPushEvents: any[] = [];
+  if (hasSW && navigator.serviceWorker.controller) {
+    try {
+      const channel = new MessageChannel();
+      const swPromise = new Promise<any>((resolve) => {
+        channel.port1.onmessage = (event) => resolve(event.data);
+        setTimeout(() => resolve(null), 600);
+      });
+      navigator.serviceWorker.controller.postMessage({ type: 'GET_SW_PUSH_DIAGNOSTICS' }, [channel.port2]);
+      const swData = await swPromise;
+      if (swData && Array.isArray(swData.recentPushEvents)) {
+        recentPushEvents = swData.recentPushEvents;
+      }
+    } catch {
+      // SW message channel optional
+    }
+  }
+
   let vapidByteLength: number | null = null;
   let vapidKeyValid = false;
   let vapidParseError: string | null = null;
@@ -313,6 +331,7 @@ export async function getPushDiagnosticsInfo() {
     swActive,
     swScope,
     swError,
+    recentPushEvents,
     vapidKeyPublic: cleanedVapid ? `${cleanedVapid.substring(0, 12)}...${cleanedVapid.slice(-6)} (${cleanedVapid.length} chars, ${vapidByteLength !== null ? vapidByteLength + ' bytes' : 'erro parse'})` : 'NÃO CONFIGURADA (VITE_FIREBASE_VAPID_KEY)',
     hasVapidKey: !!cleanedVapid,
     vapidByteLength,
@@ -381,16 +400,22 @@ export async function sendTestPushToCurrentDevice(userEmail?: string, userName?:
     }
 
     if (res.ok) {
+      const isSimulation = resBody?.simulationMode === true;
+      const isRealSuccess = resBody?.success === true && !isSimulation;
       return {
-        success: true,
+        success: isRealSuccess,
+        simulationMode: isSimulation,
         status,
         roundtripMs,
         resBody,
-        message: 'Servidor /api/send-push processou o envio de teste com sucesso!'
+        message: isSimulation
+          ? 'Servidor executou em MODO SIMULAÇÃO (chaves VAPID não ativas no backend). O push NÃO foi despachado para o FCM.'
+          : (resBody?.message || 'Servidor despachou a notificação real via Web Push (FCM)!')
       };
     } else {
       return {
         success: false,
+        simulationMode: false,
         status,
         roundtripMs,
         resBody,
