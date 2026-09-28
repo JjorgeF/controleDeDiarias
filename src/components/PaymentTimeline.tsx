@@ -24,6 +24,7 @@ import {
   PartyPopper
 } from 'lucide-react';
 import { Employee, WorkDay } from '../types';
+import { getPartyPaymentDueDate } from '../lib/utils';
 
 interface PaymentTimelineProps {
   employee: Employee;
@@ -104,12 +105,12 @@ export default function PaymentTimeline({ employee, currentDate = new Date() }: 
         subtitle = workDay.type === 'party' ? (workDay.partyName || 'Festa') : 'CCSP';
       }
     } 
-    // Check if 7 days after a Party Event (Payment Forecast for Parties = Party Date + 7 days)
+    // Check if next Monday after a Party Event (Payment Forecast for Parties = Next Monday after event)
     else {
       const matchingPartyForPayment = partiesList.find(p => {
         try {
-          const partyDateObj = parseISO(p.date);
-          const forecastPaymentDate = addDays(partyDateObj, 7);
+          const partyDateObj = parseISO(p.date.includes('T') ? p.date : `${p.date}T12:00:00`);
+          const forecastPaymentDate = getPartyPaymentDueDate(partyDateObj);
           return isSameDay(forecastPaymentDate, current);
         } catch {
           return false;
@@ -121,11 +122,11 @@ export default function PaymentTimeline({ employee, currentDate = new Date() }: 
         if (partyPaymentPaid) {
           itemType = 'paid';
           title = 'Pagamento Efetuado';
-          subtitle = matchingPartyForPayment.partyName || 'Festa (7 dias)';
+          subtitle = matchingPartyForPayment.partyName || 'Festa (Segunda)';
         } else {
           itemType = 'payment_forecast';
           title = 'Previsão Pagamento';
-          subtitle = `${matchingPartyForPayment.partyName || 'Festa'} (7d após)`;
+          subtitle = `${matchingPartyForPayment.partyName || 'Festa'} (Segunda)`;
         }
       }
       // Check if standard monthly payment milestone date (Dia 15 de cada mês)
@@ -424,7 +425,7 @@ export default function PaymentTimeline({ employee, currentDate = new Date() }: 
                   Eventos & Festas
                 </h4>
                 <p className="text-[11px] text-gray-300 leading-relaxed">
-                  Os pagamentos referentes a eventos e festas ocorrem exatamente <strong>1 semana (7 dias) após a realização do evento</strong>, variando conforme a data da festa.
+                  Os pagamentos referentes a eventos e festas ocorrem sempre na <strong>segunda-feira seguinte à realização do evento</strong>.
                 </p>
               </div>
             </div>
