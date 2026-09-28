@@ -3193,6 +3193,10 @@ export default function CalendarView({
                       const isLocked = isPartyChecked && isOptionLockedForEmployee(dateStr, partyKey, myEmployee, config, isPartyDeadlinePassed);
                       const isExcludedByScope = isOptionExcludedByExtraordinaryScope(dateStr, partyKey, config);
 
+                      const isCoord = (party.name || '').toLowerCase().includes('coordena');
+                      const isOffice = (party.name || '').toLowerCase().includes('escritório') || (party.name || '').toLowerCase().includes('escritorio');
+                      const isJanitor = (party.name || '').toLowerCase().includes('zelador');
+
                       return (
                         <motion.label 
                           key={party.id} 
@@ -3205,14 +3209,32 @@ export default function CalendarView({
                               ? "bg-red-500/5 border-red-500/20 text-gray-500 cursor-not-allowed opacity-75"
                               : "cursor-pointer",
                             isPartyChecked 
-                              ? "bg-brand-party/15 border-brand-party/60 text-brand-party dark:text-brand-party ring-2 ring-brand-party/30" 
+                              ? isCoord
+                                ? "bg-cyan-500/15 border-cyan-500/60 text-cyan-300 ring-2 ring-cyan-500/30"
+                                : isOffice
+                                  ? "bg-blue-500/15 border-blue-500/60 text-blue-300 ring-2 ring-blue-500/30"
+                                  : isJanitor
+                                    ? "bg-zinc-500/15 border-zinc-500/60 text-zinc-300 ring-2 ring-zinc-500/30"
+                                    : "bg-brand-party/15 border-brand-party/60 text-brand-party dark:text-brand-party ring-2 ring-brand-party/30" 
                               : (!isExcludedByScope && "bg-brand-bg/40 border-brand-border text-brand-muted hover:border-brand-primary/30 hover:bg-brand-bg/70")
                           )}
                         >
                           <div className="flex flex-col space-y-1 pr-2">
                             <span className="font-extrabold text-sm text-brand-text flex items-center gap-1.5 flex-wrap">
-                              <span>🎉</span>
-                              <span>{party.name && party.name !== 'Festa' ? party.name : 'Festa'}</span>
+                              {isCoord ? (
+                                <ShieldCheck size={16} className="text-cyan-400 shrink-0" />
+                              ) : isOffice ? (
+                                <Briefcase size={16} className="text-blue-400 shrink-0" />
+                              ) : isJanitor ? (
+                                <Wrench size={16} className="text-zinc-400 shrink-0" />
+                              ) : (
+                                <span>🎉</span>
+                              )}
+                              <span className={cn(
+                                isCoord ? "text-cyan-200" : isOffice ? "text-blue-200" : isJanitor ? "text-zinc-200" : ""
+                              )}>
+                                {party.name && party.name !== 'Festa' ? party.name : 'Festa'}
+                              </span>
                               {isLocked && (
                                 <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
                                   <Lock size={10} />
@@ -3228,15 +3250,26 @@ export default function CalendarView({
                             </span>
                             {(party.time || config.partyTime) ? (
                               <div className="flex flex-col gap-1 mt-1">
-                                <div className="flex items-center gap-1.5 text-xs text-brand-party dark:text-brand-party font-extrabold bg-brand-party/15 border border-brand-party/30 px-2.5 py-1 rounded-lg w-fit">
-                                  <Clock size={13} className="text-brand-party shrink-0" />
+                                <div className={cn(
+                                  "flex items-center gap-1.5 text-xs font-extrabold border px-2.5 py-1 rounded-lg w-fit",
+                                  isCoord
+                                    ? "text-cyan-300 bg-cyan-500/15 border-cyan-500/30"
+                                    : isOffice
+                                      ? "text-blue-300 bg-blue-500/15 border-blue-500/30"
+                                      : isJanitor
+                                        ? "text-zinc-300 bg-zinc-500/15 border-zinc-500/30"
+                                        : "text-brand-party dark:text-brand-party bg-brand-party/15 border-brand-party/30"
+                                )}>
+                                  <Clock size={13} className={isCoord ? "text-cyan-400 shrink-0" : isOffice ? "text-blue-400 shrink-0" : isJanitor ? "text-zinc-400 shrink-0" : "text-brand-party shrink-0"} />
                                   <span>Horário: {party.time || config.partyTime}</span>
                                 </div>
                                 <span className="text-[10px] font-mono text-brand-muted/80 italic">{partyDeadlineDisplay}</span>
                               </div>
                             ) : (
                               <div className="flex flex-col gap-0.5">
-                                <span className="text-xs text-brand-muted">Trabalhar em eventos e festas extras</span>
+                                <span className="text-xs text-brand-muted">
+                                  {isCoord ? 'Plantão de Coordenação' : isOffice ? 'Trabalho no Escritório' : isJanitor ? 'Serviços de Zeladoria' : 'Trabalhar em eventos e festas extras'}
+                                </span>
                                 <span className="text-[10px] font-mono text-brand-muted/80 italic">{partyDeadlineDisplay}</span>
                               </div>
                             )}
@@ -3293,8 +3326,12 @@ export default function CalendarView({
                             <motion.div 
                               animate={{
                                 scale: isPartyChecked ? [0.8, 1.25, 1] : 1,
-                                backgroundColor: isPartyChecked ? "#ac67e6" : "rgba(255,255,255,0.05)",
-                                borderColor: isPartyChecked ? "#ac67e6" : "rgba(255,255,255,0.2)"
+                                backgroundColor: isPartyChecked 
+                                  ? (isCoord ? "#06b6d4" : isOffice ? "#3b82f6" : isJanitor ? "#71717a" : "#ac67e6") 
+                                  : "rgba(255,255,255,0.05)",
+                                borderColor: isPartyChecked 
+                                  ? (isCoord ? "#22d3ee" : isOffice ? "#60a5fa" : isJanitor ? "#a1a1aa" : "#ac67e6") 
+                                  : "rgba(255,255,255,0.2)"
                               }}
                               transition={{ duration: 0.3, ease: "easeOut" }}
                               className="w-6 h-6 rounded-lg border flex items-center justify-center shrink-0 shadow-sm"
