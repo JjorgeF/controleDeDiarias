@@ -791,7 +791,7 @@ export default function DayManagementModal({
                                 </label>
                               )}
 
-                              {/* Lista de Festas */}
+                              {/* Lista de Festas e Apoios */}
                               {normalizedParties.map(p => {
                                 const allPartyIds = normalizedParties.map(item => item.id);
                                 const isPartyActive = (
@@ -801,8 +801,24 @@ export default function DayManagementModal({
                                   (dayConfig.extraordinaryPartyIds && dayConfig.extraordinaryPartyIds.includes(p.id))
                                 );
 
+                                const isCoord = (p.name || '').toLowerCase().includes('coordena');
+                                const isOffice = (p.name || '').toLowerCase().includes('escritório') || (p.name || '').toLowerCase().includes('escritorio');
+                                const isJanitor = (p.name || '').toLowerCase().includes('zelador');
+
                                 return (
-                                  <label key={p.id} className="flex items-center justify-between p-2 rounded-lg bg-brand-party/30 border border-brand-party/30 cursor-pointer hover:bg-brand-party/50 transition-all">
+                                  <label 
+                                    key={p.id} 
+                                    className={cn(
+                                      "flex items-center justify-between p-2 rounded-lg border cursor-pointer transition-all",
+                                      isCoord
+                                        ? "bg-cyan-950/40 border-cyan-500/40 hover:bg-cyan-950/60"
+                                        : isOffice
+                                          ? "bg-blue-950/40 border-blue-500/40 hover:bg-blue-950/60"
+                                          : isJanitor
+                                            ? "bg-zinc-950/40 border-zinc-500/40 hover:bg-zinc-900/60"
+                                            : "bg-brand-party/30 border-brand-party/30 hover:bg-brand-party/50"
+                                    )}
+                                  >
                                     <div className="flex items-center gap-2">
                                       <input 
                                         type="checkbox"
@@ -844,14 +860,46 @@ export default function DayManagementModal({
                                             extraordinaryCcspOpen: isCcspActive
                                           });
                                         }}
-                                        className="rounded border-brand-party text-brand-party focus:ring-brand-party w-4 h-4 cursor-pointer"
+                                        className={cn(
+                                          "rounded w-4 h-4 cursor-pointer",
+                                          isCoord 
+                                            ? "border-cyan-400 text-cyan-500 focus:ring-cyan-500" 
+                                            : isOffice 
+                                              ? "border-blue-400 text-blue-500 focus:ring-blue-500" 
+                                              : isJanitor 
+                                                ? "border-zinc-400 text-zinc-400 focus:ring-zinc-400" 
+                                                : "border-brand-party text-brand-party focus:ring-brand-party"
+                                        )}
                                       />
-                                      <span className="text-xs font-bold text-brand-party">
-                                        {(p.name || '').toLowerCase().includes('coordena') ? '🛡️' : (p.name || '').toLowerCase().includes('escritório') || (p.name || '').toLowerCase().includes('escritorio') ? '💼' : (p.name || '').toLowerCase().includes('zelador') ? '🔧' : '🎉'} {p.name || 'Festa'}
-                                      </span>
+                                      <div className="flex items-center gap-1.5">
+                                        {isCoord ? (
+                                          <ShieldCheck size={14} className="text-cyan-400 shrink-0" />
+                                        ) : isOffice ? (
+                                          <Briefcase size={14} className="text-blue-400 shrink-0" />
+                                        ) : isJanitor ? (
+                                          <Wrench size={14} className="text-zinc-400 shrink-0" />
+                                        ) : (
+                                          <span className="text-xs select-none">🎉</span>
+                                        )}
+                                        <span className={cn(
+                                          "text-xs font-bold",
+                                          isCoord ? "text-cyan-300" : isOffice ? "text-blue-300" : isJanitor ? "text-zinc-300" : "text-brand-party"
+                                        )}>
+                                          {p.name || 'Festa'}
+                                        </span>
+                                      </div>
                                     </div>
                                     {p.time && (
-                                      <span className="text-[10px] text-brand-party/80 font-mono bg-brand-party/20 px-2 py-0.5 rounded-full">
+                                      <span className={cn(
+                                        "text-[10px] font-mono px-2 py-0.5 rounded-full border",
+                                        isCoord 
+                                          ? "text-cyan-300/90 bg-cyan-500/20 border-cyan-500/30" 
+                                          : isOffice 
+                                            ? "text-blue-300/90 bg-blue-500/20 border-blue-500/30" 
+                                            : isJanitor 
+                                              ? "text-zinc-300/90 bg-zinc-500/20 border-zinc-500/30" 
+                                              : "text-brand-party/80 bg-brand-party/20 border-brand-party/30"
+                                      )}>
                                         {p.time}
                                       </span>
                                     )}
