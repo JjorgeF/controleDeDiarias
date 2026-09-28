@@ -13,14 +13,22 @@ export function getWorkDayBaseAmount(workDay: WorkDay, employee?: Employee): num
     return workDay.customTotalPay;
   }
 
+  let baseAmount = 0;
   if (workDay.type === 'party') {
-    if (workDay.partyRateAtTime !== undefined) return workDay.partyRateAtTime;
-    return employee?.partyRate || 0;
+    if (workDay.partyRateAtTime !== undefined) baseAmount = workDay.partyRateAtTime;
+    else baseAmount = employee?.partyRate || 0;
+  } else {
+    // Common (CCSP)
+    if (workDay.dailyRateAtTime !== undefined) baseAmount = workDay.dailyRateAtTime;
+    else baseAmount = employee?.dailyRate || 0;
   }
 
-  // Common (CCSP)
-  if (workDay.dailyRateAtTime !== undefined) return workDay.dailyRateAtTime;
-  return employee?.dailyRate || 0;
+  // Add overnight additional pay if active
+  if (workDay.isOvernight && workDay.overnightPay !== undefined && workDay.overnightPay > 0) {
+    baseAmount += workDay.overnightPay;
+  }
+
+  return baseAmount;
 }
 
 /**
