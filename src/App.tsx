@@ -15,7 +15,7 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { onAuthStateChanged, User, signInWithPopup, getRedirectResult } from 'firebase/auth';
-import { auth, db, googleProvider, isFirebaseConfigured, handleFirestoreError, OperationType } from './lib/firebase';
+import { auth, db, googleProvider, isFirebaseConfigured, handleFirestoreError, OperationType, removeUndefinedFields } from './lib/firebase';
 import { Employee, ViewMode, WorkDay, CancellationLog, Promotion, AppNotification, CustomNotificationDoc, DayConfig, PartyDetails } from './types';
 import { recalculateEmployeeTimeline } from './utils/promotionUtils';
 import Header from './components/Header';
@@ -695,7 +695,7 @@ export default function App() {
         items = items.slice(0, 25);
       }
 
-      await setDoc(docRef, { items }, { merge: true });
+      await setDoc(docRef, { items: removeUndefinedFields(items) }, { merge: true });
 
       // Dispatch background push notification to target user(s)
       sendPushToAllTokens(
@@ -943,16 +943,16 @@ export default function App() {
         sanitizedData.workDays = recalculated.workDays;
 
         delete sanitizedData.promotionEffectiveDate;
-        await updateDoc(empRef, sanitizedData);
+        await updateDoc(empRef, removeUndefinedFields(sanitizedData));
       } else {
         // Ao criar novo, o userId pode ser vazio se for um convite por email
         // Se o email for do próprio admin, vincula a ele, senão deixa para o funcionário vincular no primeiro login
         const isSelf = sanitizedData.email === user.email?.trim().toLowerCase();
-        await addDoc(collection(db, 'employees'), {
+        await addDoc(collection(db, 'employees'), removeUndefinedFields({
           ...sanitizedData,
           userId: isSelf ? user.uid : '',
           workDays: []
-        });
+        }));
       }
       return { success: true };
     } catch (error: any) {
@@ -1075,6 +1075,9 @@ export default function App() {
         } else if (day.type === 'party') {
           dayBase = day.partyRateAtTime !== undefined ? day.partyRateAtTime : emp.partyRate;
         }
+        if (day.isOvernight && day.overnightPay !== undefined && day.overnightPay > 0) {
+          dayBase += day.overnightPay;
+        }
         const extraRate = day.extraHourRateAtTime !== undefined ? day.extraHourRateAtTime : emp.extraHourRate;
         const extra = (day.extraHours || 0) * extraRate;
         return acc + dayBase + extra;
@@ -1097,6 +1100,9 @@ export default function App() {
           let typeLabel = workDay.type === 'common' ? 'CCSP' : 'Festa';
           if (workDay.isReducedHours) {
             typeLabel += ` [Reduzido: ${workDay.customHoursText || 'Acordo'} - R$${workDay.customTotalPay || 0}]`;
+          }
+          if (workDay.isOvernight) {
+            typeLabel += ` [Pernoite: ${workDay.overnightHoursText || 'Acordo'} +R$${workDay.overnightPay || 0}]`;
           }
           if (workDay.extraHours) typeLabel += ` (+${workDay.extraHours}h)`;
           row[dayLabel] = typeLabel;
@@ -1129,7 +1135,8 @@ export default function App() {
     if (!user || !db) return;
     try {
       const empRef = doc(db, 'employees', employeeId);
-      await updateDoc(empRef, { workDays: days });
+      const cleanedDays = removeUndefinedFields(days);
+      await updateDoc(empRef, { workDays: cleanedDays });
     } catch (error) {
       console.error("Error updating work days:", error);
       handleFirestoreError(error, OperationType.UPDATE, `employees/${employeeId}`);
@@ -1223,7 +1230,7 @@ export default function App() {
         updatedAt: new Date().toISOString()
       };
 
-      await setDoc(partyDocRef, partyDataToSave, { merge: true });
+      await setDoc(partyDocRef, removeUndefinedFields(partyDataToSave), { merge: true });
 
       // Sincroniza com as configurações do dia (dayConfigs)
       const currentCfg = dayConfigs[party.date] || { isCommon: false, isParty: false };
@@ -1351,7 +1358,7 @@ export default function App() {
         );
 
         await updateDoc(empRef, { 
-          workDays: updatedWorkDays,
+          workDays: removeUndefinedFields(updatedWorkDays),
           availabilities: updatedAvailabilities
         });
       }
@@ -1376,7 +1383,7 @@ export default function App() {
             }
             return d;
           });
-          await updateDoc(empRef, { workDays: updatedWorkDays });
+          await updateDoc(empRef, { workDays: removeUndefinedFields(updatedWorkDays) });
         }
       }
     } catch (error) {
@@ -1399,7 +1406,7 @@ export default function App() {
             }
             return d;
           });
-          await updateDoc(empRef, { workDays: updatedWorkDays });
+          await updateDoc(empRef, { workDays: removeUndefinedFields(updatedWorkDays) });
         }
       }
     } catch (error) {
@@ -1444,7 +1451,7 @@ export default function App() {
         return wd;
       });
 
-      await updateDoc(empRef, { workDays: updatedWorkDays });
+      await updateDoc(empRef, { workDays: removeUndefinedFields(updatedWorkDays) });
 
       // Atualiza estado do React
       setEmployees(prev => prev.map(e => e.id === employeeId ? { ...e, workDays: updatedWorkDays } : e));
