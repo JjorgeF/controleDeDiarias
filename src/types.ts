@@ -78,6 +78,9 @@ export interface WorkDay {
   isReducedHours?: boolean; // When employee works reduced / custom agreed hours
   customHoursText?: string; // e.g. "01h30m" or "1h30" or "4h"
   customTotalPay?: number; // Total agreed payment e.g. 45.00
+  isOvernight?: boolean; // When employee works an overnight shift
+  overnightHoursText?: string; // e.g. "22h às 08h"
+  overnightPay?: number; // Additional overnight pay added to standard rate
 }
 
 export interface Promotion {
