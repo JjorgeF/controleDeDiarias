@@ -126,12 +126,18 @@ export default function ManageDaysModal({ isOpen, onClose, employee, onUpdateDay
     if (existingDayIndex !== -1) {
       const newDays = [...tempDays];
       const curr = newDays[existingDayIndex];
-      newDays[existingDayIndex] = { 
+      const updated: WorkDay = { 
         ...curr, 
-        isReducedHours: enabled,
-        customHoursText: enabled ? (curr.customHoursText || '01h30m') : undefined,
-        customTotalPay: enabled ? (curr.customTotalPay !== undefined ? curr.customTotalPay : 45.0) : undefined
+        isReducedHours: enabled
       };
+      if (enabled) {
+        updated.customHoursText = curr.customHoursText || '01h30m';
+        updated.customTotalPay = curr.customTotalPay !== undefined ? curr.customTotalPay : 45.0;
+      } else {
+        delete updated.customHoursText;
+        delete updated.customTotalPay;
+      }
+      newDays[existingDayIndex] = updated;
       setTempDays(newDays);
     }
   };

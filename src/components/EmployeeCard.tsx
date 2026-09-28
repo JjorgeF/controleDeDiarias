@@ -120,6 +120,9 @@ const EmployeeCard: React.FC<EmployeeCardProps> = ({
     } else if (day.type === 'party') {
       dayBase = day.partyRateAtTime !== undefined ? day.partyRateAtTime : employee.partyRate;
     }
+    if (day.isOvernight && day.overnightPay !== undefined && day.overnightPay > 0) {
+      dayBase += day.overnightPay;
+    }
     
     const extraRate = day.extraHourRateAtTime !== undefined ? day.extraHourRateAtTime : employee.extraHourRate;
     const extra = (day.extraHours || 0) * extraRate;

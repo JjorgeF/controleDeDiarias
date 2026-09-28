@@ -807,6 +807,11 @@ export default function MonthlyScheduleView({
                                             <p className="text-[10px] text-gray-400 truncate">
                                               {employee.level}
                                             </p>
+                                            {workDay.isOvernight && (
+                                              <span className="text-[9px] font-black text-indigo-300 bg-indigo-500/20 border border-indigo-500/30 px-1 py-0.2 rounded shrink-0">
+                                                Pernoite (+R${workDay.overnightPay || 0})
+                                              </span>
+                                            )}
                                             {workDay.isReducedHours && (
                                               <span className="text-[9px] font-black text-amber-300 bg-amber-500/20 border border-amber-500/30 px-1 py-0.2 rounded shrink-0">
                                                 ⏱ {workDay.customHoursText || 'Reduzido'} (R${workDay.customTotalPay || 0})

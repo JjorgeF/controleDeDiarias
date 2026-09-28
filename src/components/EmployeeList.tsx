@@ -256,6 +256,9 @@ export default function EmployeeList({
                     } else if (day.type === 'party') {
                       dayBase = day.partyRateAtTime !== undefined ? day.partyRateAtTime : emp.partyRate;
                     }
+                    if (day.isOvernight && day.overnightPay !== undefined && day.overnightPay > 0) {
+                      dayBase += day.overnightPay;
+                    }
                     
                     const extraRate = day.extraHourRateAtTime !== undefined ? day.extraHourRateAtTime : emp.extraHourRate;
                     const extra = (day.extraHours || 0) * extraRate;

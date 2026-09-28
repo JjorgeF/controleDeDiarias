@@ -205,9 +205,12 @@ export default function PaymentsView({
       const ccspDays = monthDays.filter(wd => wd.type === 'common');
       if (ccspDays.length > 0) {
         const totalAmount = ccspDays.reduce((acc, d) => {
-          const rate = d.isReducedHours && d.customTotalPay !== undefined && d.customTotalPay >= 0
+          let rate = d.isReducedHours && d.customTotalPay !== undefined && d.customTotalPay >= 0
             ? d.customTotalPay
             : (d.dailyRateAtTime !== undefined ? d.dailyRateAtTime : emp.dailyRate);
+          if (d.isOvernight && d.overnightPay !== undefined && d.overnightPay > 0) {
+            rate += d.overnightPay;
+          }
           const extraRate = d.extraHourRateAtTime !== undefined ? d.extraHourRateAtTime : emp.extraHourRate;
           const extra = (d.extraHours || 0) * extraRate;
           return acc + rate + extra;
@@ -237,9 +240,12 @@ export default function PaymentsView({
           const dueDateStr = format(forecastDate, 'yyyy-MM-dd');
           const isPaid = (emp.paidDates || []).includes(dueDateStr) || (emp.paidDates || []).includes(pd.date) || !!pd.isPaid;
 
-          const rate = pd.isReducedHours && pd.customTotalPay !== undefined && pd.customTotalPay >= 0
+          let rate = pd.isReducedHours && pd.customTotalPay !== undefined && pd.customTotalPay >= 0
             ? pd.customTotalPay
             : (pd.partyRateAtTime !== undefined ? pd.partyRateAtTime : emp.partyRate);
+          if (pd.isOvernight && pd.overnightPay !== undefined && pd.overnightPay > 0) {
+            rate += pd.overnightPay;
+          }
           const extraRate = pd.extraHourRateAtTime !== undefined ? pd.extraHourRateAtTime : emp.extraHourRate;
           const extra = (pd.extraHours || 0) * extraRate;
           const amount = rate + extra;

@@ -155,12 +155,16 @@ export function KpisView({ employees, monthConfigs, promotions = [], currentMont
           levelCounts[level] = (levelCounts[level] || 0) + 1;
         }
 
-        const dailyRate = wd.isReducedHours && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
+        let dailyRate = wd.isReducedHours && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
           ? wd.customTotalPay
           : (wd.dailyRateAtTime !== undefined ? wd.dailyRateAtTime : (effectiveEmp.dailyRate || 0));
-        const partyRate = wd.isReducedHours && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
+        let partyRate = wd.isReducedHours && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
           ? wd.customTotalPay
           : (wd.partyRateAtTime !== undefined ? wd.partyRateAtTime : (effectiveEmp.partyRate || 0));
+        if (wd.isOvernight && wd.overnightPay !== undefined && wd.overnightPay > 0) {
+          dailyRate += wd.overnightPay;
+          partyRate += wd.overnightPay;
+        }
         const extraRate = wd.extraHourRateAtTime !== undefined ? wd.extraHourRateAtTime : (effectiveEmp.extraHourRate || 0);
 
         let dayCost = 0;
@@ -257,12 +261,16 @@ export function KpisView({ employees, monthConfigs, promotions = [], currentMont
       (effectiveEmp.workDays || []).forEach(wd => {
         if (!wd.date.startsWith(prevKey)) return;
 
-        const dailyRate = wd.isReducedHours && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
+        let dailyRate = wd.isReducedHours && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
           ? wd.customTotalPay
           : (wd.dailyRateAtTime !== undefined ? wd.dailyRateAtTime : (effectiveEmp.dailyRate || 0));
-        const partyRate = wd.isReducedHours && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
+        let partyRate = wd.isReducedHours && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
           ? wd.customTotalPay
           : (wd.partyRateAtTime !== undefined ? wd.partyRateAtTime : (effectiveEmp.partyRate || 0));
+        if (wd.isOvernight && wd.overnightPay !== undefined && wd.overnightPay > 0) {
+          dailyRate += wd.overnightPay;
+          partyRate += wd.overnightPay;
+        }
         const extraRate = wd.extraHourRateAtTime !== undefined ? wd.extraHourRateAtTime : (effectiveEmp.extraHourRate || 0);
 
         if (wd.type === 'common') {
@@ -354,12 +362,16 @@ export function KpisView({ employees, monthConfigs, promotions = [], currentMont
         (effectiveEmp.workDays || []).forEach(wd => {
           if (!wd.date.startsWith(mKey)) return;
 
-          const dailyRate = wd.isReducedHours && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
+          let dailyRate = wd.isReducedHours && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
             ? wd.customTotalPay
             : (wd.dailyRateAtTime !== undefined ? wd.dailyRateAtTime : (effectiveEmp.dailyRate || 0));
-          const partyRate = wd.isReducedHours && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
+          let partyRate = wd.isReducedHours && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
             ? wd.customTotalPay
             : (wd.partyRateAtTime !== undefined ? wd.partyRateAtTime : (effectiveEmp.partyRate || 0));
+          if (wd.isOvernight && wd.overnightPay !== undefined && wd.overnightPay > 0) {
+            dailyRate += wd.overnightPay;
+            partyRate += wd.overnightPay;
+          }
           const extraRate = wd.extraHourRateAtTime !== undefined ? wd.extraHourRateAtTime : (effectiveEmp.extraHourRate || 0);
 
           if (wd.type === 'common') ccspCost += dailyRate;
