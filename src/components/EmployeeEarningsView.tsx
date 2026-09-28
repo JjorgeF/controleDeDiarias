@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { Employee } from '../types';
 import PaymentTimeline from './PaymentTimeline';
-import { formatCurrency } from '../lib/utils';
+import { formatCurrency, getPartyPaymentDueDate } from '../lib/utils';
 import { AnimatedCurrency } from './AnimatedCurrency';
 import { format, isSameMonth, parseISO, addMonths, subMonths, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -72,11 +72,11 @@ export default function EmployeeEarningsView({
     return acc + rate + extra;
   }, 0);
 
-  // Party Payment status & amounts
+  // Party Payment status & amounts (Previsão: sempre na segunda-feira seguinte ao evento)
   const partyItemsComputed = monthPartyDays.map(pd => {
     try {
-      const partyDateObj = parseISO(pd.date);
-      const forecastDate = addDays(partyDateObj, 7);
+      const partyDateObj = parseISO(pd.date.includes('T') ? pd.date : `${pd.date}T12:00:00`);
+      const forecastDate = getPartyPaymentDueDate(partyDateObj);
       const dueDateStr = format(forecastDate, 'yyyy-MM-dd');
       const isPaid = (employee.paidDates || []).includes(dueDateStr) || (employee.paidDates || []).includes(pd.date) || !!pd.isPaid;
 
