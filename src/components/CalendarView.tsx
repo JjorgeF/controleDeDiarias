@@ -52,12 +52,14 @@ import {
   ShieldCheck,
   RotateCcw,
   Briefcase,
-  Wrench
+  Wrench,
+  Moon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Employee, WorkDay, DayType, CancellationLog, DayConfig, PartyConfig } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
 import DayManagementModal from './DayManagementModal';
+import DayWorkModeEditor from './DayWorkModeEditor';
 import ShiftSelector from './ShiftSelector';
 
 interface CalendarViewProps {
@@ -743,21 +745,64 @@ export default function CalendarView({
     onUpdateDays(employee.id, newDays);
   };
 
-  const updateReducedHoursConfig = (employee: Employee, isReduced: boolean, customHours?: string, customPay?: number) => {
+  const setDayWorkMode = (
+    employee: Employee, 
+    mode: 'normal' | 'reduced' | 'overnight',
+    options?: {
+      customHours?: string;
+      customPay?: number;
+      overnightHours?: string;
+      overnightPay?: number;
+    }
+  ) => {
     if (!selectedDay) return;
     const dateStr = format(selectedDay, 'yyyy-MM-dd');
     const newDays = employee.workDays.map(d => {
       if (d.date === dateStr) {
-        return {
-          ...d,
-          isReducedHours: isReduced,
-          customHoursText: isReduced ? (customHours !== undefined ? customHours : (d.customHoursText || '01h30m')) : undefined,
-          customTotalPay: isReduced ? (customPay !== undefined ? customPay : (d.customTotalPay !== undefined ? d.customTotalPay : 45.0)) : undefined
-        };
+        const updated: WorkDay = { ...d };
+        if (mode === 'normal') {
+          updated.isReducedHours = false;
+          updated.isOvernight = false;
+          delete updated.customHoursText;
+          delete updated.customTotalPay;
+          delete updated.overnightHoursText;
+          delete updated.overnightPay;
+        } else if (mode === 'reduced') {
+          updated.isReducedHours = true;
+          updated.isOvernight = false;
+          updated.customHoursText = options?.customHours !== undefined ? options.customHours : (d.customHoursText || '01h30m');
+          updated.customTotalPay = options?.customPay !== undefined ? options.customPay : (d.customTotalPay !== undefined ? d.customTotalPay : 45.0);
+          delete updated.overnightHoursText;
+          delete updated.overnightPay;
+        } else if (mode === 'overnight') {
+          updated.isOvernight = true;
+          updated.isReducedHours = false;
+          updated.overnightHoursText = options?.overnightHours !== undefined ? options.overnightHours : (d.overnightHoursText || '22h às 08h');
+          updated.overnightPay = options?.overnightPay !== undefined ? options.overnightPay : (d.overnightPay !== undefined ? d.overnightPay : 150.0);
+          delete updated.customHoursText;
+          delete updated.customTotalPay;
+        }
+        return updated;
       }
       return d;
     });
     onUpdateDays(employee.id, newDays);
+  };
+
+  const updateReducedHoursConfig = (employee: Employee, isReduced: boolean, customHours?: string, customPay?: number) => {
+    if (isReduced) {
+      setDayWorkMode(employee, 'reduced', { customHours, customPay });
+    } else {
+      setDayWorkMode(employee, 'normal');
+    }
+  };
+
+  const updateOvernightConfig = (employee: Employee, isOvernight: boolean, overnightHours?: string, overnightPay?: number) => {
+    if (isOvernight) {
+      setDayWorkMode(employee, 'overnight', { overnightHours, overnightPay });
+    } else {
+      setDayWorkMode(employee, 'normal');
+    }
   };
 
   const handleCopyTeam = () => {
@@ -1101,6 +1146,9 @@ export default function CalendarView({
         dayBase = d.partyRateAtTime !== undefined ? d.partyRateAtTime : myEmployee.partyRate;
       } else {
         dayBase = d.dailyRateAtTime !== undefined ? d.dailyRateAtTime : myEmployee.dailyRate;
+      }
+      if (d.isOvernight && d.overnightPay !== undefined && d.overnightPay > 0) {
+        dayBase += d.overnightPay;
       }
       const extraRate = d.extraHourRateAtTime !== undefined ? d.extraHourRateAtTime : myEmployee.extraHourRate;
       const extra = (d.extraHours || 0) * extraRate;
@@ -1994,6 +2042,9 @@ export default function CalendarView({
                         } else {
                           dayBase = d.dailyRateAtTime !== undefined ? d.dailyRateAtTime : myEmployee.dailyRate;
                         }
+                        if (d.isOvernight && d.overnightPay !== undefined && d.overnightPay > 0) {
+                          dayBase += d.overnightPay;
+                        }
                         const extraRate = d.extraHourRateAtTime !== undefined ? d.extraHourRateAtTime : myEmployee.extraHourRate;
                         const extra = (d.extraHours || 0) * extraRate;
                         const dayTotal = dayBase + extra;
@@ -2019,11 +2070,13 @@ export default function CalendarView({
                                   ? "bg-zinc-500/5 border-zinc-500/20 hover:border-zinc-500/45 hover:bg-zinc-500/10"
                                   : d.isReducedHours
                                     ? "bg-amber-500/10 border-amber-500/30 hover:border-amber-500/50 hover:bg-amber-500/15"
-                                    : isCoordination
-                                      ? "bg-cyan-500/5 border-cyan-500/20 hover:border-cyan-500/45 hover:bg-cyan-500/10"
-                                      : isParty 
-                                        ? "bg-brand-party/5 border-brand-party/20 hover:border-brand-party/45 hover:bg-brand-party/10" 
-                                        : "bg-brand-primary/5 border-brand-primary/20 hover:border-brand-primary/45 hover:bg-brand-primary/10"
+                                    : d.isOvernight
+                                      ? "bg-indigo-500/10 border-indigo-500/30 hover:border-indigo-500/50 hover:bg-indigo-500/15"
+                                      : isCoordination
+                                        ? "bg-cyan-500/5 border-cyan-500/20 hover:border-cyan-500/45 hover:bg-cyan-500/10"
+                                        : isParty 
+                                          ? "bg-brand-party/5 border-brand-party/20 hover:border-brand-party/45 hover:bg-brand-party/10" 
+                                          : "bg-brand-primary/5 border-brand-primary/20 hover:border-brand-primary/45 hover:bg-brand-primary/10"
                             )}
                           >
                             <div className="flex items-center gap-3 animate-in fade-in duration-200 min-w-0">
@@ -2036,11 +2089,13 @@ export default function CalendarView({
                                     ? "bg-zinc-500 text-white group-hover:bg-zinc-400"
                                     : d.isReducedHours
                                       ? "bg-amber-500 text-slate-950 group-hover:bg-amber-400"
-                                      : isCoordination
-                                        ? "bg-cyan-500 text-slate-950 group-hover:bg-cyan-400"
-                                        : isParty 
-                                          ? "bg-brand-party text-white group-hover:bg-brand-party" 
-                                          : "bg-brand-primary text-slate-900 group-hover:bg-brand-primary-hover"
+                                      : d.isOvernight
+                                        ? "bg-indigo-500 text-white group-hover:bg-indigo-400"
+                                        : isCoordination
+                                          ? "bg-cyan-500 text-slate-950 group-hover:bg-cyan-400"
+                                          : isParty 
+                                            ? "bg-brand-party text-white group-hover:bg-brand-party" 
+                                            : "bg-brand-primary text-slate-900 group-hover:bg-brand-primary-hover"
                               )}>
                                 <span className="text-sm leading-none">{format(dateObj, 'dd')}</span>
                                 <span className="text-[8px] uppercase tracking-wider leading-none mt-0.5 font-bold">
@@ -2055,7 +2110,7 @@ export default function CalendarView({
                                 </p>
 
                                 <div className="flex flex-wrap items-center gap-1.5">
-                                  {/* Horário Reduzido ou Onde é a escala (Festa, Coordenação ou CCSP) */}
+                                  {/* Horário Reduzido ou Pernoite ou Onde é a escala (Festa, Coordenação ou CCSP) */}
                                   {isOfficeMode ? (
                                     <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-blue-500/10 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded border border-blue-500/20">
                                       <Briefcase size={10} className="shrink-0 text-blue-400" /> Escritório {d.customHoursText ? `(${d.customHoursText.replace(' (Escritório)', '')})` : ''}
@@ -2063,6 +2118,10 @@ export default function CalendarView({
                                   ) : isJanitorMode ? (
                                     <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-zinc-500/10 dark:bg-zinc-500/20 text-zinc-700 dark:text-zinc-300 px-2 py-0.5 rounded border border-zinc-500/20">
                                       <Wrench size={10} className="shrink-0 text-zinc-400" /> Zeladoria
+                                    </span>
+                                  ) : d.isOvernight ? (
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/40 shadow-sm">
+                                      <Moon size={10} className="text-indigo-300" /> Pernoite ({d.overnightHoursText || '22h às 08h'}) +{formatCurrency(d.overnightPay || 0)}
                                     </span>
                                   ) : d.isReducedHours ? (
                                     <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/40 shadow-sm">
@@ -2104,13 +2163,17 @@ export default function CalendarView({
                                   "inline-block font-black text-[11px] md:text-xs px-2.5 py-1 rounded-lg shadow-sm border",
                                   d.isReducedHours
                                     ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
-                                    : isParty
-                                      ? "bg-brand-party/10 dark:bg-brand-party/20 border-brand-party/30 text-brand-party dark:text-brand-party"
-                                      : "bg-brand-primary/10 border-brand-primary/20 text-amber-700 dark:text-brand-primary"
+                                    : d.isOvernight
+                                      ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-300"
+                                      : isParty
+                                        ? "bg-brand-party/10 dark:bg-brand-party/20 border-brand-party/30 text-brand-party dark:text-brand-party"
+                                        : "bg-brand-primary/10 border-brand-primary/20 text-amber-700 dark:text-brand-primary"
                                 )}>
                                   {d.isReducedHours 
                                     ? `Reduzido: ${d.customHoursText || 'Acordado'}` 
-                                    : isParty ? (partyTime || "A definir") : (d.shift || "CCSP Padrão")}
+                                    : d.isOvernight
+                                      ? `Pernoite: ${d.overnightHoursText || '22h às 08h'}`
+                                      : isParty ? (partyTime || "A definir") : (d.shift || "CCSP Padrão")}
                                 </span>
                               </div>
                               <span className="text-[9px] font-bold text-red-600 dark:text-red-400 group-hover:opacity-100 opacity-0 transition-opacity uppercase tracking-wider">
@@ -2340,11 +2403,33 @@ export default function CalendarView({
                                       );
                                     });
                                   })()}
-                                  {!!dayData?.extraHours && (
+                                  {dayData?.isOvernight ? (
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/40 shadow-sm">
+                                        <Moon size={10} className="text-indigo-300" /> Pernoite ({dayData.overnightHoursText || '22h às 08h'}) +{formatCurrency(dayData.overnightPay || 0)}
+                                      </span>
+                                      {!!dayData.extraHours && (
+                                        <span className="text-[9px] font-black text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                          +{dayData.extraHours}h extra
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : dayData?.isReducedHours ? (
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/40 shadow-sm">
+                                        <Clock size={10} className="text-amber-300" /> Horário Reduzido ({dayData.customHoursText || 'Acordo'}): {formatCurrency(dayData.customTotalPay || 0)}
+                                      </span>
+                                      {!!dayData.extraHours && (
+                                        <span className="text-[9px] font-black text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                          +{dayData.extraHours}h extra
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : !!dayData?.extraHours ? (
                                     <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
                                       +{dayData.extraHours}h extra ({formatCurrency(dayData.extraHours * (dayData.extraHourRateAtTime !== undefined ? dayData.extraHourRateAtTime : emp.extraHourRate))})
                                     </span>
-                                  )}
+                                  ) : null}
                                 </div>
 
                                 {hasCommon && (
@@ -2361,16 +2446,22 @@ export default function CalendarView({
                             <div className="flex items-center gap-1 shrink-0">
                               {(hasCommon || hasParty) && (
                                 <motion.button 
-                                  whileHover={{ scale: 1.1 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  onClick={() => setExpandedEmployeeId(isExpanded ? null : emp.id)}
-                                  className={cn(
-                                    "p-1.5 rounded-lg transition-colors",
-                                    isExpanded ? "text-brand-primary bg-brand-primary/20" : "text-brand-muted hover:text-brand-primary hover:bg-brand-primary/10"
-                                  )}
-                                  title="Horas Extras"
-                                >
-                                  <Clock size={16} />
+                                   whileHover={{ scale: 1.1 }}
+                                   whileTap={{ scale: 0.9 }}
+                                   onClick={() => setExpandedEmployeeId(isExpanded ? null : emp.id)}
+                                   className={cn(
+                                     "p-1.5 rounded-lg transition-colors",
+                                     isExpanded 
+                                       ? "text-brand-primary bg-brand-primary/20" 
+                                       : dayData?.isOvernight
+                                         ? "text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20"
+                                         : dayData?.isReducedHours
+                                           ? "text-amber-400 bg-amber-500/10 hover:bg-amber-500/20"
+                                           : "text-brand-muted hover:text-brand-primary hover:bg-brand-primary/10"
+                                   )}
+                                   title={dayData?.isOvernight ? "Configurar Pernoite" : dayData?.isReducedHours ? "Configurar Horário Reduzido" : "Horas Extras e Configurações"}
+                                 >
+                                   {dayData?.isOvernight ? <Moon size={16} /> : <Clock size={16} />}
                                 </motion.button>
                               )}
                               <motion.button 
@@ -2386,90 +2477,14 @@ export default function CalendarView({
                           </div>
                           
                           {isExpanded && (hasCommon || hasParty) && (
-                            <div className="pt-2.5 mt-2 border-t border-brand-primary/10 animate-in fade-in slide-in-from-top-2 space-y-3">
-                              {/* Toggle Horário Reduzido (Acordo com a Administração) */}
-                              <div className="flex items-center justify-between bg-amber-500/10 p-2 rounded-lg border border-amber-500/30">
-                                <label className="flex items-center gap-1.5 text-xs font-bold text-amber-400 cursor-pointer">
-                                  <Clock size={13} className="text-amber-400" />
-                                  Horário Reduzido (Acordo de Horas e Valor)
-                                </label>
-                                <input 
-                                  type="checkbox"
-                                  checked={!!dayData?.isReducedHours}
-                                  onChange={(e) => updateReducedHoursConfig(emp, e.target.checked)}
-                                  className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 accent-amber-500 cursor-pointer"
-                                />
-                              </div>
-
-                              {dayData?.isReducedHours ? (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-brand-bg/60 p-3 rounded-lg border border-amber-500/20">
-                                  <div>
-                                    <label className="block text-[10px] font-bold text-gray-300 uppercase mb-1">
-                                      Quantas Horas (Ex: 01h30m)
-                                    </label>
-                                    <input 
-                                      type="text"
-                                      value={dayData?.customHoursText || ''}
-                                      onChange={(e) => updateReducedHoursConfig(emp, true, e.target.value, dayData?.customTotalPay)}
-                                      placeholder="01h30m"
-                                      className="w-full bg-brand-card border border-amber-500/40 rounded-md py-1 px-2.5 text-xs font-medium text-white focus:outline-none focus:border-amber-400"
-                                    />
-                                  </div>
-
-                                  <div>
-                                    <label className="block text-[10px] font-bold text-gray-300 uppercase mb-1">
-                                      Valor Total de Horas (R$)
-                                    </label>
-                                    <div className="relative">
-                                      <span className="absolute left-2.5 top-1 text-xs text-gray-400 font-bold">R$</span>
-                                      <input 
-                                        type="number"
-                                        min="0"
-                                        step="1"
-                                        value={dayData?.customTotalPay !== undefined ? dayData.customTotalPay : ''}
-                                        onChange={(e) => updateReducedHoursConfig(emp, true, dayData?.customHoursText, Number(e.target.value))}
-                                        placeholder="45.00"
-                                        className="w-full bg-brand-card border border-amber-500/40 rounded-md py-1 pl-8 pr-2.5 text-xs font-bold text-emerald-400 focus:outline-none focus:border-amber-400"
-                                      />
-                                    </div>
-                                  </div>
-
-                                  <div className="col-span-full text-[10px] text-amber-300 font-medium bg-amber-500/10 p-1.5 rounded border border-amber-500/20">
-                                    Valor total acordado para este dia: <strong>{formatCurrency(dayData?.customTotalPay || 0)}</strong> ({dayData?.customHoursText || 'Horário Reduzido'}).
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="flex flex-wrap items-center gap-3">
-                                  <label className="text-[10px] font-black text-brand-muted uppercase">Horas Extras:</label>
-                                  <input 
-                                    type="number"
-                                    min="0"
-                                    step="0.5"
-                                    autoFocus
-                                    value={dayData?.extraHours || ''}
-                                    onChange={(e) => updateExtraHours(emp, Number(e.target.value))}
-                                    placeholder="0"
-                                    className="w-20 bg-brand-bg border border-brand-primary/20 rounded-lg py-1 px-2.5 text-xs focus:outline-none focus:border-brand-primary text-brand-text"
-                                  />
-                                  {(() => {
-                                    const extraH = dayData?.extraHours || 0;
-                                    const rate = dayData?.extraHourRateAtTime !== undefined ? dayData.extraHourRateAtTime : emp.extraHourRate;
-                                    if (extraH > 0) {
-                                      return (
-                                        <span className="text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                                          = {formatCurrency(extraH * rate)} ({formatCurrency(rate)}/h)
-                                        </span>
-                                      );
-                                    }
-                                    return (
-                                      <span className="text-[10px] text-brand-muted italic">
-                                        (Taxa: {formatCurrency(rate)}/h)
-                                      </span>
-                                    );
-                                  })()}
-                                </div>
-                              )}
-                            </div>
+                            <DayWorkModeEditor
+                              employee={emp}
+                              selectedDayStr={selectedDayStr}
+                              onUpdateDays={onUpdateDays}
+                              onClose={() => setExpandedEmployeeId(null)}
+                              isAdmin={isAdmin}
+                              isReadOnly={isReadOnly}
+                            />
                           )}
                         </motion.div>
                       );
@@ -3334,6 +3349,8 @@ export default function CalendarView({
           onPasteTeam={handlePasteTeam}
           dayConfig={selectedDay ? getDayConfig(format(selectedDay, 'yyyy-MM-dd')) : { isCommon: false, isParty: false, partyTime: '' }}
           onUpdateDayConfig={onUpdateDayConfig || (() => {})}
+          isAdmin={isAdmin}
+          isReadOnly={isReadOnly}
         />
       )}
 
