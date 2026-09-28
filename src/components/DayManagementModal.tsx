@@ -1,11 +1,12 @@
 import React from 'react';
-import { X, Search, UserPlus, UserMinus, Clock, Copy, ClipboardPaste, Users, Plus, Trash2, PartyPopper, ChevronDown, ChevronUp, Zap, Lock, ShieldCheck, Target, Check, Wrench, Briefcase } from 'lucide-react';
+import { X, Search, UserPlus, UserMinus, Clock, Copy, ClipboardPaste, Users, Plus, Trash2, PartyPopper, ChevronDown, ChevronUp, Zap, Lock, ShieldCheck, Target, Check, Wrench, Briefcase, Moon } from 'lucide-react';
 import { Employee, WorkDay, DayType, DayConfig, PartyConfig } from '../types';
 import { format, isSunday, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn, formatCurrency } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import ShiftSelector from './ShiftSelector';
+import DayWorkModeEditor from './DayWorkModeEditor';
 
 interface DayManagementModalProps {
   isOpen: boolean;
@@ -18,6 +19,8 @@ interface DayManagementModalProps {
   onPasteTeam: () => void;
   dayConfig: DayConfig;
   onUpdateDayConfig: (dateStr: string, config: DayConfig) => void;
+  isAdmin?: boolean;
+  isReadOnly?: boolean;
 }
 
 export default function DayManagementModal({
@@ -30,7 +33,9 @@ export default function DayManagementModal({
   onCopyTeam,
   onPasteTeam,
   dayConfig,
-  onUpdateDayConfig
+  onUpdateDayConfig,
+  isAdmin = true,
+  isReadOnly = false
 }: DayManagementModalProps) {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
@@ -301,19 +306,62 @@ export default function DayManagementModal({
     onUpdateDays(employee.id, newDays);
   };
 
-  const updateReducedHoursConfig = (employee: Employee, isReduced: boolean, customHours?: string, customPay?: number) => {
+  const setDayWorkMode = (
+    employee: Employee, 
+    mode: 'normal' | 'reduced' | 'overnight',
+    options?: {
+      customHours?: string;
+      customPay?: number;
+      overnightHours?: string;
+      overnightPay?: number;
+    }
+  ) => {
     const newDays = employee.workDays.map(d => {
       if (d.date === selectedDayStr && !d.isCancelled) {
-        return {
-          ...d,
-          isReducedHours: isReduced,
-          customHoursText: isReduced ? (customHours !== undefined ? customHours : (d.customHoursText || '01h30m')) : undefined,
-          customTotalPay: isReduced ? (customPay !== undefined ? customPay : (d.customTotalPay !== undefined ? d.customTotalPay : 45.0)) : undefined
-        };
+        const updated: WorkDay = { ...d };
+        if (mode === 'normal') {
+          updated.isReducedHours = false;
+          updated.isOvernight = false;
+          delete updated.customHoursText;
+          delete updated.customTotalPay;
+          delete updated.overnightHoursText;
+          delete updated.overnightPay;
+        } else if (mode === 'reduced') {
+          updated.isReducedHours = true;
+          updated.isOvernight = false;
+          updated.customHoursText = options?.customHours !== undefined ? options.customHours : (d.customHoursText || '01h30m');
+          updated.customTotalPay = options?.customPay !== undefined ? options.customPay : (d.customTotalPay !== undefined ? d.customTotalPay : 45.0);
+          delete updated.overnightHoursText;
+          delete updated.overnightPay;
+        } else if (mode === 'overnight') {
+          updated.isOvernight = true;
+          updated.isReducedHours = false;
+          updated.overnightHoursText = options?.overnightHours !== undefined ? options.overnightHours : (d.overnightHoursText || '22h às 08h');
+          updated.overnightPay = options?.overnightPay !== undefined ? options.overnightPay : (d.overnightPay !== undefined ? d.overnightPay : 150.0);
+          delete updated.customHoursText;
+          delete updated.customTotalPay;
+        }
+        return updated;
       }
       return d;
     });
     onUpdateDays(employee.id, newDays);
+  };
+
+  const updateReducedHoursConfig = (employee: Employee, isReduced: boolean, customHours?: string, customPay?: number) => {
+    if (isReduced) {
+      setDayWorkMode(employee, 'reduced', { customHours, customPay });
+    } else {
+      setDayWorkMode(employee, 'normal');
+    }
+  };
+
+  const updateOvernightConfig = (employee: Employee, isOvernight: boolean, overnightHours?: string, overnightPay?: number) => {
+    if (isOvernight) {
+      setDayWorkMode(employee, 'overnight', { overnightHours, overnightPay });
+    } else {
+      setDayWorkMode(employee, 'normal');
+    }
   };
 
   return (
@@ -1092,13 +1140,35 @@ export default function DayManagementModal({
                                   />
                                 </div>
                               )}
-                              {!!workDay?.extraHours && (
+                              {workDay?.isOvernight ? (
+                                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/40 shadow-sm">
+                                    <Moon size={10} className="text-indigo-300" /> Pernoite ({workDay.overnightHoursText || '22h às 08h'}) +{formatCurrency(workDay.overnightPay || 0)}
+                                  </span>
+                                  {!!workDay.extraHours && (
+                                    <span className="text-[9px] font-black text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                      +{workDay.extraHours}h extra
+                                    </span>
+                                  )}
+                                </div>
+                              ) : workDay?.isReducedHours ? (
+                                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/40 shadow-sm">
+                                    <Clock size={10} className="text-amber-300" /> Horário Reduzido ({workDay.customHoursText || 'Acordo'}): {formatCurrency(workDay.customTotalPay || 0)}
+                                  </span>
+                                  {!!workDay.extraHours && (
+                                    <span className="text-[9px] font-black text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                      +{workDay.extraHours}h extra
+                                    </span>
+                                  )}
+                                </div>
+                              ) : !!workDay?.extraHours ? (
                                 <div className="mt-1.5">
                                   <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
                                     +{workDay.extraHours}h extra ({formatCurrency(workDay.extraHours * (workDay.extraHourRateAtTime !== undefined ? workDay.extraHourRateAtTime : emp.extraHourRate))})
                                   </span>
                                 </div>
-                              )}
+                              ) : null}
                             </div>
                           </div>
 
@@ -1108,11 +1178,17 @@ export default function DayManagementModal({
                                 onClick={() => setExpandedEmployeeId(isExpanded ? null : emp.id)}
                                 className={cn(
                                   "p-1.5 rounded-lg transition-colors",
-                                  isExpanded ? "text-brand-primary bg-brand-primary/20" : "text-gray-500 hover:text-brand-primary hover:bg-brand-primary/10"
+                                  isExpanded 
+                                    ? "text-brand-primary bg-brand-primary/20" 
+                                    : workDay?.isOvernight
+                                      ? "text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20"
+                                      : workDay?.isReducedHours
+                                        ? "text-amber-400 bg-amber-500/10 hover:bg-amber-500/20"
+                                        : "text-gray-500 hover:text-brand-primary hover:bg-brand-primary/10"
                                 )}
-                                title="Horas Extras"
+                                title={workDay?.isOvernight ? "Configurar Pernoite" : workDay?.isReducedHours ? "Configurar Horário Reduzido" : "Horas Extras e Configurações"}
                               >
-                                <Clock size={16} />
+                                {workDay?.isOvernight ? <Moon size={16} /> : <Clock size={16} />}
                               </button>
                             )}
                             <button 
@@ -1126,97 +1202,14 @@ export default function DayManagementModal({
                         </div>
                         
                         {isExpanded && (isCommon || isParty) && (
-                          <div className="pt-2.5 mt-2 border-t border-brand-primary/10 animate-in fade-in slide-in-from-top-2 space-y-3">
-                            {/* Toggle Horário Reduzido (Acordo com a Administração) */}
-                            {(() => {
-                              const dayData = emp.workDays.find(d => d.date === selectedDayStr && !d.isCancelled);
-                              return (
-                                <>
-                                  <div className="flex items-center justify-between bg-amber-500/10 p-2 rounded-lg border border-amber-500/30">
-                                    <label className="flex items-center gap-1.5 text-xs font-bold text-amber-400 cursor-pointer">
-                                      <Clock size={13} className="text-amber-400" />
-                                      Horário Reduzido (Acordo de Horas e Valor)
-                                    </label>
-                                    <input 
-                                      type="checkbox"
-                                      checked={!!dayData?.isReducedHours}
-                                      onChange={(e) => updateReducedHoursConfig(emp, e.target.checked)}
-                                      className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 accent-amber-500 cursor-pointer"
-                                    />
-                                  </div>
-
-                                  {dayData?.isReducedHours ? (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-brand-bg/60 p-3 rounded-lg border border-amber-500/20">
-                                      <div>
-                                        <label className="block text-[10px] font-bold text-gray-300 uppercase mb-1">
-                                          Quantas Horas (Ex: 01h30m)
-                                        </label>
-                                        <input 
-                                          type="text"
-                                          value={dayData?.customHoursText || ''}
-                                          onChange={(e) => updateReducedHoursConfig(emp, true, e.target.value, dayData?.customTotalPay)}
-                                          placeholder="01h30m"
-                                          className="w-full bg-brand-card border border-amber-500/40 rounded-md py-1 px-2.5 text-xs font-medium text-white focus:outline-none focus:border-amber-400"
-                                        />
-                                      </div>
-
-                                      <div>
-                                        <label className="block text-[10px] font-bold text-gray-300 uppercase mb-1">
-                                          Valor Total de Horas (R$)
-                                        </label>
-                                        <div className="relative">
-                                          <span className="absolute left-2.5 top-1 text-xs text-gray-400 font-bold">R$</span>
-                                          <input 
-                                            type="number"
-                                            min="0"
-                                            step="1"
-                                            value={dayData?.customTotalPay !== undefined ? dayData.customTotalPay : ''}
-                                            onChange={(e) => updateReducedHoursConfig(emp, true, dayData?.customHoursText, Number(e.target.value))}
-                                            placeholder="45.00"
-                                            className="w-full bg-brand-card border border-amber-500/40 rounded-md py-1 pl-8 pr-2.5 text-xs font-bold text-emerald-400 focus:outline-none focus:border-amber-400"
-                                          />
-                                        </div>
-                                      </div>
-
-                                      <div className="col-span-full text-[10px] text-amber-300 font-medium bg-amber-500/10 p-1.5 rounded border border-amber-500/20">
-                                        Valor total acordado para este dia: <strong>{formatCurrency(dayData?.customTotalPay || 0)}</strong> ({dayData?.customHoursText || 'Horário Reduzido'}).
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="flex flex-wrap items-center gap-3">
-                                      <label className="text-[10px] font-black text-gray-500 uppercase">Horas Extras:</label>
-                                      <input 
-                                        type="number"
-                                        min="0"
-                                        step="0.5"
-                                        autoFocus
-                                        value={dayData?.extraHours || ''}
-                                        onChange={(e) => updateExtraHours(emp, Number(e.target.value))}
-                                        placeholder="0"
-                                        className="w-20 bg-brand-bg border border-brand-primary/20 rounded-lg py-1 px-2.5 text-xs focus:outline-none focus:border-brand-primary"
-                                      />
-                                      {(() => {
-                                        const extraH = dayData?.extraHours || 0;
-                                        const rate = dayData?.extraHourRateAtTime !== undefined ? dayData.extraHourRateAtTime : emp.extraHourRate;
-                                        if (extraH > 0) {
-                                          return (
-                                            <span className="text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                                              = {formatCurrency(extraH * rate)} ({formatCurrency(rate)}/h)
-                                            </span>
-                                          );
-                                        }
-                                        return (
-                                          <span className="text-[10px] text-gray-500 italic">
-                                            (Taxa: {formatCurrency(rate)}/h)
-                                          </span>
-                                        );
-                                      })()}
-                                    </div>
-                                  )}
-                                </>
-                              );
-                            })()}
-                          </div>
+                          <DayWorkModeEditor
+                            employee={emp}
+                            selectedDayStr={selectedDayStr}
+                            onUpdateDays={onUpdateDays}
+                            onClose={() => setExpandedEmployeeId(null)}
+                            isAdmin={isAdmin}
+                            isReadOnly={isReadOnly}
+                          />
                         )}
                       </div>
                     );
