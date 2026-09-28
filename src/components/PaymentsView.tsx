@@ -22,7 +22,7 @@ import {
   CheckSquare
 } from 'lucide-react';
 import { Employee, WorkDay } from '../types';
-import { formatCurrency, cn } from '../lib/utils';
+import { formatCurrency, cn, getPartyPaymentDueDate } from '../lib/utils';
 import { AnimatedCurrency } from './AnimatedCurrency';
 import { db } from '../lib/firebase';
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
@@ -231,12 +231,12 @@ export default function PaymentsView({
         });
       }
 
-      // 2. Festas e Eventos
+      // 2. Festas e Eventos (Previsão: sempre na segunda-feira seguinte ao evento)
       const partyDays = monthDays.filter(wd => wd.type === 'party');
       partyDays.forEach((pd, idx) => {
         try {
-          const partyDateObj = parseISO(pd.date);
-          const forecastDate = addDays(partyDateObj, 7);
+          const partyDateObj = parseISO(pd.date.includes('T') ? pd.date : `${pd.date}T12:00:00`);
+          const forecastDate = getPartyPaymentDueDate(partyDateObj);
           const dueDateStr = format(forecastDate, 'yyyy-MM-dd');
           const isPaid = (emp.paidDates || []).includes(dueDateStr) || (emp.paidDates || []).includes(pd.date) || !!pd.isPaid;
 
@@ -428,7 +428,7 @@ export default function PaymentsView({
                 </h2>
               </div>
               <p className="text-xs sm:text-sm text-brand-muted mt-0.5">
-                Controle de quitação mensal (CCSP no Dia 15 e Festas em 7 dias após o evento)
+                Controle de quitação mensal (CCSP no Dia 15 e Festas na segunda-feira seguinte ao evento)
               </p>
             </div>
           </div>
@@ -803,13 +803,13 @@ export default function PaymentsView({
         </div>
       )}
 
-      {/* SEÇÃO 2: Festas & Eventos (Previsão: 7 dias após o evento) */}
+      {/* SEÇÃO 2: Festas & Eventos (Previsão: Segunda-feira seguinte ao evento) */}
       {(typeFilter === 'all' || typeFilter === 'parties') && (
         <div className="space-y-3 pt-4">
           <div className="flex items-center gap-2 px-1">
             <PartyPopper className="text-pink-400" size={18} />
             <h3 className="text-base sm:text-lg font-black text-brand-text">
-              Festas & Eventos — Prazo de Pagamento (7 dias após o evento)
+              Festas & Eventos — Prazo de Pagamento (Segunda-feira seguinte ao evento)
             </h3>
             <span className="text-xs font-bold bg-brand-card border border-brand-border px-2 py-0.5 rounded-full text-brand-muted">
               {filteredPartyItems.length} {filteredPartyItems.length === 1 ? 'evento' : 'eventos'}
@@ -891,7 +891,7 @@ export default function PaymentsView({
                       <div className="flex items-center justify-between text-xs pt-1 border-t border-brand-border/40">
                         <span className="text-gray-400 font-semibold flex items-center gap-1">
                           <Clock size={12} className="text-brand-primary" />
-                          Previsão Pgto (7d):
+                          Previsão Pgto (Segunda):
                         </span>
                         <strong className={cn(
                           "font-bold",
