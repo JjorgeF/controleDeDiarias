@@ -21,7 +21,8 @@ import {
   TrendingUp,
   Info,
   X,
-  PartyPopper
+  PartyPopper,
+  ShieldCheck
 } from 'lucide-react';
 import { Employee, WorkDay } from '../types';
 import { getPartyPaymentDueDate } from '../lib/utils';
@@ -105,12 +106,13 @@ export default function PaymentTimeline({ employee, currentDate = new Date() }: 
         subtitle = workDay.type === 'party' ? (workDay.partyName || 'Festa') : 'CCSP';
       }
     } 
-    // Check if next Monday after a Party Event (Payment Forecast for Parties = Next Monday after event)
+    // Check if next Monday after a Party Event (or 15th of next month if Management)
     else {
+      const isManagement = employee.paymentGroup === 'management';
       const matchingPartyForPayment = partiesList.find(p => {
         try {
           const partyDateObj = parseISO(p.date.includes('T') ? p.date : `${p.date}T12:00:00`);
-          const forecastPaymentDate = getPartyPaymentDueDate(partyDateObj);
+          const forecastPaymentDate = getPartyPaymentDueDate(partyDateObj, isManagement);
           return isSameDay(forecastPaymentDate, current);
         } catch {
           return false;
@@ -119,14 +121,15 @@ export default function PaymentTimeline({ employee, currentDate = new Date() }: 
 
       if (matchingPartyForPayment) {
         const partyPaymentPaid = employee.paidDates?.includes(dateStr) || matchingPartyForPayment.isPaid;
+        const timingSuffix = isManagement ? '(Dia 15)' : '(Segunda)';
         if (partyPaymentPaid) {
           itemType = 'paid';
           title = 'Pagamento Efetuado';
-          subtitle = matchingPartyForPayment.partyName || 'Festa (Segunda)';
+          subtitle = `${matchingPartyForPayment.partyName || 'Festa'} ${timingSuffix}`;
         } else {
           itemType = 'payment_forecast';
           title = 'Previsão Pagamento';
-          subtitle = `${matchingPartyForPayment.partyName || 'Festa'} (Segunda)`;
+          subtitle = `${matchingPartyForPayment.partyName || 'Festa'} ${timingSuffix}`;
         }
       }
       // Check if standard monthly payment milestone date (Dia 15 de cada mês)
@@ -134,11 +137,11 @@ export default function PaymentTimeline({ employee, currentDate = new Date() }: 
         if (isExplicitlyPaid) {
           itemType = 'paid';
           title = 'Pagamento Efetuado';
-          subtitle = 'Diárias CCSP Mês';
+          subtitle = isManagement ? 'Diárias & Festas (Gestão)' : 'Diárias CCSP Mês';
         } else {
           itemType = 'payment_forecast';
           title = 'Previsão Pagamento';
-          subtitle = 'Dia 15 (CCSP Mês)';
+          subtitle = isManagement ? 'Dia 15 (Gestão: CCSP & Festas)' : 'Dia 15 (CCSP Mês)';
         }
       }
       // Check if today indicator
@@ -401,6 +404,28 @@ export default function PaymentTimeline({ employee, currentDate = new Date() }: 
 
             {/* Content */}
             <div className="space-y-3 text-xs text-gray-200">
+              {employee.paymentGroup === 'management' ? (
+                <div className="bg-amber-500/10 p-3 rounded-xl border border-amber-500/30 text-amber-300 space-y-1">
+                  <p className="font-bold flex items-center gap-1.5 text-xs text-amber-400">
+                    <ShieldCheck size={14} />
+                    Regra da Gestão / Administração
+                  </p>
+                  <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                    Tanto as <strong>Diárias CCSP</strong> quanto os <strong>Eventos e Festas</strong> têm seu fechamento e previsão de pagamento programados para o <strong>dia 15 do próximo mês</strong>.
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-brand-primary/10 p-3 rounded-xl border border-brand-primary/20 text-brand-text space-y-1">
+                  <p className="font-bold flex items-center gap-1.5 text-xs text-brand-primary">
+                    <Sparkles size={14} />
+                    Regra Padrão (Recreador / Geral)
+                  </p>
+                  <p className="text-[11px] text-gray-300 leading-relaxed">
+                    Festas e eventos são pagos na <strong>segunda-feira seguinte</strong>, e diárias do CCSP no <strong>dia 15 de cada mês</strong>.
+                  </p>
+                </div>
+              )}
+
               <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 space-y-2">
                 <h4 className="font-black text-cyan-400 uppercase tracking-wider flex items-center gap-1.5 text-xs">
                   <Calendar size={14} />
@@ -425,7 +450,9 @@ export default function PaymentTimeline({ employee, currentDate = new Date() }: 
                   Eventos & Festas
                 </h4>
                 <p className="text-[11px] text-gray-300 leading-relaxed">
-                  Os pagamentos referentes a eventos e festas ocorrem sempre na <strong>segunda-feira seguinte à realização do evento</strong>.
+                  {employee.paymentGroup === 'management'
+                    ? 'Para o seu grupo (Administração), o pagamento dos eventos ocorre no dia 15 do próximo mês.'
+                    : 'Os pagamentos referentes a eventos e festas ocorrem sempre na segunda-feira seguinte à realização do evento.'}
                 </p>
               </div>
             </div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Edit2, Pencil, User, UserRound, Calendar, Sparkles, Award, CreditCard, Copy, Check, Shirt, PhoneCall, Wind, CheckCircle2, DollarSign } from 'lucide-react';
+import { Edit2, Pencil, User, UserRound, Calendar, Sparkles, Award, CreditCard, Copy, Check, Shirt, PhoneCall, Wind, CheckCircle2, DollarSign, ShieldCheck } from 'lucide-react';
 import { Employee } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
 import { AnimatedCurrency } from './AnimatedCurrency';
@@ -178,8 +178,13 @@ const EmployeeCard: React.FC<EmployeeCardProps> = ({
               <h3 className="text-lg font-bold text-brand-text group-hover:text-brand-primary transition-colors leading-tight">
                 {employee.name}
               </h3>
-              <div className="flex items-center gap-2 mt-0.5">
+              <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                 <p className="text-xs text-brand-muted">{employee.level}</p>
+                {employee.paymentGroup === 'management' && (
+                  <span className="bg-amber-500/15 text-amber-300 text-[9px] font-black px-1.5 py-0.5 rounded border border-amber-500/30 uppercase tracking-wider flex items-center gap-0.5">
+                    <ShieldCheck size={9} /> Gestão
+                  </span>
+                )}
                 {monthPromotion && (
                   <div className="relative inline-block">
                     <span 

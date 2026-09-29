@@ -19,7 +19,8 @@ import {
   Sparkles,
   ShieldCheck,
   Undo2,
-  CheckSquare
+  CheckSquare,
+  Users
 } from 'lucide-react';
 import { Employee, WorkDay } from '../types';
 import { formatCurrency, cn, getPartyPaymentDueDate } from '../lib/utils';
@@ -59,6 +60,7 @@ interface PaymentsViewProps {
 
 type PaymentTypeFilter = 'all' | 'ccsp' | 'parties';
 type PaymentStatusFilter = 'all' | 'pending' | 'paid';
+type PaymentGroupFilter = 'all' | 'general' | 'management';
 
 interface CCSPPaymentItem {
   id: string;
@@ -95,6 +97,7 @@ export default function PaymentsView({
 }: PaymentsViewProps) {
   const [typeFilter, setTypeFilter] = useState<PaymentTypeFilter>('all');
   const [statusFilter, setStatusFilter] = useState<PaymentStatusFilter>('all');
+  const [groupFilter, setGroupFilter] = useState<PaymentGroupFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
@@ -185,7 +188,7 @@ export default function PaymentsView({
 
 
   // Process and compute all payment records for currentMonth
-  const { ccspItems, partyItems, stats } = useMemo(() => {
+  const { ccspItems, partyItems } = useMemo(() => {
     const ccspList: CCSPPaymentItem[] = [];
     const partyList: PartyPaymentItem[] = [];
 
@@ -231,12 +234,13 @@ export default function PaymentsView({
         });
       }
 
-      // 2. Festas e Eventos (Previsão: sempre na segunda-feira seguinte ao evento)
+      // 2. Festas e Eventos (Previsão: segunda-feira seguinte para equipe; dia 15 do próximo mês para gestão)
       const partyDays = monthDays.filter(wd => wd.type === 'party');
       partyDays.forEach((pd, idx) => {
         try {
           const partyDateObj = parseISO(pd.date.includes('T') ? pd.date : `${pd.date}T12:00:00`);
-          const forecastDate = getPartyPaymentDueDate(partyDateObj);
+          const isManagement = emp.paymentGroup === 'management';
+          const forecastDate = getPartyPaymentDueDate(partyDateObj, isManagement);
           const dueDateStr = format(forecastDate, 'yyyy-MM-dd');
           const isPaid = (emp.paidDates || []).includes(dueDateStr) || (emp.paidDates || []).includes(pd.date) || !!pd.isPaid;
 
@@ -269,37 +273,53 @@ export default function PaymentsView({
       });
     });
 
-    // Compute Overall Financial Statistics
-    const allTotalAmount = ccspList.reduce((acc, c) => acc + c.totalAmount, 0) +
-                           partyList.reduce((acc, p) => acc + p.amount, 0);
+    return {
+      ccspItems: ccspList.sort((a, b) => a.employee.artisticName.localeCompare(b.employee.artisticName)),
+      partyItems: partyList.sort((a, b) => a.dueDateStr.localeCompare(b.dueDateStr))
+    };
+  }, [employees, currentMonth, currentMonthCcspKey]);
 
-    const paidTotalAmount = ccspList.filter(c => c.isPaid).reduce((acc, c) => acc + c.totalAmount, 0) +
-                            partyList.filter(p => p.isPaid).reduce((acc, p) => acc + p.amount, 0);
+  // Compute Financial Statistics based on selected groupFilter
+  const stats = useMemo(() => {
+    let activeCcsp = ccspItems;
+    let activeParties = partyItems;
+
+    if (groupFilter === 'general') {
+      activeCcsp = activeCcsp.filter(i => (i.employee.paymentGroup || 'general') === 'general');
+      activeParties = activeParties.filter(i => (i.employee.paymentGroup || 'general') === 'general');
+    } else if (groupFilter === 'management') {
+      activeCcsp = activeCcsp.filter(i => i.employee.paymentGroup === 'management');
+      activeParties = activeParties.filter(i => i.employee.paymentGroup === 'management');
+    }
+
+    const allTotalAmount = activeCcsp.reduce((acc, c) => acc + c.totalAmount, 0) +
+                           activeParties.reduce((acc, p) => acc + p.amount, 0);
+
+    const paidTotalAmount = activeCcsp.filter(c => c.isPaid).reduce((acc, c) => acc + c.totalAmount, 0) +
+                            activeParties.filter(p => p.isPaid).reduce((acc, p) => acc + p.amount, 0);
 
     const pendingTotalAmount = allTotalAmount - paidTotalAmount;
 
-    const totalCount = ccspList.length + partyList.length;
-    const paidCount = ccspList.filter(c => c.isPaid).length + partyList.filter(p => p.isPaid).length;
+    const totalCount = activeCcsp.length + activeParties.length;
+    const paidCount = activeCcsp.filter(c => c.isPaid).length + activeParties.filter(p => p.isPaid).length;
     const pendingCount = totalCount - paidCount;
 
     return {
-      ccspItems: ccspList.sort((a, b) => a.employee.artisticName.localeCompare(b.employee.artisticName)),
-      partyItems: partyList.sort((a, b) => a.dueDateStr.localeCompare(b.dueDateStr)),
-      stats: {
-        allTotalAmount,
-        paidTotalAmount,
-        pendingTotalAmount,
-        totalCount,
-        paidCount,
-        pendingCount
-      }
+      allTotalAmount,
+      paidTotalAmount,
+      pendingTotalAmount,
+      totalCount,
+      paidCount,
+      pendingCount
     };
-  }, [employees, currentMonth, currentMonthCcspKey]);
+  }, [ccspItems, partyItems, groupFilter]);
 
   // Apply filters
   const filteredCcspItems = useMemo(() => {
     if (typeFilter === 'parties') return [];
     return ccspItems.filter(item => {
+      if (groupFilter === 'general' && item.employee.paymentGroup === 'management') return false;
+      if (groupFilter === 'management' && item.employee.paymentGroup !== 'management') return false;
       if (statusFilter === 'pending' && item.isPaid) return false;
       if (statusFilter === 'paid' && !item.isPaid) return false;
       if (searchQuery.trim()) {
@@ -311,11 +331,13 @@ export default function PaymentsView({
       }
       return true;
     });
-  }, [ccspItems, typeFilter, statusFilter, searchQuery]);
+  }, [ccspItems, typeFilter, statusFilter, groupFilter, searchQuery]);
 
   const filteredPartyItems = useMemo(() => {
     if (typeFilter === 'ccsp') return [];
     return partyItems.filter(item => {
+      if (groupFilter === 'general' && item.employee.paymentGroup === 'management') return false;
+      if (groupFilter === 'management' && item.employee.paymentGroup !== 'management') return false;
       if (statusFilter === 'pending' && item.isPaid) return false;
       if (statusFilter === 'paid' && !item.isPaid) return false;
       if (searchQuery.trim()) {
@@ -328,7 +350,7 @@ export default function PaymentsView({
       }
       return true;
     });
-  }, [partyItems, typeFilter, statusFilter, searchQuery]);
+  }, [partyItems, typeFilter, statusFilter, groupFilter, searchQuery]);
 
   const handleConfirmBulkPay = async () => {
     if (!db) return;
@@ -522,6 +544,41 @@ export default function PaymentsView({
 
           {/* Controles de Filtro */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Grupo de Pagamento */}
+            <div className="flex items-center bg-brand-bg/80 border border-brand-border rounded-xl p-1 text-xs">
+              <button
+                onClick={() => setGroupFilter('all')}
+                className={cn(
+                  "px-2.5 py-1 rounded-lg font-bold transition-all",
+                  groupFilter === 'all' ? "bg-brand-primary text-slate-950 shadow-sm" : "text-gray-400 hover:text-white"
+                )}
+              >
+                Todos
+              </button>
+              <button
+                onClick={() => setGroupFilter('general')}
+                className={cn(
+                  "px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1",
+                  groupFilter === 'general' ? "bg-brand-primary text-slate-950 shadow-sm" : "text-gray-400 hover:text-white"
+                )}
+                title="Apenas Recreadores e Equipe Geral (Festas na 2ª / CCSP dia 15)"
+              >
+                <Users size={12} />
+                Recreadores
+              </button>
+              <button
+                onClick={() => setGroupFilter('management')}
+                className={cn(
+                  "px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1",
+                  groupFilter === 'management' ? "bg-amber-500 text-slate-950 shadow-sm font-extrabold" : "text-gray-400 hover:text-white"
+                )}
+                title="Apenas Administração e Gestão (Festas e CCSP no dia 15)"
+              >
+                <ShieldCheck size={12} />
+                Gestão
+              </button>
+            </div>
+
             {/* Tipo */}
             <div className="flex items-center bg-brand-bg/80 border border-brand-border rounded-xl p-1 text-xs">
               <button
@@ -688,6 +745,11 @@ export default function PaymentsView({
                             <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-brand-bg border border-brand-border text-brand-muted">
                               {emp.level}
                             </span>
+                            {emp.paymentGroup === 'management' ? (
+                              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 flex items-center gap-1">
+                                <ShieldCheck size={10} /> Gestão
+                              </span>
+                            ) : null}
                           </div>
                           <p className="text-[11px] text-brand-muted leading-tight mt-0.5">
                             {emp.name}
@@ -859,6 +921,11 @@ export default function PaymentsView({
                             <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-pink-500/10 text-pink-300 border border-pink-500/20">
                               Festa
                             </span>
+                            {emp.paymentGroup === 'management' ? (
+                              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 flex items-center gap-1">
+                                <ShieldCheck size={10} /> Gestão
+                              </span>
+                            ) : null}
                           </div>
                           <p className="text-[11px] text-brand-muted leading-tight mt-0.5">
                             {emp.name}
@@ -891,7 +958,7 @@ export default function PaymentsView({
                       <div className="flex items-center justify-between text-xs pt-1 border-t border-brand-border/40">
                         <span className="text-gray-400 font-semibold flex items-center gap-1">
                           <Clock size={12} className="text-brand-primary" />
-                          Previsão Pgto (Segunda):
+                          Previsão Pgto {emp.paymentGroup === 'management' ? '(Dia 15)' : '(Segunda)'}:
                         </span>
                         <strong className={cn(
                           "font-bold",

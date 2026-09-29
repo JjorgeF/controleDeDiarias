@@ -72,11 +72,12 @@ export default function EmployeeEarningsView({
     return acc + rate + extra;
   }, 0);
 
-  // Party Payment status & amounts (Previsão: sempre na segunda-feira seguinte ao evento)
+  // Party Payment status & amounts (Previsão: segunda-feira seguinte para equipe; dia 15 do próximo mês para gestão)
+  const isManagement = employee.paymentGroup === 'management';
   const partyItemsComputed = monthPartyDays.map(pd => {
     try {
       const partyDateObj = parseISO(pd.date.includes('T') ? pd.date : `${pd.date}T12:00:00`);
-      const forecastDate = getPartyPaymentDueDate(partyDateObj);
+      const forecastDate = getPartyPaymentDueDate(partyDateObj, isManagement);
       const dueDateStr = format(forecastDate, 'yyyy-MM-dd');
       const isPaid = (employee.paidDates || []).includes(dueDateStr) || (employee.paidDates || []).includes(pd.date) || !!pd.isPaid;
 

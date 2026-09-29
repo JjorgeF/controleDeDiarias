@@ -1,5 +1,5 @@
 import React from 'react';
-import { Edit2, Calendar, FileDown, Award, UserCheck, UserX, Trash2, Clock, RotateCcw, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { Edit2, Calendar, FileDown, Award, UserCheck, UserX, Trash2, Clock, RotateCcw, AlertTriangle, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { Employee } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
 import { format, isSameMonth, parseISO } from 'date-fns';
@@ -302,10 +302,15 @@ export default function EmployeeList({
                         </div>
                       </td>
                       <td className="p-4">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-xs bg-brand-bg border border-brand-border px-2 py-1 rounded text-brand-muted">
                             {emp.level}
                           </span>
+                          {emp.paymentGroup === 'management' && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 flex items-center gap-1" title="Grupo: Administração / Gestão (Pagamento no dia 15)">
+                              <ShieldCheck size={10} /> Gestão
+                            </span>
+                          )}
                           {monthPromotion && <PromoBadge />}
                         </div>
                       </td>

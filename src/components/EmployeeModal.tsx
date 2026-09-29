@@ -1,8 +1,9 @@
 import React, { useRef } from 'react';
-import { X, AlertCircle, Trash2, ArrowRight, Calendar, Sparkles, Camera, User, UserX, UserCheck, Power } from 'lucide-react';
+import { X, AlertCircle, Trash2, ArrowRight, Calendar, Sparkles, Camera, User, UserX, UserCheck, Power, ShieldCheck, Users } from 'lucide-react';
 import { Employee, EmployeeLevel } from '../types';
 import { recalculateEmployeeTimeline, LEVEL_RATES } from '../utils/promotionUtils';
 import { compressProfileImage } from '../utils/imageCompressor';
+import { cn } from '../lib/utils';
 import ImageCropperModal from './ImageCropperModal';
 
 interface EmployeeModalProps {
@@ -42,6 +43,7 @@ export default function EmployeeModal({
     extraHourRate: 0,
     officeHourRate: 20,
     janitorRate: 70,
+    paymentGroup: 'general',
     workDays: [],
     email: '',
   });
@@ -58,6 +60,7 @@ export default function EmployeeModal({
       
       setFormData({
         ...employee,
+        paymentGroup: employee.paymentGroup || 'general',
         promotionEffectiveDate: employee.promotionEffectiveDate || todayStr
       });
     } else {
@@ -70,6 +73,7 @@ export default function EmployeeModal({
         extraHourRate: 0,
         officeHourRate: 20,
         janitorRate: 70,
+        paymentGroup: 'general',
         workDays: [],
         email: '',
       });
@@ -306,6 +310,55 @@ export default function EmployeeModal({
             <p className="text-[10px] text-gray-500 mt-1">
               Caso não informada, será usada a data do primeiro trabalho registrado.
             </p>
+          </div>
+
+          {/* Grupo e Regra de Pagamento */}
+          <div className="bg-brand-bg/50 border border-brand-border/80 rounded-xl p-3.5 space-y-2.5">
+            <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
+              <ShieldCheck size={14} className="text-amber-400" />
+              Grupo e Regra de Pagamento
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, paymentGroup: 'general' })}
+                className={cn(
+                  "p-3 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer",
+                  (formData.paymentGroup || 'general') === 'general'
+                    ? "bg-brand-primary/10 border-brand-primary text-white ring-1 ring-brand-primary shadow-sm"
+                    : "bg-brand-card border-brand-border/60 text-gray-400 hover:border-gray-500 hover:text-gray-200"
+                )}
+              >
+                <div className="flex items-center gap-1.5 font-bold text-xs text-white">
+                  <Users size={14} className="text-brand-primary" />
+                  <span>Recreador / Geral</span>
+                </div>
+                <p className="text-[11px] text-gray-300 leading-snug">
+                  • <strong>Festas:</strong> Próxima 2ª-feira<br />
+                  • <strong>CCSP:</strong> Todo dia 15
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, paymentGroup: 'management' })}
+                className={cn(
+                  "p-3 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer",
+                  formData.paymentGroup === 'management'
+                    ? "bg-amber-500/15 border-amber-500 text-white ring-1 ring-amber-500 shadow-sm"
+                    : "bg-brand-card border-brand-border/60 text-gray-400 hover:border-gray-500 hover:text-gray-200"
+                )}
+              >
+                <div className="flex items-center gap-1.5 font-bold text-xs text-amber-400">
+                  <ShieldCheck size={14} />
+                  <span>Gestão</span>
+                </div>
+                <p className="text-[11px] text-gray-300 leading-snug">
+                  • <strong>Festas:</strong> Dia 15 do próx. mês<br />
+                  • <strong>CCSP:</strong> Dia 15 do próx. mês
+                </p>
+              </button>
+            </div>
           </div>
 
           {employee && (
