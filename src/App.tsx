@@ -14,7 +14,7 @@ import {
   setDoc,
   writeBatch
 } from 'firebase/firestore';
-import { onAuthStateChanged, User, signInWithPopup, getRedirectResult } from 'firebase/auth';
+import { onAuthStateChanged, User, signInWithPopup, signOut, getRedirectResult } from 'firebase/auth';
 import { auth, db, googleProvider, isFirebaseConfigured, handleFirestoreError, OperationType, removeUndefinedFields } from './lib/firebase';
 import { Employee, ViewMode, WorkDay, CancellationLog, Promotion, AppNotification, CustomNotificationDoc, DayConfig, PartyDetails } from './types';
 import { recalculateEmployeeTimeline } from './utils/promotionUtils';
@@ -54,7 +54,7 @@ const ViewFallback = () => (
   </div>
 );
 import Logo from './components/Logo';
-import { LogIn, AlertTriangle, Calendar, Award, X, Table, UserPlus, Plus, DollarSign, UserRound } from 'lucide-react';
+import { LogIn, AlertTriangle, Calendar, Award, X, Table, UserPlus, Plus, DollarSign, UserRound, UserX, ShieldAlert, LogOut } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format, isSameMonth, parseISO, eachDayOfInterval, startOfMonth, endOfMonth, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -332,15 +332,19 @@ export default function App() {
       setEmployees(emps);
       setEmployeesLoading(false);
 
-      // Auto-vincular o UID do usuário autenticado se ele for funcionário e o campo userId estiver vazio
+      // Auto-vincular o UID do usuário autenticado apenas se for funcionário ATIVO e estritamente pelo e-mail
       if (!isAdmin && emps.length > 0 && user) {
         const myEmailLower = (user.email || '').trim().toLowerCase();
-        const myEmp = emps.find(emp => (myEmailLower && (emp.email || '').trim().toLowerCase() === myEmailLower) || (emp.userId && emp.userId === user.uid));
+        const myEmp = emps.find(emp => 
+          myEmailLower && 
+          (emp.email || '').trim().toLowerCase() === myEmailLower && 
+          emp.status !== 'inactive'
+        );
         if (myEmp && (!myEmp.userId || myEmp.userId !== user.uid)) {
           try {
             const empRef = doc(db, 'employees', myEmp.id);
             await updateDoc(empRef, { userId: user.uid });
-            console.log("userId vinculado com sucesso para o funcionário:", myEmp.name);
+            console.log("userId vinculado com sucesso para o funcionário ativo:", myEmp.name);
           } catch (err) {
             console.warn("Não foi possível auto-vincular o userId:", err);
           }
@@ -971,9 +975,10 @@ export default function App() {
       const docRef = doc(db, 'employees', id);
       await updateDoc(docRef, {
         status: 'inactive',
-        inactivatedAt: new Date().toISOString()
+        inactivatedAt: new Date().toISOString(),
+        userId: ''
       });
-      console.log("Employee inactivated successfully:", id);
+      console.log("Employee inactivated successfully and userId unlinked:", id);
     } catch (error: any) {
       console.error("handleInactivateEmployee error:", error);
       handleFirestoreError(error, OperationType.UPDATE, `employees/${id}`);
@@ -1624,12 +1629,115 @@ export default function App() {
   // Interface do Funcionário (Não Admin)
   if (!isViewingAsAdmin) {
     const userEmailLower = (user?.email || '').trim().toLowerCase();
+    
+    // Busca segura do funcionário:
+    // 1. Em modo simulação (apenas admins autorizados): usa o id simulado
+    // 2. Busca estrita pelo e-mail cadastrado
+    // 3. Fallback seguro por userId apenas se o funcionário estiver ativo
+    // NUNCA faz fallback cego para employees[0]
     const myEmployeeRecord = simulationActive
       ? employees.find(emp => emp.id === simulatedEmployeeId)
-      : (employees.find(emp => 
-          (userEmailLower && (emp.email || '').trim().toLowerCase() === userEmailLower) || 
-          (user?.uid && emp.userId === user.uid)
-        ) || employees[0]);
+      : (
+          employees.find(emp => userEmailLower && (emp.email || '').trim().toLowerCase() === userEmailLower) ||
+          employees.find(emp => user?.uid && emp.userId === user.uid && emp.status !== 'inactive')
+        );
+
+    // Bloqueio 1: Usuário desativado pela administração
+    if (myEmployeeRecord && myEmployeeRecord.status === 'inactive' && !simulationActive) {
+      return (
+        <div className="min-h-screen bg-brand-bg flex flex-col items-center justify-center p-4">
+          <div className="bg-brand-card border border-red-500/30 p-6 md:p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400">
+              <UserX size={32} />
+            </div>
+            <h1 className="text-xl md:text-2xl font-black text-brand-text mb-2">Acesso Desativado</h1>
+            <p className="text-sm text-brand-muted mb-4">
+              Olá, <strong className="text-brand-text">{myEmployeeRecord.artisticName || myEmployeeRecord.name}</strong>. Seu cadastro foi desativado no sistema pela administração.
+            </p>
+            <div className="bg-brand-bg/60 border border-brand-border/60 rounded-xl p-3 mb-4 text-xs text-brand-muted text-left space-y-1">
+              <div className="flex justify-between">
+                <span>E-mail conectado:</span>
+                <span className="font-mono text-brand-text break-all">{user.email}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Status da conta:</span>
+                <span className="font-bold text-red-400 uppercase text-[10px] bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20">Desativado</span>
+              </div>
+            </div>
+            <p className="text-xs text-brand-muted mb-6 leading-relaxed">
+              Caso você faça parte da equipe ativa e acredite que isto seja um engano, entre em contato com a coordenação (Cacheado).
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={async () => {
+                  if (auth) {
+                    await signOut(auth);
+                  }
+                }}
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-brand-primary text-brand-bg font-bold hover:opacity-90 transition-opacity shadow-lg"
+              >
+                <LogOut size={18} />
+                Sair / Trocar de Conta
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Bloqueio 2: E-mail não vinculado a nenhum funcionário
+    if (!myEmployeeRecord && !simulationActive) {
+      return (
+        <div className="min-h-screen bg-brand-bg flex flex-col items-center justify-center p-4">
+          <div className="bg-brand-card border border-brand-border p-6 md:p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+              <ShieldAlert size={32} />
+            </div>
+            <h1 className="text-xl md:text-2xl font-black text-brand-text mb-2">Conta Não Vinculada</h1>
+            <p className="text-sm text-brand-muted mb-3">
+              Você entrou com o e-mail:
+            </p>
+            <div className="bg-brand-bg/60 border border-brand-border/60 rounded-xl p-3 mb-4 text-xs font-mono text-brand-primary break-all">
+              {user.email}
+            </div>
+            <p className="text-xs text-brand-muted mb-6 leading-relaxed">
+              Este e-mail não foi encontrado no cadastro de recreadores nem possui permissão de administrador. Se você possui mais de uma conta no Google, clique no botão abaixo para escolher o e-mail correto cadastrado pela coordenação.
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={async () => {
+                  if (auth) {
+                    await signOut(auth);
+                    try {
+                      await signInWithPopup(auth, googleProvider);
+                    } catch (e) {
+                      console.log("Login popup fechado ou cancelado");
+                    }
+                  }
+                }}
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-brand-primary text-brand-bg font-bold hover:opacity-90 transition-opacity shadow-lg"
+              >
+                <LogIn size={18} />
+                Escolher Outra Conta Google
+              </button>
+              <button
+                onClick={async () => {
+                  if (auth) {
+                    await signOut(auth);
+                  }
+                }}
+                className="w-full py-2.5 px-4 rounded-xl bg-brand-card hover:bg-brand-border/50 text-brand-muted font-bold text-xs transition-colors border border-brand-border"
+              >
+                Sair
+              </button>
+            </div>
+            <p className="mt-6 text-[11px] text-brand-muted/70">
+              Dúvidas ou problemas? Contate o administrador (Cacheado).
+            </p>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="min-h-screen bg-brand-bg pb-28">
