@@ -22,6 +22,9 @@ if (!isFirebaseConfigured) {
 const app = isFirebaseConfigured ? initializeApp(firebaseConfig) : null;
 export const auth = app ? getAuth(app) : null;
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({
+  prompt: 'select_account'
+});
 
 // Initialize Firestore with Offline Persistence to drastically improve LCP and INP
 export const db = app ? initializeFirestore(app, {
