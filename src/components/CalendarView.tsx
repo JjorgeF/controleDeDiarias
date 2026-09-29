@@ -1338,7 +1338,7 @@ export default function CalendarView({
                   </div>
                   <div className="flex-1 text-xs md:text-sm">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-black text-amber-300 text-sm md:text-base">⚡ Abertura Extra de Disponibilidade Ativa</span>
+                      <span className="font-black text-amber-300 text-sm md:text-base">Abertura Extra de Disponibilidade Ativa</span>
                       {totalExtraSubmissions > 0 && (
                         <span className="bg-amber-500/30 text-amber-200 text-[10px] font-black px-2.5 py-0.5 rounded-full border border-amber-500/50 flex items-center gap-1">
                           <UserCheck size={12} />
@@ -1346,10 +1346,6 @@ export default function CalendarView({
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] md:text-xs text-amber-100/90 font-medium mt-0.5">
-                      Há <strong>{extraordinaryDays.length} {extraordinaryDays.length === 1 ? 'dia' : 'dias'}</strong> neste mês com abertura extra.
-                      {!isAdmin && " Você pode cadastrar ou alterar sua disponibilidade nestes dias destacados até o encerramento do prazo extra."}
-                    </p>
                   </div>
                 </div>
 
@@ -1380,7 +1376,6 @@ export default function CalendarView({
                       <Users size={14} />
                       Envios da Abertura Extra ({totalExtraSubmissions})
                     </span>
-                    <span className="text-[10px] text-brand-muted font-normal">Clique em "Gerenciar" para escalar a equipe no dia</span>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1992,19 +1987,19 @@ export default function CalendarView({
           {/* Employee Scheduled Days List (Below Calendar) */}
           {!isAdmin && myEmployee && (
             <div className="bg-brand-card border border-brand-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-4">
-              <div className="p-4 md:p-6 border-b border-brand-border bg-brand-bg/30 flex items-center justify-between">
-                <div>
+              <div className="p-3.5 md:p-5 border-b border-brand-border bg-brand-bg/30">
+                <div className="flex items-center gap-2.5 flex-wrap">
                   <h3 className="text-sm md:text-base font-black text-brand-text flex items-center gap-2">
-                    <Calendar className="text-brand-primary" size={18} />
-                    Suas Escalas Confirmadas — {format(currentMonth, 'MMMM', { locale: ptBR })}
+                    <Calendar className="text-brand-primary shrink-0" size={18} />
+                    <span className="capitalize">Suas Escalas Confirmadas — {format(currentMonth, 'MMMM', { locale: ptBR })}</span>
                   </h3>
-                  <p className="text-[10px] md:text-xs text-brand-muted font-semibold mt-0.5">
-                    Estes são os dias que você está escalado para trabalhar neste mês
-                  </p>
+                  <span className="bg-brand-primary/10 text-brand-primary text-xs font-black px-2.5 py-0.5 rounded-full border border-brand-primary/20 shrink-0 whitespace-nowrap inline-flex items-center">
+                    {scheduledDaysThisMonth.length} {scheduledDaysThisMonth.length === 1 ? 'dia' : 'dias'}
+                  </span>
                 </div>
-                <span className="bg-brand-primary/10 text-brand-primary text-xs font-black px-3 py-1 rounded-full border border-brand-primary/20">
-                  {scheduledDaysThisMonth.length} {scheduledDaysThisMonth.length === 1 ? 'dia' : 'dias'}
-                </span>
+                <p className="text-[10px] md:text-xs text-brand-muted font-semibold mt-1">
+                  Estes são os dias que você está escalado para trabalhar neste mês
+                </p>
               </div>
 
               <div className="p-4 md:p-6">
