@@ -54,7 +54,7 @@ const ViewFallback = () => (
   </div>
 );
 import Logo from './components/Logo';
-import { LogIn, AlertTriangle, Calendar, Award, X, Table, UserPlus, Plus, DollarSign, UserRound, UserX, ShieldAlert, LogOut } from 'lucide-react';
+import { LogIn, AlertTriangle, Calendar, Award, X, Table, UserPlus, Plus, DollarSign, UserRound, UserX, ShieldAlert, LogOut, ShieldCheck } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format, isSameMonth, parseISO, eachDayOfInterval, startOfMonth, endOfMonth, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -1821,44 +1821,70 @@ export default function App() {
           }}
         />
 
-        <main className={`w-full mx-auto px-2 md:px-4 py-4 md:py-8 ${employeeActiveTab === 'master_schedule' ? 'max-w-7xl' : 'max-w-4xl'}`}>
+        <main className={`w-full mx-auto px-2 md:px-4 py-4 md:py-8 ${employeeActiveTab === 'master_schedule' ? 'max-w-7xl' : employeeActiveTab === 'schedule' ? 'max-w-6xl' : 'max-w-4xl'}`}>
           {myEmployeeRecord ? (
             <div className="space-y-6">
               {employeeActiveTab === 'schedule' ? (
-                <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start">
-                  <div className="w-full md:w-1/3">
-                    <EmployeeCard 
-                      employee={myEmployeeRecord}
-                      onEdit={() => {}}
-                      onManageDays={() => {}}
-                      onViewStory={() => setEmployeeActiveTab('profile')}
-                      currentMonth={currentMonth}
-                      isReadOnly={true}
-                      onUpdateDetails={handleUpdateEmployeeDetails}
-                    />
+                <div className="space-y-4">
+                  {/* Faixa Discreta e Ultracompacta de Saudação */}
+                  <div className="bg-brand-card/70 border border-brand-border/80 rounded-2xl p-3 sm:p-3.5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 backdrop-blur-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-brand-bg border border-brand-border flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
+                        {myEmployeeRecord.photoUrl ? (
+                          <img src={myEmployeeRecord.photoUrl} alt={myEmployeeRecord.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-xs font-black text-brand-primary">
+                            {myEmployeeRecord.artisticName?.slice(0, 2).toUpperCase() || myEmployeeRecord.name?.slice(0, 2).toUpperCase() || 'LP'}
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h2 className="text-base sm:text-lg font-black text-brand-text leading-tight">
+                            Olá, {myEmployeeRecord.artisticName || myEmployeeRecord.name}! 👋
+                          </h2>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-bg border border-brand-border text-brand-muted">
+                            {myEmployeeRecord.level}
+                          </span>
+                          {myEmployeeRecord.paymentGroup === 'management' && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 flex items-center gap-1">
+                              <ShieldCheck size={11} /> Gestão
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                      <div className="bg-brand-bg/80 border border-brand-border/80 rounded-xl px-3 py-1.5 flex items-center gap-2">
+                        <Calendar size={13} className="text-brand-primary shrink-0" />
+                        <span className="text-xs font-bold text-brand-text">
+                          {(myEmployeeRecord.workDays || []).filter(d => !d.isCancelled && isSameMonth(parseISO(d.date), currentMonth)).length} escalas neste mês
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="w-full md:w-2/3 space-y-4">
-                    <h2 className="text-lg md:text-xl font-black text-brand-text mb-2">Meu Calendário de Trabalho / Disponibilidade</h2>
-                    <CalendarView 
-                      employees={[myEmployeeRecord]} // Pass the simulated employee as the single record
-                      allEmployees={employees} // Pass all employees to list co-workers
-                      onUpdateDays={() => {}}
-                      currentMonth={currentMonth}
-                      setCurrentMonth={setCurrentMonth}
-                      isReadOnly={false}
-                      isAdmin={false}
-                      deadlines={deadlines}
-                      onUpdateAvailabilities={handleUpdateAvailabilities}
-                      dayConfigs={dayConfigs}
-                      onUpdateDayConfig={() => {}}
-                      onCancelWorkDay={handleCancelWorkDay}
-                      cancellations={[]}
-                      onDismissCancellation={() => {}}
-                      onMarkCancellationRead={() => {}}
-                      sidebarTab={sidebarTab}
-                      onSidebarTabChange={setSidebarTab}
-                    />
-                  </div>
+
+                  {/* Calendário Amplo com Leitura Confortável */}
+                  <CalendarView 
+                    employees={[myEmployeeRecord]} // Pass the simulated employee as the single record
+                    allEmployees={employees} // Pass all employees to list co-workers
+                    onUpdateDays={() => {}}
+                    currentMonth={currentMonth}
+                    setCurrentMonth={setCurrentMonth}
+                    isReadOnly={false}
+                    isAdmin={false}
+                    deadlines={deadlines}
+                    onUpdateAvailabilities={handleUpdateAvailabilities}
+                    dayConfigs={dayConfigs}
+                    onUpdateDayConfig={() => {}}
+                    onCancelWorkDay={handleCancelWorkDay}
+                    cancellations={[]}
+                    onDismissCancellation={() => {}}
+                    onMarkCancellationRead={() => {}}
+                    sidebarTab={sidebarTab}
+                    onSidebarTabChange={setSidebarTab}
+                  />
                 </div>
               ) : employeeActiveTab === 'master_schedule' ? (
                 <Suspense fallback={<ViewFallback />}>
