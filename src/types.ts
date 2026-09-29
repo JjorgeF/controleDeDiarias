@@ -125,6 +125,7 @@ export interface Employee {
   windbreakerSize?: 'PP' | 'P' | 'M' | 'G' | 'GG' | 'XGG';
   emergencyContactName?: string;
   emergencyContactPhone?: string;
+  paymentGroup?: 'general' | 'management'; // 'general': Festas na 2ª e CCSP dia 15 | 'management': Festas e CCSP dia 15
   paidDates?: string[]; // Array of YYYY-MM-DD or milestone date strings marked as paid by admin
 }
 
