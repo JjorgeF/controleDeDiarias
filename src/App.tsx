@@ -76,14 +76,31 @@ export default function App() {
   const [sidebarTab, setSidebarTab] = useState<'availabilities' | 'cancellations'>('availabilities');
   const [isAdvancedSettingsOpen, setIsAdvancedSettingsOpen] = useState(false);
   
-  // Estado para simulação de papéis (Role simulation)
+  // Estado para simulação de papéis (Role simulation - exclusivo para admins)
   const [simulationActive, setSimulationActive] = useState(false);
   const [simulatedEmployeeId, setSimulatedEmployeeId] = useState<string>('');
 
   // Flag de controle: ativa no modo desenvolvimento local ou via variável customizada VITE_ENABLE_SIMULATION no .env
   const isSimulationEnabled = import.meta.env.VITE_ENABLE_SIMULATION?.toLowerCase() === 'true' || import.meta.env.DEV;
 
-  const isViewingAsAdmin = isAdmin && (!isSimulationEnabled || !simulationActive);
+  // A simulação SÓ pode existir se o usuário for ADMIN comprovado
+  const isSimulating = isSimulationEnabled && isAdmin && simulationActive;
+  const isViewingAsAdmin = isAdmin && !isSimulating;
+
+  const userEmailLower = (user?.email || '').trim().toLowerCase();
+
+  // Resolução unificada e estrita do colaborador logado
+  const currentLoggedInEmployee = useMemo(() => {
+    if (!user) return null;
+    if (isSimulating) {
+      return employees.find(emp => emp.id === simulatedEmployeeId) || null;
+    }
+    return (
+      employees.find(emp => userEmailLower && (emp.email || '').trim().toLowerCase() === userEmailLower) ||
+      employees.find(emp => user.uid && emp.userId === user.uid && emp.status !== 'inactive') ||
+      null
+    );
+  }, [user, userEmailLower, isSimulating, simulatedEmployeeId, employees]);
 
   // Modals & Navigation state
   const [employeeActiveTab, setEmployeeActiveTab] = useState<'schedule' | 'master_schedule' | 'profile' | 'earnings'>('schedule');
@@ -283,7 +300,10 @@ export default function App() {
           // Sync push subscription for PWA background notifications if permission was granted
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             const myEmailLower = (user.email || '').trim().toLowerCase();
-            const myEmp = employees.find(e => (myEmailLower && (e.email || '').trim().toLowerCase() === myEmailLower) || (user.uid && e.userId === user.uid));
+            const myEmp = employees.find(e => 
+              (myEmailLower && (e.email || '').trim().toLowerCase() === myEmailLower && e.status !== 'inactive') || 
+              (user.uid && e.userId === user.uid && e.status !== 'inactive')
+            );
             registerPushSubscription(user.email, user.displayName || user.email.split('@')[0], myEmp?.id).catch(() => {});
           }
         } catch (error) {
@@ -482,7 +502,7 @@ export default function App() {
 
   const activeUserKey = isViewingAsAdmin
     ? 'admin'
-    : (simulationActive ? `emp_${simulatedEmployeeId}` : (user?.email || user?.uid || 'user'));
+    : (isSimulating ? `emp_${simulatedEmployeeId}` : (currentLoggedInEmployee?.id || user?.email || user?.uid || 'user'));
 
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>(() => {
     try {
@@ -622,12 +642,7 @@ export default function App() {
     }
 
     // 3. Custom broadcast or targeted notifications
-    const userEmailLower = (user?.email || '').trim().toLowerCase();
-    const myRecord = simulationActive
-      ? employees.find(e => e.id === simulatedEmployeeId)
-      : (userEmailLower
-          ? employees.find(e => (e.email || '').trim().toLowerCase() === userEmailLower || (user?.uid && e.userId === user.uid))
-          : null);
+    const myRecord = currentLoggedInEmployee;
 
     customNotificationsDocs.forEach(cNotif => {
       const notifId = `custom_${cNotif.id}`;
@@ -742,7 +757,7 @@ export default function App() {
   };
 
   const handleDeleteCustomNotification = async (customNotifId: string) => {
-    if (!db) return;
+    if (!db || !isViewingAsAdmin) return;
     try {
       const docRef = doc(db, 'settings', 'custom_notifications');
       const docSnap = await getDoc(docRef);
@@ -757,7 +772,12 @@ export default function App() {
   };
 
   const handleUpdatePhoto = async (employeeId: string, photoUrl: string) => {
-    if (!db) return;
+    if (!db || !user) return;
+    // Permissão: Apenas administradores OU o próprio funcionário logado
+    if (!isAdmin && (!currentLoggedInEmployee || currentLoggedInEmployee.id !== employeeId)) {
+      console.warn("Tentativa não autorizada de alterar foto de perfil de outro usuário.");
+      return;
+    }
     try {
       const empRef = doc(db, 'employees', employeeId);
       await updateDoc(empRef, { photoUrl });
@@ -773,17 +793,35 @@ export default function App() {
   };
 
   const handleUpdateEmployeeDetails = async (employeeId: string, updatedFields: Partial<Employee>) => {
-    if (!db) return;
+    if (!db || !user) return;
+    // Permissão: Apenas administradores OU o próprio funcionário logado
+    if (!isAdmin && (!currentLoggedInEmployee || currentLoggedInEmployee.id !== employeeId)) {
+      console.warn("Tentativa não autorizada de alterar dados de outro colaborador.");
+      return;
+    }
+
+    // Se não for admin, sanitiza retirando qualquer campo sensível contratual ou de status
+    const sanitizedFields = { ...updatedFields };
+    if (!isAdmin) {
+      delete sanitizedFields.level;
+      delete sanitizedFields.dailyRate;
+      delete sanitizedFields.partyRate;
+      delete sanitizedFields.extraHourRate;
+      delete sanitizedFields.status;
+      delete sanitizedFields.inactivatedAt;
+      delete sanitizedFields.promotions;
+      delete sanitizedFields.workDays;
+    }
     
     // Optimistic UI Update
-    setEmployees(prev => prev.map(emp => emp.id === employeeId ? { ...emp, ...updatedFields } : emp));
+    setEmployees(prev => prev.map(emp => emp.id === employeeId ? { ...emp, ...sanitizedFields } : emp));
     if (selectedStoryEmployee?.id === employeeId) {
-      setSelectedStoryEmployee(prev => prev ? { ...prev, ...updatedFields } : null);
+      setSelectedStoryEmployee(prev => prev ? { ...prev, ...sanitizedFields } : null);
     }
 
     try {
       const empRef = doc(db, 'employees', employeeId);
-      await updateDoc(empRef, updatedFields);
+      await updateDoc(empRef, sanitizedFields);
     } catch (error: any) {
       console.error("Erro ao atualizar dados do funcionário:", error);
       
@@ -813,12 +851,7 @@ export default function App() {
   // Native browser & mobile device notification trigger
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-      const userEmailLower = (user?.email || '').trim().toLowerCase();
-      const myRecord = simulationActive
-        ? employees.find(e => e.id === simulatedEmployeeId)
-        : (userEmailLower
-            ? employees.find(e => (e.email || '').trim().toLowerCase() === userEmailLower || (user?.uid && e.userId === user.uid))
-            : null);
+      const myRecord = currentLoggedInEmployee;
 
       // Filter unread notifications to ONLY those intended FOR this specific user/device to pop up natively:
       const unreadList = allNotifications.filter(n => {
@@ -884,6 +917,9 @@ export default function App() {
 
   const handleSaveEmployee = async (data: Partial<Employee>): Promise<{ success: boolean; error?: string }> => {
     if (!user || !db) return { success: false, error: "Usuário não autenticado." };
+    if (!isAdmin) {
+      return { success: false, error: "Apenas administradores podem cadastrar ou editar colaboradores." };
+    }
 
     const sanitizedData = { ...data };
     if (sanitizedData.email) {
@@ -970,7 +1006,7 @@ export default function App() {
   };
 
   const handleInactivateEmployee = useCallback(async (id: string) => {
-    if (!id || !db) return;
+    if (!id || !db || !isAdmin) return;
     try {
       const docRef = doc(db, 'employees', id);
       await updateDoc(docRef, {
@@ -985,10 +1021,10 @@ export default function App() {
       alert("Erro ao desativar funcionário: " + (error.message || "Erro desconhecido."));
       throw error;
     }
-  }, [db]);
+  }, [db, isAdmin]);
 
   const handleReactivateEmployee = useCallback(async (id: string) => {
-    if (!id || !db) return;
+    if (!id || !db || !isAdmin) return;
     try {
       const docRef = doc(db, 'employees', id);
       await updateDoc(docRef, {
@@ -1002,10 +1038,10 @@ export default function App() {
       alert("Erro ao reativar funcionário: " + (error.message || "Erro desconhecido."));
       throw error;
     }
-  }, [db]);
+  }, [db, isAdmin]);
 
   const handlePurgeExpiredInactives = useCallback(async () => {
-    if (!db) return;
+    if (!db || !isAdmin) return;
     const SIX_MONTHS_MS = 180 * 24 * 60 * 60 * 1000;
     const now = Date.now();
 
@@ -1033,11 +1069,11 @@ export default function App() {
       console.error("handlePurgeExpiredInactives error:", error);
       alert("Erro ao excluir desativados expirados: " + error.message);
     }
-  }, [db, employees]);
+  }, [db, employees, isAdmin]);
 
   const handleDeleteEmployee = useCallback(async (id: string) => {
-    if (!id) {
-      console.error("handleDeleteEmployee: ID is missing");
+    if (!id || !isAdmin) {
+      console.error("handleDeleteEmployee: Não autorizado ou ID ausente");
       return;
     }
     
@@ -1137,7 +1173,10 @@ export default function App() {
   };
 
   const handleUpdateDays = async (employeeId: string, days: WorkDay[]) => {
-    if (!user || !db) return;
+    if (!user || !db || !isAdmin) {
+      console.warn("Apenas administradores podem atualizar escalas de trabalho.");
+      return;
+    }
     try {
       const empRef = doc(db, 'employees', employeeId);
       const cleanedDays = removeUndefinedFields(days);
@@ -1150,6 +1189,11 @@ export default function App() {
 
   const handleUpdateAvailabilities = async (employeeId: string, availabilities: string[]) => {
     if (!user || !db) return;
+    // Permissão: Apenas administradores OU o próprio colaborador logado
+    if (!isAdmin && (!currentLoggedInEmployee || currentLoggedInEmployee.id !== employeeId)) {
+      console.warn("Tentativa não autorizada de alterar disponibilidade de outro usuário.");
+      return;
+    }
     try {
       let finalAvailabilities = availabilities;
 
@@ -1184,7 +1228,7 @@ export default function App() {
   };
 
   const handleUpdateDeadline = async (monthKey: string, deadlineIso: string) => {
-    if (!db) return;
+    if (!db || !isAdmin) return;
     try {
       const docRef = doc(db, 'settings', 'deadlines');
       await setDoc(docRef, { [monthKey]: deadlineIso }, { merge: true });
@@ -1195,7 +1239,7 @@ export default function App() {
   };
 
   const handleUpdateDayConfig = async (dateStr: string, config: DayConfig) => {
-    if (!db) return;
+    if (!db || !isAdmin) return;
     try {
       const cleanConfig: Record<string, any> = {
         isCommon: !!config.isCommon,
@@ -1221,7 +1265,7 @@ export default function App() {
   };
 
   const handleSaveParty = async (party: PartyDetails, assignedEmployeeIds: string[] = []) => {
-    if (!db || !user) return;
+    if (!db || !user || !isAdmin) return;
     try {
       const partyId = party.partyId || party.id || `p_${Date.now()}`;
       const docId = `${party.date}_${partyId}`;
@@ -1295,7 +1339,7 @@ export default function App() {
   };
 
   const handleDeleteParty = async (partyId: string, dateStr: string) => {
-    if (!db || !user) return;
+    if (!db || !user || !isAdmin) return;
     try {
       const docId = `${dateStr}_${partyId}`;
       await deleteDoc(doc(db, 'party_events', docId));
@@ -1331,6 +1375,11 @@ export default function App() {
 
   const handleCancelWorkDay = async (employeeId: string, dateStr: string, type: 'common' | 'party', employeeName: string) => {
     if (!user || !db) return;
+    // Permissão: Apenas administradores OU o próprio funcionário logado
+    if (!isAdmin && (!currentLoggedInEmployee || currentLoggedInEmployee.id !== employeeId)) {
+      console.warn("Tentativa não autorizada de cancelar escala de outro usuário.");
+      return;
+    }
     try {
       const todayStr = format(new Date(), 'yyyy-MM-dd');
       const monthKey = dateStr.slice(0, 7);
@@ -1377,6 +1426,9 @@ export default function App() {
     if (!db) return;
     try {
       const [employeeId, dateStr] = cancellationId.split('_');
+      if (!isAdmin && (!currentLoggedInEmployee || currentLoggedInEmployee.id !== employeeId)) {
+        return;
+      }
       if (employeeId && dateStr) {
         const empRef = doc(db, 'employees', employeeId);
         const empSnap = await getDoc(empRef);
@@ -1400,6 +1452,9 @@ export default function App() {
     if (!db) return;
     try {
       const [employeeId, dateStr] = cancellationId.split('_');
+      if (!isAdmin && (!currentLoggedInEmployee || currentLoggedInEmployee.id !== employeeId)) {
+        return;
+      }
       if (employeeId && dateStr) {
         const empRef = doc(db, 'employees', employeeId);
         const empSnap = await getDoc(empRef);
@@ -1431,6 +1486,7 @@ export default function App() {
     mode: 'restore_workday' | 'ignore_penalty_only';
   }): Promise<{ success: boolean; error?: string }> => {
     if (!db) return { success: false, error: 'Banco de dados indisponível.' };
+    if (!isAdmin) return { success: false, error: 'Apenas administradores podem reverter cancelamentos.' };
     try {
       const empRef = doc(db, 'employees', employeeId);
       const empSnap = await getDoc(empRef);
@@ -1628,22 +1684,10 @@ export default function App() {
 
   // Interface do Funcionário (Não Admin)
   if (!isViewingAsAdmin) {
-    const userEmailLower = (user?.email || '').trim().toLowerCase();
-    
-    // Busca segura do funcionário:
-    // 1. Em modo simulação (apenas admins autorizados): usa o id simulado
-    // 2. Busca estrita pelo e-mail cadastrado
-    // 3. Fallback seguro por userId apenas se o funcionário estiver ativo
-    // NUNCA faz fallback cego para employees[0]
-    const myEmployeeRecord = simulationActive
-      ? employees.find(emp => emp.id === simulatedEmployeeId)
-      : (
-          employees.find(emp => userEmailLower && (emp.email || '').trim().toLowerCase() === userEmailLower) ||
-          employees.find(emp => user?.uid && emp.userId === user.uid && emp.status !== 'inactive')
-        );
+    const myEmployeeRecord = currentLoggedInEmployee;
 
     // Bloqueio 1: Usuário desativado pela administração
-    if (myEmployeeRecord && myEmployeeRecord.status === 'inactive' && !simulationActive) {
+    if (myEmployeeRecord && myEmployeeRecord.status === 'inactive' && !isSimulating) {
       return (
         <div className="min-h-screen bg-brand-bg flex flex-col items-center justify-center p-4">
           <div className="bg-brand-card border border-red-500/30 p-6 md:p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
@@ -1686,7 +1730,7 @@ export default function App() {
     }
 
     // Bloqueio 2: E-mail não vinculado a nenhum funcionário
-    if (!myEmployeeRecord && !simulationActive) {
+    if (!myEmployeeRecord && !isSimulating) {
       return (
         <div className="min-h-screen bg-brand-bg flex flex-col items-center justify-center p-4">
           <div className="bg-brand-card border border-brand-border p-6 md:p-8 rounded-2xl shadow-2xl max-w-md w-full text-center">
@@ -1806,11 +1850,11 @@ export default function App() {
                       deadlines={deadlines}
                       onUpdateAvailabilities={handleUpdateAvailabilities}
                       dayConfigs={dayConfigs}
-                      onUpdateDayConfig={handleUpdateDayConfig}
+                      onUpdateDayConfig={() => {}}
                       onCancelWorkDay={handleCancelWorkDay}
-                      cancellations={cancellations}
-                      onDismissCancellation={handleDismissCancellation}
-                      onMarkCancellationRead={handleMarkCancellationRead}
+                      cancellations={[]}
+                      onDismissCancellation={() => {}}
+                      onMarkCancellationRead={() => {}}
                       sidebarTab={sidebarTab}
                       onSidebarTabChange={setSidebarTab}
                     />
@@ -2119,7 +2163,7 @@ export default function App() {
               employees={employees}
               currentMonth={currentMonth}
               setCurrentMonth={setCurrentMonth}
-              currentEmployee={simulationActive ? employees.find(e => e.id === simulatedEmployeeId) : null}
+              currentEmployee={isSimulating ? employees.find(e => e.id === simulatedEmployeeId) : null}
               isAdmin={isViewingAsAdmin}
               dayConfigs={dayConfigs}
             />
