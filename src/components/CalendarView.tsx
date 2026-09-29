@@ -1331,14 +1331,14 @@ export default function CalendarView({
           return (
             <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl overflow-hidden shadow-lg animate-in fade-in">
               {/* Header Banner */}
-              <div className="p-3.5 md:p-4 bg-amber-500/15 flex flex-wrap items-center justify-between gap-3 border-b border-amber-500/20">
-                <div className="flex items-center gap-3 flex-1 min-w-[240px]">
-                  <div className="w-9 h-9 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0">
-                    <Zap size={20} className="text-amber-400 fill-amber-400 animate-pulse" />
+              <div className="p-3 md:p-3.5 bg-amber-500/15 flex flex-wrap items-center justify-between gap-3 border-b border-amber-500/20">
+                <div className="flex items-center gap-2.5 flex-1 min-w-[200px]">
+                  <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0">
+                    <Zap size={18} className="text-amber-400 fill-amber-400 animate-pulse" />
                   </div>
                   <div className="flex-1 text-xs md:text-sm">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-black text-amber-300 text-sm md:text-base">Abertura Extra de Disponibilidade Ativa</span>
+                      <span className="font-black text-amber-300 text-sm md:text-base">Abertura Extra</span>
                       {totalExtraSubmissions > 0 && (
                         <span className="bg-amber-500/30 text-amber-200 text-[10px] font-black px-2.5 py-0.5 rounded-full border border-amber-500/50 flex items-center gap-1">
                           <UserCheck size={12} />
@@ -1352,9 +1352,9 @@ export default function CalendarView({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setIsExtraordinaryDetailsOpen(!isExtraordinaryDetailsOpen)}
-                    className="bg-amber-500/25 hover:bg-amber-500/40 text-amber-200 border border-amber-500/40 px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1.5 shadow-xs"
+                    className="bg-amber-500/25 hover:bg-amber-500/40 text-amber-200 border border-amber-500/40 px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1 shadow-xs"
                   >
-                    <span>{isExtraordinaryDetailsOpen ? 'Ocultar Sessão Extra' : 'Ver Pessoas Extras'}</span>
+                    <span>{isExtraordinaryDetailsOpen ? 'Ocultar' : 'Ver Dias'}</span>
                     {isExtraordinaryDetailsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                   </button>
 
@@ -1370,14 +1370,7 @@ export default function CalendarView({
 
               {/* Expandable Details Session */}
               {isExtraordinaryDetailsOpen && (
-                <div className="p-3.5 md:p-4 space-y-3 bg-brand-bg/40">
-                  <div className="flex items-center justify-between text-xs font-bold text-amber-400 border-b border-amber-500/20 pb-2 flex-wrap gap-2">
-                    <span className="uppercase tracking-wider text-[11px] font-black flex items-center gap-1.5">
-                      <Users size={14} />
-                      Envios da Abertura Extra ({totalExtraSubmissions})
-                    </span>
-                  </div>
-
+                <div className="p-3 md:p-3.5 space-y-3 bg-brand-bg/40">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {extraordinaryDaysData.map(({ date, dateStr, cfg, extraEmps }) => (
                       <div 
@@ -1414,7 +1407,7 @@ export default function CalendarView({
                           )}
 
                           {/* List of Extra Recreadores */}
-                          <div className="mt-2 space-y-1.5">
+                          <div className="mt-2 space-y-1">
                             <div className="text-[10px] font-bold text-brand-muted uppercase tracking-wider flex items-center justify-between">
                               <span>Envios neste dia:</span>
                               <span className="text-amber-400 font-extrabold">{extraEmps.length}</span>
@@ -1425,42 +1418,24 @@ export default function CalendarView({
                                 Nenhum novo envio registrado ainda neste dia.
                               </div>
                             ) : (
-                              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                              <div className="space-y-1 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
                                 {extraEmps.map(({ employee: emp, isDispCommon, partyDetails }) => (
                                   <div 
                                     key={emp.id}
-                                    className="bg-amber-500/[0.08] border border-amber-500/30 p-2 rounded-lg text-xs space-y-1.5"
+                                    className="flex items-center justify-between gap-2 py-1 px-2 rounded-md bg-amber-500/[0.08] border border-amber-500/25 text-xs hover:bg-amber-500/15 transition-colors"
                                   >
-                                    {/* Top Row: Avatar + Name + Level */}
-                                    <div className="flex items-center justify-between gap-2 min-w-0">
-                                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                                        <div className="w-6 h-6 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center font-black text-[10px] text-amber-300 shrink-0 overflow-hidden shadow-2xs">
-                                          {emp.photoUrl ? (
-                                            <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
-                                          ) : (
-                                            (emp.artisticName || emp.name).slice(0, 2).toUpperCase()
-                                          )}
-                                        </div>
-                                        <span className="font-bold text-brand-text truncate text-xs min-w-0">
-                                          {emp.artisticName || emp.name}
-                                        </span>
-                                      </div>
-                                      <span className="text-[9px] font-black text-amber-300 uppercase shrink-0 bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/30">
-                                        {emp.level}
-                                      </span>
-                                    </div>
-
-                                    {/* Badges Row: Options Selected */}
-                                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                    <span className="font-bold text-brand-text truncate text-xs">
+                                      {emp.artisticName || emp.name}
+                                    </span>
+                                    <div className="flex items-center gap-1 shrink-0">
                                       {isDispCommon && (
-                                        <span className="text-[9px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded flex items-center gap-1 shadow-2xs">
-                                          <span className="text-emerald-400">✓</span> CCSP
+                                        <span className="text-[9px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded">
+                                          CCSP
                                         </span>
                                       )}
                                       {partyDetails.map((pName, idx) => (
-                                        <span key={idx} className="text-[9px] font-black bg-brand-party/20 text-brand-party border border-brand-party/30 px-2 py-0.5 rounded flex items-center gap-1 max-w-full truncate shadow-2xs" title={`Festa: ${pName}`}>
-                                          <span className="text-brand-party">✓</span>
-                                          <span className="truncate">{pName}</span>
+                                        <span key={idx} className="text-[9px] font-black bg-brand-party/20 text-brand-party border border-brand-party/30 px-1.5 py-0.2 rounded max-w-[110px] truncate" title={`Festa: ${pName}`}>
+                                          {pName}
                                         </span>
                                       ))}
                                     </div>
