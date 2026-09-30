@@ -42,7 +42,7 @@ import {
 import { format, parseISO, formatDistanceToNow, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '../lib/utils';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface AdminDashboardProps {
   employees: Employee[];
@@ -600,64 +600,104 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
             
             <div className="flex flex-wrap items-center gap-3">
               {/* Period Selector (Mensal vs Geral) */}
-              <div className="flex bg-brand-bg/60 p-1 rounded-xl border border-brand-border">
+              <div className="relative flex bg-brand-bg/70 p-1 rounded-xl border border-brand-border shadow-inner">
                 <button
+                  type="button"
                   onClick={() => setRankPeriod('monthly')}
                   className={cn(
-                    "px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider rounded-lg transition-all",
+                    "relative z-10 px-3.5 py-1.5 text-[11px] font-extrabold uppercase tracking-wider rounded-lg transition-colors cursor-pointer select-none active:scale-95 duration-150",
                     rankPeriod === 'monthly' 
-                      ? "bg-brand-primary/20 dark:bg-white/10 text-brand-primary dark:text-white border border-brand-primary/10 dark:border-white/10 shadow-sm" 
+                      ? "text-brand-primary dark:text-white" 
                       : "text-brand-muted hover:text-brand-text"
                   )}
                 >
+                  {rankPeriod === 'monthly' && (
+                    <motion.div
+                      layoutId="activeRankPeriodPill"
+                      className="absolute inset-0 rounded-lg bg-brand-primary/20 dark:bg-white/10 border border-brand-primary/20 dark:border-white/15 shadow-sm -z-10"
+                      transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                    />
+                  )}
                   Mensal
                 </button>
                 <button
+                  type="button"
                   onClick={() => setRankPeriod('allTime')}
                   className={cn(
-                    "px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider rounded-lg transition-all",
+                    "relative z-10 px-3.5 py-1.5 text-[11px] font-extrabold uppercase tracking-wider rounded-lg transition-colors cursor-pointer select-none active:scale-95 duration-150",
                     rankPeriod === 'allTime' 
-                      ? "bg-brand-primary/20 dark:bg-white/10 text-brand-primary dark:text-white border border-brand-primary/10 dark:border-white/10 shadow-sm" 
+                      ? "text-brand-primary dark:text-white" 
                       : "text-brand-muted hover:text-brand-text"
                   )}
                 >
+                  {rankPeriod === 'allTime' && (
+                    <motion.div
+                      layoutId="activeRankPeriodPill"
+                      className="absolute inset-0 rounded-lg bg-brand-primary/20 dark:bg-white/10 border border-brand-primary/20 dark:border-white/15 shadow-sm -z-10"
+                      transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                    />
+                  )}
                   Geral
                 </button>
               </div>
 
               {/* Metric Selector (Dias Agendados vs Disponibilidades vs Desistências) */}
-              <div className="flex bg-brand-bg/60 p-1 rounded-xl border border-brand-border flex-wrap gap-1">
+              <div className="relative flex bg-brand-bg/70 p-1 rounded-xl border border-brand-border flex-wrap gap-1 shadow-inner">
                 <button
+                  type="button"
                   onClick={() => setRankMetric('confirmed')}
                   className={cn(
-                    "px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider rounded-lg transition-all",
+                    "relative z-10 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider rounded-lg transition-colors cursor-pointer select-none active:scale-95 duration-150",
                     rankMetric === 'confirmed' 
-                      ? "bg-brand-primary text-brand-bg shadow-md" 
+                      ? "text-slate-950 font-black" 
                       : "text-brand-muted hover:text-brand-text"
                   )}
                 >
+                  {rankMetric === 'confirmed' && (
+                    <motion.div
+                      layoutId="activeRankMetricPill"
+                      className="absolute inset-0 rounded-lg bg-brand-primary shadow-md -z-10"
+                      transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                    />
+                  )}
                   Dias Agendados
                 </button>
                 <button
+                  type="button"
                   onClick={() => setRankMetric('availabilities')}
                   className={cn(
-                    "px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider rounded-lg transition-all",
+                    "relative z-10 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider rounded-lg transition-colors cursor-pointer select-none active:scale-95 duration-150",
                     rankMetric === 'availabilities' 
-                      ? "bg-brand-party text-white shadow-md" 
+                      ? "text-white font-black" 
                       : "text-brand-muted hover:text-brand-text"
                   )}
                 >
+                  {rankMetric === 'availabilities' && (
+                    <motion.div
+                      layoutId="activeRankMetricPill"
+                      className="absolute inset-0 rounded-lg bg-brand-party shadow-md -z-10"
+                      transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                    />
+                  )}
                   Disponibilidades
                 </button>
                 <button
+                  type="button"
                   onClick={() => setRankMetric('cancellations')}
                   className={cn(
-                    "px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider rounded-lg transition-all",
+                    "relative z-10 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider rounded-lg transition-colors cursor-pointer select-none active:scale-95 duration-150",
                     rankMetric === 'cancellations' 
-                      ? "bg-rose-500 text-white shadow-md" 
+                      ? "text-white font-black" 
                       : "text-brand-muted hover:text-brand-text"
                   )}
                 >
+                  {rankMetric === 'cancellations' && (
+                    <motion.div
+                      layoutId="activeRankMetricPill"
+                      className="absolute inset-0 rounded-lg bg-rose-500 shadow-md -z-10"
+                      transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                    />
+                  )}
                   Desistências
                 </button>
               </div>
@@ -678,9 +718,18 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
 
           {/* Ranking list */}
           <div className="space-y-6">
-            {rankingData.length > 0 ? (
-              <>
-                {/* Pódio (Top 3) */}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`${rankPeriod}-${rankMetric}`}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2, ease: "easeInOut" }}
+                className="space-y-6"
+              >
+                {rankingData.length > 0 ? (
+                  <>
+                    {/* Pódio (Top 3) */}
                 <div className="bg-brand-bg/40 border border-brand-border/40 rounded-2xl p-4 sm:p-6 mb-6 flex flex-col items-center justify-center relative overflow-hidden shadow-inner">
                   {/* Subtle background glow effect */}
                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-brand-primary/5 rounded-full blur-3xl pointer-events-none" />
@@ -1004,6 +1053,8 @@ export default function AdminDashboard({ employees, currentMonth, setCurrentMont
                 <p className="text-gray-500 font-semibold text-sm">Nenhum funcionário cadastrado para o ranking.</p>
               </div>
             )}
+              </motion.div>
+            </AnimatePresence>
           </div>
         </div>
 
