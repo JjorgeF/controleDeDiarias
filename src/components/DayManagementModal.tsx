@@ -541,7 +541,7 @@ export default function DayManagementModal({
                     animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
                     transition={{ duration: 0.2 }}
-                    className="space-y-3 pt-3 pb-32 max-h-[50vh] sm:max-h-[55vh] overflow-y-auto pr-1.5 custom-scrollbar"
+                    className="space-y-3 pt-3 pb-1 max-h-[50vh] sm:max-h-[55vh] overflow-y-auto pr-1.5 custom-scrollbar"
                   >
                     {/* Toggles & Add Party Button */}
                     <div className="flex flex-wrap items-center gap-2 max-w-full">
@@ -704,9 +704,6 @@ export default function DayManagementModal({
                           <Zap size={15} className="text-amber-400 shrink-0 fill-amber-400" />
                           <span className="font-bold text-amber-300">Abertura Extra Ativa</span>
                         </div>
-                        <p className="text-[11px] text-amber-100/90 leading-relaxed">
-                          Funcionários podem cadastrar ou alterar disponibilidades até o horário limite. Remoções anteriores foram travadas.
-                        </p>
                         
                         <div className="pt-1 flex flex-col sm:flex-row sm:items-center gap-2 bg-amber-950/40 p-2.5 rounded-lg border border-amber-500/20">
                           <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-300 shrink-0">
