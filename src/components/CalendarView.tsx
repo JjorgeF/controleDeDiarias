@@ -1339,7 +1339,7 @@ export default function CalendarView({
                   <div className="flex-1 text-xs md:text-sm">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-black text-amber-300 text-sm md:text-base">Abertura Extra</span>
-                      {totalExtraSubmissions > 0 && (
+                      {isAdmin && totalExtraSubmissions > 0 && (
                         <span className="bg-amber-500/30 text-amber-200 text-[10px] font-black px-2.5 py-0.5 rounded-full border border-amber-500/50 flex items-center gap-1">
                           <UserCheck size={12} />
                           {totalExtraSubmissions} {totalExtraSubmissions === 1 ? 'novo envio' : 'novos envios'}
@@ -1372,81 +1372,162 @@ export default function CalendarView({
               {isExtraordinaryDetailsOpen && (
                 <div className="p-3 md:p-3.5 space-y-3 bg-brand-bg/40">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {extraordinaryDaysData.map(({ date, dateStr, cfg, extraEmps }) => (
-                      <div 
-                        key={dateStr}
-                        className="bg-brand-card/80 border border-amber-500/30 hover:border-amber-500/60 rounded-xl p-3 transition-all flex flex-col justify-between gap-2.5 shadow-xs group"
-                      >
-                        <div>
-                          <div className="flex items-center justify-between gap-2 mb-2">
-                            <div className="flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                              <span className="font-black text-xs md:text-sm text-brand-text capitalize">
-                                {format(date, "EEEE, dd 'de' MMMM", { locale: ptBR })}
-                              </span>
+                    {extraordinaryDaysData.map(({ date, dateStr, cfg, extraEmps }) => {
+                      const myAvails = !isAdmin && myEmployee 
+                        ? (myEmployee.availabilities || []).filter(a => a === dateStr || a.startsWith(`${dateStr}_`))
+                        : [];
+                      const hasMyAvail = myAvails.length > 0;
+
+                      // Check options open in this day based on extraordinary scope
+                      const isCcspScope = cfg.isCommon !== false && (
+                        !cfg.extraordinaryScope || 
+                        cfg.extraordinaryScope === 'all' || 
+                        cfg.extraordinaryScope === 'ccsp' ||
+                        cfg.extraordinaryCcspOpen
+                      );
+                      const partiesScope = (cfg.parties || []).filter(p => {
+                        if (!cfg.extraordinaryScope || cfg.extraordinaryScope === 'all' || cfg.extraordinaryScope === 'parties') return true;
+                        if (cfg.extraordinaryPartyIds && cfg.extraordinaryPartyIds.includes(p.id)) return true;
+                        return false;
+                      });
+
+                      return (
+                        <div 
+                          key={dateStr}
+                          className="bg-brand-card/80 border border-amber-500/30 hover:border-amber-500/60 rounded-xl p-3.5 transition-all flex flex-col justify-between gap-2.5 shadow-xs group"
+                        >
+                          <div>
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                                <span className="font-black text-xs md:text-sm text-brand-text capitalize truncate">
+                                  {format(date, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                                </span>
+                              </div>
+                              {isAdmin && (
+                                <button
+                                  onClick={() => {
+                                    setSelectedDay(date);
+                                    setIsDayModalOpen(true);
+                                  }}
+                                  className="text-[10px] font-extrabold text-amber-300 hover:text-white bg-amber-500/25 hover:bg-amber-500/40 px-2 py-1 rounded-md border border-amber-500/40 transition-colors flex items-center gap-1 shrink-0 shadow-xs"
+                                >
+                                  <span>Gerenciar</span>
+                                  <ExternalLink size={10} />
+                                </button>
+                              )}
                             </div>
-                            {isAdmin && (
-                              <button
-                                onClick={() => {
-                                  setSelectedDay(date);
-                                  setIsDayModalOpen(true);
-                                }}
-                                className="text-[10px] font-extrabold text-amber-300 hover:text-white bg-amber-500/25 hover:bg-amber-500/40 px-2 py-1 rounded-md border border-amber-500/40 transition-colors flex items-center gap-1 shrink-0 shadow-xs"
-                              >
-                                <span>Gerenciar</span>
-                                <ExternalLink size={10} />
-                              </button>
+
+                            {/* Prazo Limite */}
+                            {cfg.extraordinaryDeadline && (
+                              <div className="text-[10px] text-amber-300/90 font-medium mb-2 flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 w-fit">
+                                <Clock size={10} />
+                                <span>Prazo: {format(new Date(cfg.extraordinaryDeadline), "dd/MM 'às' HH:mm")}</span>
+                              </div>
                             )}
-                          </div>
 
-                          {cfg.extraordinaryDeadline && (
-                            <div className="text-[10px] text-amber-300/90 font-medium mb-2 flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 w-fit">
-                              <Clock size={10} />
-                              <span>Prazo: {format(new Date(cfg.extraordinaryDeadline), "dd/MM 'às' HH:mm")}</span>
-                            </div>
-                          )}
+                            {/* Admin View: Submissions Count and List */}
+                            {isAdmin ? (
+                              <div className="mt-2 space-y-1">
+                                <div className="text-[10px] font-bold text-brand-muted uppercase tracking-wider flex items-center justify-between">
+                                  <span>Envios neste dia:</span>
+                                  <span className="text-amber-400 font-extrabold">{extraEmps.length}</span>
+                                </div>
 
-                          {/* List of Extra Recreadores */}
-                          <div className="mt-2 space-y-1">
-                            <div className="text-[10px] font-bold text-brand-muted uppercase tracking-wider flex items-center justify-between">
-                              <span>Envios neste dia:</span>
-                              <span className="text-amber-400 font-extrabold">{extraEmps.length}</span>
-                            </div>
-
-                            {extraEmps.length === 0 ? (
-                              <div className="p-2 rounded-lg bg-brand-bg/50 border border-brand-border/40 text-center text-[11px] text-brand-muted italic">
-                                Nenhum novo envio registrado ainda neste dia.
+                                {extraEmps.length === 0 ? (
+                                  <div className="p-2 rounded-lg bg-brand-bg/50 border border-brand-border/40 text-center text-[11px] text-brand-muted italic">
+                                    Nenhum novo envio registrado ainda neste dia.
+                                  </div>
+                                ) : (
+                                  <div className="space-y-1 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
+                                    {extraEmps.map(({ employee: emp, isDispCommon, partyDetails }) => (
+                                      <div 
+                                        key={emp.id}
+                                        className="flex items-center justify-between gap-2 py-1 px-2 rounded-md bg-amber-500/[0.08] border border-amber-500/25 text-xs hover:bg-amber-500/15 transition-colors"
+                                      >
+                                        <span className="font-bold text-brand-text truncate text-xs">
+                                          {emp.artisticName || emp.name}
+                                        </span>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          {isDispCommon && (
+                                            <span className="text-[9px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded">
+                                              CCSP
+                                            </span>
+                                          )}
+                                          {partyDetails.map((pName, idx) => (
+                                            <span key={idx} className="text-[9px] font-black bg-brand-party/20 text-brand-party border border-brand-party/30 px-1.5 py-0.2 rounded max-w-[110px] truncate" title={`Festa: ${pName}`}>
+                                              {pName}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             ) : (
-                              <div className="space-y-1 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
-                                {extraEmps.map(({ employee: emp, isDispCommon, partyDetails }) => (
-                                  <div 
-                                    key={emp.id}
-                                    className="flex items-center justify-between gap-2 py-1 px-2 rounded-md bg-amber-500/[0.08] border border-amber-500/25 text-xs hover:bg-amber-500/15 transition-colors"
-                                  >
-                                    <span className="font-bold text-brand-text truncate text-xs">
-                                      {emp.artisticName || emp.name}
+                              /* Employee View: Open Options & Personal Action Status */
+                              <div className="space-y-2 mt-2">
+                                {/* Open Scopes */}
+                                <div className="flex flex-wrap items-center gap-1">
+                                  <span className="text-[10px] font-bold text-brand-muted uppercase tracking-wider mr-0.5">
+                                    Vagas:
+                                  </span>
+                                  {isCcspScope && (
+                                    <span className="text-[9px] font-black bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                      🏢 CCSP
                                     </span>
-                                    <div className="flex items-center gap-1 shrink-0">
-                                      {isDispCommon && (
-                                        <span className="text-[9px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded">
-                                          CCSP
-                                        </span>
-                                      )}
-                                      {partyDetails.map((pName, idx) => (
-                                        <span key={idx} className="text-[9px] font-black bg-brand-party/20 text-brand-party border border-brand-party/30 px-1.5 py-0.2 rounded max-w-[110px] truncate" title={`Festa: ${pName}`}>
-                                          {pName}
-                                        </span>
-                                      ))}
+                                  )}
+                                  {partiesScope.map(p => (
+                                    <span key={p.id} className="text-[9px] font-black bg-brand-party/20 text-brand-party border border-brand-party/30 px-1.5 py-0.5 rounded flex items-center gap-1 truncate max-w-[120px]" title={p.name}>
+                                      🎉 {p.name}
+                                    </span>
+                                  ))}
+                                  {!isCcspScope && partiesScope.length === 0 && (
+                                    <span className="text-[10px] text-brand-muted italic">Em aberto</span>
+                                  )}
+                                </div>
+
+                                {/* Personal Status */}
+                                {hasMyAvail ? (
+                                  <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-2 shadow-xs">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
+                                      <span className="text-xs font-bold text-emerald-300 truncate">
+                                        Disponibilidade enviada
+                                      </span>
                                     </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDayClick(date)}
+                                      className="text-[10px] font-extrabold text-emerald-300 hover:text-white bg-emerald-500/20 hover:bg-emerald-500/40 border border-emerald-500/30 px-2 py-0.5 rounded-md transition-all active:scale-95 shrink-0"
+                                    >
+                                      Alterar
+                                    </button>
                                   </div>
-                                ))}
+                                ) : (
+                                  <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-2 shadow-xs">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping shrink-0" />
+                                      <span className="text-xs font-medium text-amber-200 truncate">
+                                        Disponível para envio
+                                      </span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDayClick(date)}
+                                      className="text-[10px] font-black text-slate-950 bg-amber-400 hover:bg-amber-300 px-2.5 py-1 rounded-md shadow-sm transition-all active:scale-95 shrink-0"
+                                    >
+                                      Candidatar-se
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
