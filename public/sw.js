@@ -1,5 +1,5 @@
 // Service Worker for Liga Positiva PWA
-const CACHE_NAME = 'liga-positiva-v1';
+const CACHE_NAME = 'liga-positiva-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
