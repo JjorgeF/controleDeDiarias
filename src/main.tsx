@@ -81,6 +81,8 @@ if ('serviceWorker' in navigator) {
   }
 }
 
+(window as any).__REACT_MOUNTED__ = true;
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
