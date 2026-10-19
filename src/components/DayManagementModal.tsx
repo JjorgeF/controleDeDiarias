@@ -254,7 +254,7 @@ export default function DayManagementModal({
         extraHours: 0,
         dailyRateAtTime: employee.dailyRate,
         partyRateAtTime: employee.partyRate,
-        extraHourRateAtTime: employee.extraHourRate,
+        extraHourRateAtTime: (employee.extraHourRate && employee.extraHourRate > 0) ? employee.extraHourRate : 30,
         levelAtTime: employee.level
       }];
       onUpdateDays(employee.id, newDays);
@@ -278,7 +278,7 @@ export default function DayManagementModal({
         extraHours: 0,
         dailyRateAtTime: employee.dailyRate,
         partyRateAtTime: employee.partyRate,
-        extraHourRateAtTime: employee.extraHourRate,
+        extraHourRateAtTime: (employee.extraHourRate && employee.extraHourRate > 0) ? employee.extraHourRate : 30,
         levelAtTime: employee.level
       }];
       onUpdateDays(employee.id, newDays);
@@ -300,13 +300,14 @@ export default function DayManagementModal({
   };
 
   const updateExtraHours = (employee: Employee, hours: number) => {
+    const defaultRate = (employee.extraHourRate && employee.extraHourRate > 0) ? employee.extraHourRate : 30;
     const newDays = employee.workDays.map(d => 
       d.date === selectedDayStr && !d.isCancelled ? { 
         ...d, 
         extraHours: hours,
         extraHourRateAtTime: (d.extraHourRateAtTime && d.extraHourRateAtTime > 0)
           ? d.extraHourRateAtTime
-          : (employee.extraHourRate || 0)
+          : defaultRate
       } : d
     );
     onUpdateDays(employee.id, newDays);

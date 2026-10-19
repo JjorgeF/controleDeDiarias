@@ -36,6 +36,10 @@ export default function DayWorkModeEditor({
   const savedOvernightHours = dayData?.overnightHoursText || '22h às 08h';
   const savedOvernightPay = dayData?.overnightPay !== undefined ? dayData.overnightPay : 150.0;
   const savedExtraHours = dayData?.extraHours || 0;
+  const defaultExtraRate = (employee.extraHourRate && employee.extraHourRate > 0) ? employee.extraHourRate : 30;
+  const savedExtraHourRate = (dayData?.extraHourRateAtTime && dayData.extraHourRateAtTime > 0)
+    ? dayData.extraHourRateAtTime
+    : defaultExtraRate;
 
   // Local draft state for editing before committing to Firestore
   const [selectedMode, setSelectedMode] = useState<'normal' | 'reduced' | 'overnight'>(savedMode);
@@ -44,6 +48,7 @@ export default function DayWorkModeEditor({
   const [overnightHoursText, setOvernightHoursText] = useState<string>(savedOvernightHours);
   const [overnightPay, setOvernightPay] = useState<number | string>(savedOvernightPay);
   const [extraHours, setExtraHours] = useState<number | string>(savedExtraHours);
+  const [extraHourRateInput, setExtraHourRateInput] = useState<number | string>(savedExtraHourRate);
 
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
@@ -56,16 +61,23 @@ export default function DayWorkModeEditor({
     setOvernightHoursText(savedOvernightHours);
     setOvernightPay(savedOvernightPay);
     setExtraHours(savedExtraHours);
+    const activeExtraRate = (dayData?.extraHourRateAtTime && dayData.extraHourRateAtTime > 0)
+      ? dayData.extraHourRateAtTime
+      : ((employee.extraHourRate && employee.extraHourRate > 0) ? employee.extraHourRate : 30);
+    setExtraHourRateInput(activeExtraRate);
     setStatusMessage(null);
-  }, [employee.id, selectedDayStr, dayData?.isOvernight, dayData?.isReducedHours, dayData?.customHoursText, dayData?.customTotalPay, dayData?.overnightHoursText, dayData?.overnightPay, dayData?.extraHours]);
+  }, [employee.id, selectedDayStr, dayData?.isOvernight, dayData?.isReducedHours, dayData?.customHoursText, dayData?.customTotalPay, dayData?.overnightHoursText, dayData?.overnightPay, dayData?.extraHours, dayData?.extraHourRateAtTime, employee.extraHourRate]);
+
+  const numericExtraHours = Math.max(0, Number(extraHours) || 0);
+  const numericExtraHourRate = Number(extraHourRateInput) > 0 ? Number(extraHourRateInput) : defaultExtraRate;
 
   // Determine if there are uncommitted changes
   const hasModeChanged = selectedMode !== savedMode;
   const isDirty = 
     hasModeChanged ||
     (selectedMode === 'reduced' && (customHoursText !== savedCustomHours || Number(customTotalPay) !== savedCustomPay)) ||
-    (selectedMode === 'overnight' && (overnightHoursText !== savedOvernightHours || Number(overnightPay) !== savedOvernightPay || Number(extraHours) !== savedExtraHours)) ||
-    (selectedMode === 'normal' && Number(extraHours) !== savedExtraHours);
+    (selectedMode === 'overnight' && (overnightHoursText !== savedOvernightHours || Number(overnightPay) !== savedOvernightPay || Number(extraHours) !== savedExtraHours || (numericExtraHours > 0 && numericExtraHourRate !== savedExtraHourRate))) ||
+    (selectedMode === 'normal' && (Number(extraHours) !== savedExtraHours || (numericExtraHours > 0 && numericExtraHourRate !== savedExtraHourRate)));
 
   // Financial calculations
   const isParty = dayData?.type === 'party';
@@ -73,8 +85,7 @@ export default function DayWorkModeEditor({
     ? (dayData?.partyRateAtTime !== undefined ? dayData.partyRateAtTime : employee.partyRate)
     : (dayData?.dailyRateAtTime !== undefined ? dayData.dailyRateAtTime : employee.dailyRate);
 
-  const extraHourRate = dayData?.extraHourRateAtTime !== undefined ? dayData.extraHourRateAtTime : employee.extraHourRate;
-  const numericExtraHours = Math.max(0, Number(extraHours) || 0);
+  const extraHourRate = numericExtraHourRate;
   const extraVal = numericExtraHours * extraHourRate;
   const numericOvernightPay = Math.max(0, Number(overnightPay) || 0);
   const totalOvernightVal = baseRate + numericOvernightPay + extraVal;
@@ -139,8 +150,12 @@ export default function DayWorkModeEditor({
 
           if (numericExtraHours > 0) {
             updated.extraHours = numericExtraHours;
+            updated.extraHourRateAtTime = numericExtraHourRate;
           } else {
             delete updated.extraHours;
+            if (numericExtraHourRate > 0) {
+              updated.extraHourRateAtTime = numericExtraHourRate;
+            }
           }
 
           return updated;
@@ -174,6 +189,7 @@ export default function DayWorkModeEditor({
     setOvernightHoursText(savedOvernightHours);
     setOvernightPay(savedOvernightPay);
     setExtraHours(savedExtraHours);
+    setExtraHourRateInput(savedExtraHourRate);
     setStatusMessage({ type: 'info', text: 'Alterações descartadas.' });
 
     setTimeout(() => {
@@ -347,17 +363,37 @@ export default function DayWorkModeEditor({
 
           {/* Campo de Horas Extras também na Pernoite */}
           <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-brand-border/40">
-            <label className="text-[10px] font-black text-brand-muted uppercase">Horas Extras na Pernoite:</label>
-            <input 
-              type="number"
-              min="0"
-              step="0.5"
-              value={extraHours || ''}
-              onChange={(e) => setExtraHours(e.target.value)}
-              placeholder="0"
-              disabled={!canEdit || isSaving}
-              className="w-20 bg-brand-bg border border-indigo-500/30 rounded-lg py-1 px-2.5 text-xs focus:outline-none focus:border-indigo-400 text-brand-text disabled:opacity-60"
-            />
+            <div className="flex items-center gap-1.5">
+              <label className="text-[10px] font-black text-brand-muted uppercase">Horas Extras na Pernoite:</label>
+              <input 
+                type="number"
+                min="0"
+                step="0.5"
+                value={extraHours || ''}
+                onChange={(e) => setExtraHours(e.target.value)}
+                placeholder="0"
+                disabled={!canEdit || isSaving}
+                className="w-20 bg-brand-bg border border-indigo-500/30 rounded-lg py-1 px-2.5 text-xs focus:outline-none focus:border-indigo-400 text-brand-text disabled:opacity-60"
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <label className="text-[10px] font-black text-brand-muted uppercase">Valor/h:</label>
+              <div className="relative w-24">
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-indigo-400">R$</span>
+                <input 
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={extraHourRateInput || ''}
+                  onChange={(e) => setExtraHourRateInput(e.target.value)}
+                  placeholder={String(defaultExtraRate)}
+                  disabled={!canEdit || isSaving}
+                  className="w-full bg-brand-bg border border-indigo-500/30 rounded-lg py-1 pl-6 pr-2 text-xs font-bold text-brand-text focus:outline-none focus:border-indigo-400 disabled:opacity-60"
+                />
+              </div>
+            </div>
+
             {numericExtraHours > 0 && (
               <span className="text-xs font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
                 = {formatCurrency(extraVal)} ({formatCurrency(extraHourRate)}/h)
@@ -377,24 +413,40 @@ export default function DayWorkModeEditor({
       {selectedMode === 'normal' && (
         <div className="space-y-2 bg-brand-bg/40 p-2.5 rounded-lg border border-brand-border">
           <div className="flex flex-wrap items-center gap-3">
-            <label className="text-[10px] font-black text-brand-muted uppercase">Horas Extras:</label>
-            <input 
-              type="number"
-              min="0"
-              step="0.5"
-              value={extraHours || ''}
-              onChange={(e) => setExtraHours(e.target.value)}
-              placeholder="0"
-              disabled={!canEdit || isSaving}
-              className="w-20 bg-brand-bg border border-brand-primary/20 rounded-lg py-1 px-2.5 text-xs focus:outline-none focus:border-brand-primary text-brand-text disabled:opacity-60"
-            />
-            {numericExtraHours > 0 ? (
+            <div className="flex items-center gap-1.5">
+              <label className="text-[10px] font-black text-brand-muted uppercase">Horas Extras:</label>
+              <input 
+                type="number"
+                min="0"
+                step="0.5"
+                value={extraHours || ''}
+                onChange={(e) => setExtraHours(e.target.value)}
+                placeholder="0"
+                disabled={!canEdit || isSaving}
+                className="w-20 bg-brand-bg border border-brand-primary/20 rounded-lg py-1 px-2.5 text-xs focus:outline-none focus:border-brand-primary text-brand-text disabled:opacity-60"
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <label className="text-[10px] font-black text-brand-muted uppercase">Valor/h:</label>
+              <div className="relative w-24">
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-brand-muted">R$</span>
+                <input 
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={extraHourRateInput || ''}
+                  onChange={(e) => setExtraHourRateInput(e.target.value)}
+                  placeholder={String(defaultExtraRate)}
+                  disabled={!canEdit || isSaving}
+                  className="w-full bg-brand-bg border border-brand-primary/20 rounded-lg py-1 pl-6 pr-2 text-xs font-bold text-brand-text focus:outline-none focus:border-brand-primary disabled:opacity-60"
+                />
+              </div>
+            </div>
+
+            {numericExtraHours > 0 && (
               <span className="text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
                 = {formatCurrency(extraVal)} ({formatCurrency(extraHourRate)}/h)
-              </span>
-            ) : (
-              <span className="text-[10px] text-brand-muted italic">
-                (Taxa padrão: {formatCurrency(extraHourRate)}/h)
               </span>
             )}
           </div>

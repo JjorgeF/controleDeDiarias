@@ -689,7 +689,7 @@ export default function CalendarView({
         extraHours: 0,
         dailyRateAtTime: employee.dailyRate,
         partyRateAtTime: employee.partyRate,
-        extraHourRateAtTime: employee.extraHourRate,
+        extraHourRateAtTime: (employee.extraHourRate && employee.extraHourRate > 0) ? employee.extraHourRate : 30,
         levelAtTime: employee.level,
         ...((isOffice || isJanitor) && {
           isReducedHours,
@@ -728,7 +728,7 @@ export default function CalendarView({
         extraHours: 0,
         dailyRateAtTime: employee.dailyRate,
         partyRateAtTime: employee.partyRate,
-        extraHourRateAtTime: employee.extraHourRate,
+        extraHourRateAtTime: (employee.extraHourRate && employee.extraHourRate > 0) ? employee.extraHourRate : 30,
         levelAtTime: employee.level
       }];
     }
@@ -739,13 +739,14 @@ export default function CalendarView({
   const updateExtraHours = (employee: Employee, hours: number) => {
     if (!selectedDay) return;
     const dateStr = format(selectedDay, 'yyyy-MM-dd');
+    const defaultRate = (employee.extraHourRate && employee.extraHourRate > 0) ? employee.extraHourRate : 30;
     const newDays = employee.workDays.map(d => 
       d.date === dateStr ? { 
         ...d, 
         extraHours: hours,
         extraHourRateAtTime: (d.extraHourRateAtTime && d.extraHourRateAtTime > 0)
           ? d.extraHourRateAtTime
-          : (employee.extraHourRate || 0)
+          : defaultRate
       } : d
     );
     onUpdateDays(employee.id, newDays);
