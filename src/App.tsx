@@ -982,14 +982,14 @@ export default function App() {
         sanitizedData.partyRate = recalculated.partyRate;
         sanitizedData.workDays = recalculated.workDays;
 
-        // If extraHourRate is set and > 0, ensure any workDays with 0 or undefined extraHourRateAtTime are updated
+        // If extraHourRate is set and > 0, ensure any workDays with 0 or undefined extraHourRateAtTime (or when rate changed) are updated
         const effectiveExtraRate = sanitizedData.extraHourRate !== undefined ? sanitizedData.extraHourRate : selectedEmployee.extraHourRate;
         if (effectiveExtraRate && effectiveExtraRate > 0) {
           sanitizedData.workDays = (sanitizedData.workDays || selectedEmployee.workDays || []).map(wd => ({
             ...wd,
-            extraHourRateAtTime: (wd.extraHourRateAtTime && wd.extraHourRateAtTime > 0)
-              ? wd.extraHourRateAtTime
-              : effectiveExtraRate
+            extraHourRateAtTime: (extraHourRateChanged || !wd.extraHourRateAtTime || wd.extraHourRateAtTime <= 0)
+              ? effectiveExtraRate
+              : wd.extraHourRateAtTime
           }));
         }
 
@@ -1332,7 +1332,11 @@ export default function App() {
             date: party.date,
             type: 'party',
             partyId,
-            partyName: party.name
+            partyName: party.name,
+            dailyRateAtTime: emp.dailyRate || 0,
+            partyRateAtTime: emp.partyRate || 0,
+            extraHourRateAtTime: (emp.extraHourRate && emp.extraHourRate > 0) ? emp.extraHourRate : 30,
+            levelAtTime: emp.level || 'Trainee'
           };
           await handleUpdateDays(emp.id, [...currentWorkDays, newWorkDay]);
         } else if (!isAssigned && hasPartyWorkDay) {
