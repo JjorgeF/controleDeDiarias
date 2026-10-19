@@ -982,6 +982,17 @@ export default function App() {
         sanitizedData.partyRate = recalculated.partyRate;
         sanitizedData.workDays = recalculated.workDays;
 
+        // If extraHourRate is set and > 0, ensure any workDays with 0 or undefined extraHourRateAtTime are updated
+        const effectiveExtraRate = sanitizedData.extraHourRate !== undefined ? sanitizedData.extraHourRate : selectedEmployee.extraHourRate;
+        if (effectiveExtraRate && effectiveExtraRate > 0) {
+          sanitizedData.workDays = (sanitizedData.workDays || selectedEmployee.workDays || []).map(wd => ({
+            ...wd,
+            extraHourRateAtTime: (wd.extraHourRateAtTime && wd.extraHourRateAtTime > 0)
+              ? wd.extraHourRateAtTime
+              : effectiveExtraRate
+          }));
+        }
+
         delete sanitizedData.promotionEffectiveDate;
         await updateDoc(empRef, removeUndefinedFields(sanitizedData));
       } else {
@@ -1119,7 +1130,7 @@ export default function App() {
         if (day.isOvernight && day.overnightPay !== undefined && day.overnightPay > 0) {
           dayBase += day.overnightPay;
         }
-        const extraRate = day.extraHourRateAtTime !== undefined ? day.extraHourRateAtTime : emp.extraHourRate;
+        const extraRate = (day.extraHourRateAtTime && day.extraHourRateAtTime > 0) ? day.extraHourRateAtTime : (emp.extraHourRate || 0);
         const extra = (day.extraHours || 0) * extraRate;
         return acc + dayBase + extra;
       }, 0);
