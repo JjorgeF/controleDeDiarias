@@ -39,7 +39,7 @@ export function getWorkDayExtraAmount(workDay: WorkDay, employee?: Employee): nu
   if (workDay.isCancelled) return 0;
   if (!workDay.extraHours || workDay.extraHours <= 0) return 0;
 
-  const extraRate = workDay.extraHourRateAtTime !== undefined 
+  const extraRate = (workDay.extraHourRateAtTime && workDay.extraHourRateAtTime > 0)
     ? workDay.extraHourRateAtTime 
     : (employee?.extraHourRate || 0);
 

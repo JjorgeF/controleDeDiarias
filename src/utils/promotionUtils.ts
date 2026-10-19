@@ -45,6 +45,10 @@ export function recalculateEmployeeTimeline(
   // Recalculate workDays
   const workDays = currentEmployee.workDays || [];
   const updatedWorkDays: WorkDay[] = workDays.map((day) => {
+    const effectiveExtraRate = (day.extraHourRateAtTime && day.extraHourRateAtTime > 0)
+      ? day.extraHourRateAtTime
+      : (currentEmployee.extraHourRate || 0);
+
     // Find active promotion on or before this workDay's date
     const activePromos = sortedPromos.filter((p) => p.date <= day.date);
     if (activePromos.length > 0) {
@@ -54,7 +58,7 @@ export function recalculateEmployeeTimeline(
         levelAtTime: active.newLevel,
         dailyRateAtTime: active.newDailyRate,
         partyRateAtTime: active.newPartyRate,
-        extraHourRateAtTime: day.extraHourRateAtTime !== undefined ? day.extraHourRateAtTime : (currentEmployee.extraHourRate || 0)
+        extraHourRateAtTime: effectiveExtraRate
       };
     } else {
       // Prior to all promotions
@@ -63,7 +67,7 @@ export function recalculateEmployeeTimeline(
         levelAtTime: baseLevel,
         dailyRateAtTime: baseDaily,
         partyRateAtTime: baseParty,
-        extraHourRateAtTime: day.extraHourRateAtTime !== undefined ? day.extraHourRateAtTime : (currentEmployee.extraHourRate || 0)
+        extraHourRateAtTime: effectiveExtraRate
       };
     }
   });
