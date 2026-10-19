@@ -260,14 +260,14 @@ export default function EmployeeList({
                       dayBase += day.overnightPay;
                     }
                     
-                    const extraRate = day.extraHourRateAtTime !== undefined ? day.extraHourRateAtTime : emp.extraHourRate;
+                    const extraRate = (day.extraHourRateAtTime && day.extraHourRateAtTime > 0) ? day.extraHourRateAtTime : (emp.extraHourRate || 0);
                     const extra = (day.extraHours || 0) * extraRate;
                     return acc + dayBase + extra;
                   }, 0);
 
                   const totalExtraHours = monthWorkDays.reduce((acc, day) => acc + (day.extraHours || 0), 0);
                   const totalExtraEarnings = monthWorkDays.reduce((acc, day) => {
-                    const extraRate = day.extraHourRateAtTime !== undefined ? day.extraHourRateAtTime : emp.extraHourRate;
+                    const extraRate = (day.extraHourRateAtTime && day.extraHourRateAtTime > 0) ? day.extraHourRateAtTime : (emp.extraHourRate || 0);
                     return acc + (day.extraHours || 0) * extraRate;
                   }, 0);
 

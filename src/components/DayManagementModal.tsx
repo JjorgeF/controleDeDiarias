@@ -301,7 +301,13 @@ export default function DayManagementModal({
 
   const updateExtraHours = (employee: Employee, hours: number) => {
     const newDays = employee.workDays.map(d => 
-      d.date === selectedDayStr && !d.isCancelled ? { ...d, extraHours: hours } : d
+      d.date === selectedDayStr && !d.isCancelled ? { 
+        ...d, 
+        extraHours: hours,
+        extraHourRateAtTime: (d.extraHourRateAtTime && d.extraHourRateAtTime > 0)
+          ? d.extraHourRateAtTime
+          : (employee.extraHourRate || 0)
+      } : d
     );
     onUpdateDays(employee.id, newDays);
   };
@@ -1210,7 +1216,7 @@ export default function DayManagementModal({
                               ) : !!workDay?.extraHours ? (
                                 <div className="mt-1.5">
                                   <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                                    +{workDay.extraHours}h extra ({formatCurrency(workDay.extraHours * (workDay.extraHourRateAtTime !== undefined ? workDay.extraHourRateAtTime : emp.extraHourRate))})
+                                    +{workDay.extraHours}h extra ({formatCurrency(workDay.extraHours * ((workDay.extraHourRateAtTime && workDay.extraHourRateAtTime > 0) ? workDay.extraHourRateAtTime : (emp.extraHourRate || 0)))})
                                   </span>
                                 </div>
                               ) : null}

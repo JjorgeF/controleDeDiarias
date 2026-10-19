@@ -740,7 +740,13 @@ export default function CalendarView({
     if (!selectedDay) return;
     const dateStr = format(selectedDay, 'yyyy-MM-dd');
     const newDays = employee.workDays.map(d => 
-      d.date === dateStr ? { ...d, extraHours: hours } : d
+      d.date === dateStr ? { 
+        ...d, 
+        extraHours: hours,
+        extraHourRateAtTime: (d.extraHourRateAtTime && d.extraHourRateAtTime > 0)
+          ? d.extraHourRateAtTime
+          : (employee.extraHourRate || 0)
+      } : d
     );
     onUpdateDays(employee.id, newDays);
   };
@@ -1150,7 +1156,7 @@ export default function CalendarView({
       if (d.isOvernight && d.overnightPay !== undefined && d.overnightPay > 0) {
         dayBase += d.overnightPay;
       }
-      const extraRate = d.extraHourRateAtTime !== undefined ? d.extraHourRateAtTime : myEmployee.extraHourRate;
+      const extraRate = (d.extraHourRateAtTime && d.extraHourRateAtTime > 0) ? d.extraHourRateAtTime : (myEmployee.extraHourRate || 0);
       const extra = (d.extraHours || 0) * extraRate;
       return acc + dayBase + extra;
     }, 0);
@@ -2096,7 +2102,7 @@ export default function CalendarView({
                         if (d.isOvernight && d.overnightPay !== undefined && d.overnightPay > 0) {
                           dayBase += d.overnightPay;
                         }
-                        const extraRate = d.extraHourRateAtTime !== undefined ? d.extraHourRateAtTime : myEmployee.extraHourRate;
+                        const extraRate = (d.extraHourRateAtTime && d.extraHourRateAtTime > 0) ? d.extraHourRateAtTime : (myEmployee.extraHourRate || 0);
                         const extra = (d.extraHours || 0) * extraRate;
                         const dayTotal = dayBase + extra;
                         const rawDateStr = format(dateObj, "EEEE, dd 'de' MMMM", { locale: ptBR });
@@ -2194,7 +2200,7 @@ export default function CalendarView({
 
                                   {!!d.extraHours && (
                                     <span className="inline-flex items-center gap-1 text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                                      +{d.extraHours}h extra ({formatCurrency(d.extraHours * (d.extraHourRateAtTime !== undefined ? d.extraHourRateAtTime : myEmployee.extraHourRate))})
+                                      +{d.extraHours}h extra ({formatCurrency(d.extraHours * ((d.extraHourRateAtTime && d.extraHourRateAtTime > 0) ? d.extraHourRateAtTime : (myEmployee.extraHourRate || 0)))})
                                     </span>
                                   )}
 
@@ -2269,7 +2275,7 @@ export default function CalendarView({
                             <span className="text-[10px] uppercase text-brand-muted font-extrabold tracking-wider">Horas Extras ({scheduledDaysThisMonth.reduce((acc, d) => acc + (d.extraHours || 0), 0)}h)</span>
                             <span className="text-sm text-yellow-600 dark:text-yellow-400 font-black mt-0.5">
                               {formatCurrency(scheduledDaysThisMonth.reduce((acc, d) => {
-                                const rate = d.extraHourRateAtTime !== undefined ? d.extraHourRateAtTime : myEmployee.extraHourRate;
+                                const rate = (d.extraHourRateAtTime && d.extraHourRateAtTime > 0) ? d.extraHourRateAtTime : (myEmployee.extraHourRate || 0);
                                 return acc + (d.extraHours || 0) * rate;
                               }, 0))}
                             </span>
@@ -2478,7 +2484,7 @@ export default function CalendarView({
                                     </div>
                                   ) : !!dayData?.extraHours ? (
                                     <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                                      +{dayData.extraHours}h extra ({formatCurrency(dayData.extraHours * (dayData.extraHourRateAtTime !== undefined ? dayData.extraHourRateAtTime : emp.extraHourRate))})
+                                      +{dayData.extraHours}h extra ({formatCurrency(dayData.extraHours * ((dayData.extraHourRateAtTime && dayData.extraHourRateAtTime > 0) ? dayData.extraHourRateAtTime : (emp.extraHourRate || 0)))})
                                     </span>
                                   ) : null}
                                 </div>

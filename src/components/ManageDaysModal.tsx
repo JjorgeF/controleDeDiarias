@@ -110,10 +110,16 @@ export default function ManageDaysModal({ isOpen, onClose, employee, onUpdateDay
     if (!selectedDay) return;
     const dateStr = format(selectedDay, 'yyyy-MM-dd');
     const existingDayIndex = tempDays.findIndex(d => d.date === dateStr);
-    
     if (existingDayIndex !== -1) {
       const newDays = [...tempDays];
-      newDays[existingDayIndex] = { ...newDays[existingDayIndex], extraHours: hours };
+      const curr = newDays[existingDayIndex];
+      newDays[existingDayIndex] = { 
+        ...curr, 
+        extraHours: hours,
+        extraHourRateAtTime: (curr.extraHourRateAtTime && curr.extraHourRateAtTime > 0)
+          ? curr.extraHourRateAtTime
+          : (employee.extraHourRate || 0)
+      };
       setTempDays(newDays);
     }
   };

@@ -67,7 +67,7 @@ export default function EmployeeEarningsView({
     if (d.isOvernight && d.overnightPay !== undefined && d.overnightPay > 0) {
       rate += d.overnightPay;
     }
-    const extraRate = d.extraHourRateAtTime !== undefined ? d.extraHourRateAtTime : employee.extraHourRate;
+    const extraRate = (d.extraHourRateAtTime && d.extraHourRateAtTime > 0) ? d.extraHourRateAtTime : (employee.extraHourRate || 0);
     const extra = (d.extraHours || 0) * extraRate;
     return acc + rate + extra;
   }, 0);
@@ -87,7 +87,7 @@ export default function EmployeeEarningsView({
       if (pd.isOvernight && pd.overnightPay !== undefined && pd.overnightPay > 0) {
         rate += pd.overnightPay;
       }
-      const extraRate = pd.extraHourRateAtTime !== undefined ? pd.extraHourRateAtTime : employee.extraHourRate;
+      const extraRate = (pd.extraHourRateAtTime && pd.extraHourRateAtTime > 0) ? pd.extraHourRateAtTime : (employee.extraHourRate || 0);
       const extra = (pd.extraHours || 0) * extraRate;
       const amount = rate + extra;
 
