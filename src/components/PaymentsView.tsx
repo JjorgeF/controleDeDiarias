@@ -23,7 +23,7 @@ import {
   Users
 } from 'lucide-react';
 import { Employee, WorkDay } from '../types';
-import { formatCurrency, cn, getPartyPaymentDueDate } from '../lib/utils';
+import { formatCurrency, cn, getPartyPaymentDueDate, getCcspCycleAndDueDate } from '../lib/utils';
 import { AnimatedCurrency } from './AnimatedCurrency';
 import { db } from '../lib/firebase';
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
@@ -70,6 +70,8 @@ interface CCSPPaymentItem {
   totalAmount: number;
   dueDateStr: string;
   dueDateFormatted: string;
+  referenceCycleText: string;
+  hasRolloverDays?: boolean;
   isPaid: boolean;
   workDays: WorkDay[];
 }
@@ -133,6 +135,8 @@ export default function PaymentsView({
   const monthName = format(currentMonth, 'MMMM yyyy', { locale: ptBR });
   const capitalizedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
   const currentMonthCcspKey = format(currentMonth, 'yyyy-MM-15');
+  // Chave do ciclo anterior para compatibilidade total com baixas retroativas registradas no formato anterior
+  const legacyCycleKey = format(subMonths(currentMonth, 1), 'yyyy-MM-15');
 
   // Copy PIX to clipboard
   const handleCopyPix = (pixKey: string, id: string) => {
@@ -151,8 +155,8 @@ export default function PaymentsView({
       setIsProcessing(itemKey);
       const currentPaid = employee.paidDates || [];
       const newPaid = isPaid
-        ? currentPaid.filter(d => d !== currentMonthCcspKey)
-        : [...currentPaid, currentMonthCcspKey];
+        ? currentPaid.filter(d => d !== currentMonthCcspKey && d !== legacyCycleKey)
+        : [...currentPaid.filter(d => d !== legacyCycleKey), currentMonthCcspKey];
 
       await onUpdateDetails(employee.id, { paidDates: newPaid });
     } catch (error) {
@@ -180,14 +184,7 @@ export default function PaymentsView({
     }
   };
 
-  // Process and compute all payment records for currentMonth
-  // Define this first or pass the items. Wait, I need ccspItems and partyItems to bulk process.
-  // I will define the handlers *after* ccspItems/partyItems or I can pass them in the render.
-  // Actually, I'll define them inside the component body, but I can use filteredCcspItems/filteredPartyItems when called.
-
-
-
-  // Process and compute all payment records for currentMonth
+  // Process and compute all payment records for currentMonth (Regime de Caixa / Vencimento)
   const { ccspItems, partyItems } = useMemo(() => {
     const ccspList: CCSPPaymentItem[] = [];
     const partyList: PartyPaymentItem[] = [];
@@ -195,19 +192,19 @@ export default function PaymentsView({
     const activeEmps = employees.filter(e => e.status !== 'inactive');
 
     activeEmps.forEach(emp => {
-      const monthDays = (emp.workDays || []).filter(wd => {
-        if (wd.isCancelled || !wd.date) return false;
+      // 1. CCSP Diárias com vencimento neste mês (Dia 15 de currentMonth)
+      const matchingCcspDays = (emp.workDays || []).filter(wd => {
+        if (wd.isCancelled || !wd.date || wd.type !== 'common') return false;
         try {
-          return isSameMonth(parseISO(wd.date), currentMonth);
+          const cycleInfo = getCcspCycleAndDueDate(wd.date);
+          return cycleInfo.dueDateStr === currentMonthCcspKey;
         } catch {
           return false;
         }
       });
 
-      // 1. CCSP Diárias
-      const ccspDays = monthDays.filter(wd => wd.type === 'common');
-      if (ccspDays.length > 0) {
-        const totalAmount = ccspDays.reduce((acc, d) => {
+      if (matchingCcspDays.length > 0) {
+        const totalAmount = matchingCcspDays.reduce((acc, d) => {
           let rate = d.isReducedHours && d.customTotalPay !== undefined && d.customTotalPay >= 0
             ? d.customTotalPay
             : (d.dailyRateAtTime !== undefined ? d.dailyRateAtTime : emp.dailyRate);
@@ -219,28 +216,40 @@ export default function PaymentsView({
           return acc + rate + extra;
         }, 0);
 
-        const isPaid = (emp.paidDates || []).includes(currentMonthCcspKey);
+        // Reconhece a quitação tanto pela chave de vencimento atual quanto pela chave legada da competência
+        const isPaid = (emp.paidDates || []).includes(currentMonthCcspKey) || (emp.paidDates || []).includes(legacyCycleKey);
+
+        const firstCycleInfo = getCcspCycleAndDueDate(matchingCcspDays[0].date);
+        const hasRolloverDays = matchingCcspDays.some(d => getCcspCycleAndDueDate(d.date).isRollover);
 
         ccspList.push({
           id: `ccsp-${emp.id}-${currentMonthCcspKey}`,
           type: 'ccsp',
           employee: emp,
-          daysCount: ccspDays.length,
+          daysCount: matchingCcspDays.length,
           totalAmount,
           dueDateStr: currentMonthCcspKey,
           dueDateFormatted: `15/${format(currentMonth, 'MM/yyyy')}`,
+          referenceCycleText: `Competência: ${firstCycleInfo.cycleMonthName}`,
+          hasRolloverDays,
           isPaid,
-          workDays: ccspDays
+          workDays: matchingCcspDays
         });
       }
 
-      // 2. Festas e Eventos (Previsão: segunda-feira seguinte para equipe; dia 15 do próximo mês para gestão)
-      const partyDays = monthDays.filter(wd => wd.type === 'party');
-      partyDays.forEach((pd, idx) => {
+      // 2. Festas e Eventos com vencimento neste mês (Segunda-feira seguinte para equipe / Dia 15 para gestão)
+      const allPartyDays = (emp.workDays || []).filter(wd => !wd.isCancelled && wd.date && wd.type === 'party');
+      allPartyDays.forEach((pd, idx) => {
         try {
           const partyDateObj = parseISO(pd.date.includes('T') ? pd.date : `${pd.date}T12:00:00`);
           const isManagement = emp.paymentGroup === 'management';
           const forecastDate = getPartyPaymentDueDate(partyDateObj, isManagement);
+
+          // Em Regime de Caixa (Vencimento), a festa aparece no mês em que vence!
+          if (!isSameMonth(forecastDate, currentMonth)) {
+            return;
+          }
+
           const dueDateStr = format(forecastDate, 'yyyy-MM-dd');
           const isPaid = (emp.paidDates || []).includes(dueDateStr) || (emp.paidDates || []).includes(pd.date) || !!pd.isPaid;
 
@@ -277,7 +286,7 @@ export default function PaymentsView({
       ccspItems: ccspList.sort((a, b) => a.employee.artisticName.localeCompare(b.employee.artisticName)),
       partyItems: partyList.sort((a, b) => a.dueDateStr.localeCompare(b.dueDateStr))
     };
-  }, [employees, currentMonth, currentMonthCcspKey]);
+  }, [employees, currentMonth, currentMonthCcspKey, legacyCycleKey]);
 
   // Compute Financial Statistics based on selected groupFilter
   const stats = useMemo(() => {
@@ -690,17 +699,20 @@ export default function PaymentsView({
       {(typeFilter === 'all' || typeFilter === 'ccsp') && (
         <div className="space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
-            <div className="flex items-center gap-2">
-              <Building2 className="text-brand-primary" size={18} />
-              <h3 className="text-base sm:text-lg font-black text-brand-text">
-                Lote Mensal CCSP — Vencimento Dia 15/{format(currentMonth, 'MM')}
-              </h3>
-              <span className="text-xs font-bold bg-brand-card border border-brand-border px-2 py-0.5 rounded-full text-brand-muted">
-                {filteredCcspItems.length} {filteredCcspItems.length === 1 ? 'recreador' : 'recreadores'}
-              </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <Building2 className="text-brand-primary" size={18} />
+                <h3 className="text-base sm:text-lg font-black text-brand-text">
+                  Lote Mensal CCSP — Vencimento Dia 15/{format(currentMonth, 'MM')}
+                </h3>
+                <span className="text-xs font-bold bg-brand-card border border-brand-border px-2 py-0.5 rounded-full text-brand-muted">
+                  {filteredCcspItems.length} {filteredCcspItems.length === 1 ? 'recreador' : 'recreadores'}
+                </span>
+              </div>
+              <p className="text-[11px] text-brand-muted mt-0.5">
+                Produção referente a {format(subMonths(currentMonth, 1), 'MMMM yyyy', { locale: ptBR })} (com virada de mês em fim de semana/feriado)
+              </p>
             </div>
-
-
           </div>
 
           {filteredCcspItems.length === 0 ? (
@@ -778,6 +790,14 @@ export default function PaymentsView({
                         <span className="text-xs font-bold text-brand-text">
                           {item.daysCount} {item.daysCount === 1 ? 'dia' : 'dias'} × {formatCurrency(emp.dailyRate)}
                         </span>
+                        <span className="text-[10px] text-amber-300 font-semibold block mt-0.5">
+                          {item.referenceCycleText}
+                        </span>
+                        {item.hasRolloverDays && (
+                          <span className="text-[9px] text-cyan-300 font-bold block mt-0.5">
+                            ✨ Inclui diárias da virada de mês anterior
+                          </span>
+                        )}
                       </div>
                       <div className="text-right">
                         <span className="text-[10px] text-brand-muted uppercase font-bold block">

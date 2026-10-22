@@ -18,9 +18,9 @@ import {
 } from 'lucide-react';
 import { Employee } from '../types';
 import PaymentTimeline from './PaymentTimeline';
-import { formatCurrency, getPartyPaymentDueDate } from '../lib/utils';
+import { formatCurrency, getPartyPaymentDueDate, getCcspCycleAndDueDate } from '../lib/utils';
 import { AnimatedCurrency } from './AnimatedCurrency';
-import { format, isSameMonth, parseISO, addMonths, subMonths, addDays } from 'date-fns';
+import { format, isSameMonth, parseISO, addMonths, subMonths, addDays, setDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface EmployeeEarningsViewProps {
@@ -41,6 +41,7 @@ export default function EmployeeEarningsView({
   const monthName = format(currentMonth, 'MMMM yyyy', { locale: ptBR });
   const capitalizedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
   const currentMonthCcspKey = format(currentMonth, 'yyyy-MM-15');
+  const expectedNextMonthCcspKey = format(setDate(addMonths(currentMonth, 1), 15), 'yyyy-MM-15');
 
   // Month work days
   const monthWorkDays = React.useMemo(() => {
@@ -58,8 +59,9 @@ export default function EmployeeEarningsView({
   const monthPartyDays = monthWorkDays.filter(wd => wd.type === 'party');
   const totalDiariasMes = monthWorkDays.length;
 
-  // CCSP Payment status & amount
-  const isCcspPaid = (employee.paidDates || []).includes(currentMonthCcspKey);
+  // CCSP Payment status & amount (Previsão: dia 15 do mês seguinte)
+  const isCcspPaid = (employee.paidDates || []).includes(expectedNextMonthCcspKey) || 
+                     (employee.paidDates || []).includes(currentMonthCcspKey);
   const ccspTotalAmount = monthCcspDays.reduce((acc, d) => {
     let rate = d.isReducedHours && d.customTotalPay !== undefined && d.customTotalPay >= 0
       ? d.customTotalPay

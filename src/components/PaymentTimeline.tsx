@@ -436,10 +436,11 @@ export default function PaymentTimeline({ employee, currentDate = new Date() }: 
                 </p>
                 
                 <div className="bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20 text-[11px] text-amber-300 space-y-1">
-                  <p className="font-bold">📌 Virada de Mês & Feriado Prolongado:</p>
-                  <ul className="list-disc list-inside text-[10px] space-y-0.5 text-amber-200/90 leading-normal">
-                    <li>Se o mês virar num domingo (Dia 01), o pagamento será dia 15 do mês que entrou.</li>
-                    <li>Se o mês virar durante um feriadão prolongado, o pagamento será realizado no dia 15 do mês que entrou durante o feriadão.</li>
+                  <p className="font-bold">📌 Regra de Pagamento CCSP & Virada de Mês:</p>
+                  <ul className="list-disc list-inside text-[10px] space-y-1 text-amber-200/90 leading-normal">
+                    <li>O pagamento das diárias CCSP é retroativo, realizado no <strong>dia 15 do mês seguinte</strong>.</li>
+                    <li><strong>Virada em Fim de Semana:</strong> Se o mês virar de sábado para domingo, as diárias desse fim de semana entram no ciclo do mês que entrou e são pagas no dia 15 do outro mês subsequente.</li>
+                    <li><strong>Feriadão Prolongado:</strong> Se a virada de mês ocorrer colada em feriado prolongado, todo o bloco do feriadão é computado no ciclo do mês que entrou.</li>
                   </ul>
                 </div>
               </div>
