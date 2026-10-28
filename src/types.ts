@@ -55,6 +55,7 @@ export interface DayConfig {
 }
 
 export interface WorkDay {
+  id?: string; // Optional unique key for this assignment e.g. `${date}_${type}_${partyId || 'ccsp'}`
   date: string; // ISO string YYYY-MM-DD
   type: DayType;
   partyId?: string;
@@ -75,6 +76,7 @@ export interface WorkDay {
   levelAtTime?: EmployeeLevel;
   shift?: string; // e.g. "11h - 21h00" or "13h30 - 21h30"
   isPaid?: boolean;
+  paidAt?: string;
   isReducedHours?: boolean; // When employee works reduced / custom agreed hours
   customHoursText?: string; // e.g. "01h30m" or "1h30" or "4h"
   customTotalPay?: number; // Total agreed payment e.g. 45.00
@@ -137,6 +139,8 @@ export interface CancellationLog {
   employeeName: string;
   date: string; // YYYY-MM-DD
   type: 'common' | 'party';
+  partyId?: string;
+  partyName?: string;
   cancelledAt: string; // ISO string
   viewedByAdmins: boolean;
 }
