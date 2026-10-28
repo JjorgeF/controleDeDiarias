@@ -143,7 +143,7 @@ export function KpisView({ employees, monthConfigs, promotions = [], currentMont
       let empCost = 0;
 
       (effectiveEmp.workDays || []).forEach(wd => {
-        if (!wd.date.startsWith(monthKey)) return;
+        if (!wd.date.startsWith(monthKey) || wd.isCancelled) return;
 
         const dayOfWeek = getDay(new Date(wd.date + 'T12:00:00'));
         dayOfWeekCounts[dayOfWeek]++;
