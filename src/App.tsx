@@ -1337,6 +1337,7 @@ export default function App() {
 
         if (isAssigned && !hasPartyWorkDay) {
           const newWorkDay: WorkDay = {
+            id: `${party.date}_party_${partyId}_${Date.now()}`,
             date: party.date,
             type: 'party',
             partyId,
