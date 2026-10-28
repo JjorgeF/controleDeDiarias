@@ -57,7 +57,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Employee, WorkDay, DayType, CancellationLog, DayConfig, PartyConfig } from '../types';
-import { cn, formatCurrency } from '../lib/utils';
+import { cn, formatCurrency, getWorkDayUniqueKey } from '../lib/utils';
 import DayManagementModal from './DayManagementModal';
 import DayWorkModeEditor from './DayWorkModeEditor';
 import ShiftSelector from './ShiftSelector';
@@ -75,7 +75,7 @@ interface CalendarViewProps {
   onUpdateAvailabilities?: (employeeId: string, availabilities: string[]) => void;
   dayConfigs?: Record<string, DayConfig>;
   onUpdateDayConfig?: (dateStr: string, config: DayConfig) => void;
-  onCancelWorkDay?: (employeeId: string, dateStr: string, type: 'common' | 'party', employeeName: string) => Promise<void>;
+  onCancelWorkDay?: (employeeId: string, dateStr: string, type: 'common' | 'party', employeeName: string, partyId?: string, partyName?: string) => Promise<void>;
   cancellations?: CancellationLog[];
   onDismissCancellation?: (cancellationId: string) => void;
   onMarkCancellationRead?: (cancellationId: string) => void;
@@ -468,6 +468,7 @@ export default function CalendarView({
   // Employee Cancellation Modal State
   const [isCancelModalOpen, setIsCancelModalOpen] = React.useState(false);
   const [cancelTargetDate, setCancelTargetDate] = React.useState<Date | null>(null);
+  const [cancelTargetWorkDayKey, setCancelTargetWorkDayKey] = React.useState<string | null>(null);
   const [isCancellingLoading, setIsCancellingLoading] = React.useState(false);
 
   // Deadline Admin State
@@ -605,20 +606,22 @@ export default function CalendarView({
 
   const toggleWorkDayType = (employee: Employee, date: Date, type: 'common' | 'party', party?: PartyConfig) => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    const currentWork = employee.workDays.find(d => d.date === dateStr && !d.isCancelled);
+    const currentWorkDays = employee.workDays || [];
 
     if (type === 'common') {
-      if (currentWork && currentWork.type === 'common') {
-        const newDays = employee.workDays.filter(d => d.date !== dateStr);
+      const existingCommon = currentWorkDays.find(d => d.date === dateStr && d.type === 'common' && !d.isCancelled);
+      if (existingCommon) {
+        // Toggle OFF CCSP only
+        const newDays = currentWorkDays.filter(d => !(d.date === dateStr && d.type === 'common'));
         onUpdateDays(employee.id, newDays);
         return;
       }
-      const filtered = employee.workDays.filter(d => d.date !== dateStr);
       const defaultShift = isSunday(parseISO(dateStr)) ? 'Brinquedoteca (9h - 18h)' : 'Brinquedoteca 1 (9h - 18h)';
-      const newDays: WorkDay[] = [...filtered, { 
+      const newDays: WorkDay[] = [...currentWorkDays, { 
+        id: `${dateStr}_common_${Date.now()}`,
         date: dateStr, 
         type: 'common', 
-        shift: defaultShift,
+        shift: defaultShift, 
         extraHours: 0,
         dailyRateAtTime: employee.dailyRate,
         partyRateAtTime: employee.partyRate,
@@ -628,16 +631,20 @@ export default function CalendarView({
       onUpdateDays(employee.id, newDays);
     } else if (type === 'party') {
       const selectedParty = party || (getDayConfig(dateStr).parties?.[0] || { id: 'default_party', name: 'Festa' });
-      const isThisParty = currentWork && currentWork.type === 'party' && 
-        (currentWork.partyId === selectedParty.id || (!currentWork.partyId && selectedParty.id === 'default_party') || currentWork.partyName === selectedParty.name);
+      const isThisParty = (d: WorkDay) => 
+        d.date === dateStr && 
+        d.type === 'party' && 
+        !d.isCancelled &&
+        (d.partyId === selectedParty.id || (!d.partyId && selectedParty.id === 'default_party') || d.partyName === selectedParty.name);
 
-      if (isThisParty) {
-        const newDays = employee.workDays.filter(d => d.date !== dateStr);
+      const existingParty = currentWorkDays.find(isThisParty);
+      if (existingParty) {
+        // Toggle OFF this specific party only
+        const newDays = currentWorkDays.filter(d => !isThisParty(d));
         onUpdateDays(employee.id, newDays);
         return;
       }
 
-      const filtered = employee.workDays.filter(d => d.date !== dateStr);
       const isOffice = (selectedParty.name || '').toLowerCase().includes('escritório') || (selectedParty.name || '').toLowerCase().includes('escritorio');
       const isJanitor = (selectedParty.name || '').toLowerCase().includes('zelador');
       
@@ -680,7 +687,8 @@ export default function CalendarView({
         customTotalPay = employee.janitorRate || 0;
       }
 
-      const newDays: WorkDay[] = [...filtered, { 
+      const newDays: WorkDay[] = [...currentWorkDays, { 
+        id: `${dateStr}_party_${selectedParty.id}_${Date.now()}`,
         date: dateStr, 
         type: 'party', 
         partyId: selectedParty.id,
@@ -899,18 +907,32 @@ export default function CalendarView({
     if (!isAdmin && (dateStr < todayStr || monthKey < currentMonthKeyNow)) {
       setIsCancelModalOpen(false);
       setCancelTargetDate(null);
+      setCancelTargetWorkDayKey(null);
       return;
     }
 
     setIsCancellingLoading(true);
     try {
-      const isScheduledParty = myEmployee.workDays?.some(d => d.date === dateStr && d.type === 'party');
-      const type = isScheduledParty ? 'party' : 'common';
+      const activeWorkDays = myEmployee.workDays?.filter(d => d.date === dateStr && !d.isCancelled) || [];
       const employeeName = myEmployee.artisticName || myEmployee.name;
       
-      await onCancelWorkDay(myEmployee.id, dateStr, type, employeeName);
+      const targetWorkDay = cancelTargetWorkDayKey
+        ? activeWorkDays.find(d => getWorkDayUniqueKey(d.date, d.type, d.partyId) === cancelTargetWorkDayKey) || activeWorkDays[0]
+        : activeWorkDays[0];
+
+      if (targetWorkDay) {
+        await onCancelWorkDay(
+          myEmployee.id, 
+          dateStr, 
+          targetWorkDay.type as 'common' | 'party', 
+          employeeName,
+          targetWorkDay.partyId,
+          targetWorkDay.partyName
+        );
+      }
       setIsCancelModalOpen(false);
       setCancelTargetDate(null);
+      setCancelTargetWorkDayKey(null);
     } catch (error) {
       console.error("Error during cancellation confirm:", error);
     } finally {
@@ -3452,16 +3474,10 @@ export default function CalendarView({
       {/* Employee Cancellation Modal */}
       {!isAdmin && isCancelModalOpen && cancelTargetDate && myEmployee && (() => {
         const cancelDateStr = format(cancelTargetDate, 'yyyy-MM-dd');
-        const targetWorkDay = myEmployee.workDays?.find(wd => wd.date === cancelDateStr && !wd.isCancelled);
-        const isPartyDay = targetWorkDay?.type === 'party';
+        const activeWorkDays = myEmployee.workDays?.filter(wd => wd.date === cancelDateStr && !wd.isCancelled) || [];
         const config = getDayConfig(cancelDateStr);
-        const matchedParty = isPartyDay
-          ? (targetWorkDay?.partyId 
-              ? config.parties?.find(p => p.id === targetWorkDay.partyId) 
-              : config.parties?.find(p => p.name === targetWorkDay?.partyName))
-          : undefined;
-        const pName = targetWorkDay?.partyName || matchedParty?.name || (config.parties?.[0]?.name);
-        const pTime = matchedParty?.time || targetWorkDay?.shift || config.partyTime;
+
+        const currentSelectedKey = cancelTargetWorkDayKey || (activeWorkDays[0] ? getWorkDayUniqueKey(activeWorkDays[0].date, activeWorkDays[0].type, activeWorkDays[0].partyId) : '');
 
         return (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
@@ -3471,18 +3487,83 @@ export default function CalendarView({
                   <AlertCircle size={32} />
                 </div>
                 <h3 className="text-xl font-bold text-brand-text">Cancelar Escala?</h3>
-                <div className="text-brand-muted text-sm leading-relaxed space-y-2">
-                  <p>
+                <div className="text-brand-muted text-sm leading-relaxed space-y-3 text-left">
+                  <p className="text-center">
                     Você está escalado para trabalhar no dia <span className="text-brand-primary font-bold">{format(cancelTargetDate, "dd/MM 'de' MMMM", { locale: ptBR })}</span>.
                   </p>
-                  {isPartyDay && pName && (
-                    <div className="p-2.5 bg-brand-party/10 border border-brand-party/20 rounded-xl text-xs font-bold text-brand-party dark:text-brand-party">
-                      🎉 Festa: <span className="font-black text-brand-text">{pName}</span>
-                      {pTime && <span className="block text-[11px] text-brand-party dark:text-brand-party/90 font-semibold mt-0.5">⏰ Horário: {pTime}</span>}
+
+                  {activeWorkDays.length > 1 && (
+                    <div className="space-y-1.5 pt-1">
+                      <label className="text-xs font-black text-brand-text uppercase tracking-wider block">
+                        Qual escala você deseja cancelar?
+                      </label>
+                      <p className="text-[11px] text-brand-muted">
+                        Você possui múltiplas atividades neste dia. Escolha qual deseja cancelar mantendo a outra ativa:
+                      </p>
+                      <div className="space-y-2 mt-2">
+                        {activeWorkDays.map(wd => {
+                          const key = getWorkDayUniqueKey(wd.date, wd.type, wd.partyId);
+                          const isSelected = currentSelectedKey === key;
+                          const isParty = wd.type === 'party';
+                          const label = isParty 
+                            ? `Festa 🥳: ${wd.partyName || config.parties?.find(p => p.id === wd.partyId)?.name || 'Evento'}` 
+                            : 'Diária CCSP (Parque Infantil)';
+                          const shift = wd.shift || (isParty ? config.partyTime : 'Brinquedoteca');
+
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => setCancelTargetWorkDayKey(key)}
+                              className={cn(
+                                "w-full text-left p-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-between gap-2",
+                                isSelected 
+                                  ? "bg-red-500/15 border-red-500 text-red-300 shadow-sm" 
+                                  : "bg-brand-bg/60 border-brand-border text-brand-muted hover:border-gray-500"
+                              )}
+                            >
+                              <div>
+                                <span className="block font-black text-brand-text">{label}</span>
+                                {shift && <span className="text-[10px] text-gray-400 font-semibold">{shift}</span>}
+                              </div>
+                              <span className={cn(
+                                "w-4 h-4 rounded-full border flex items-center justify-center shrink-0 text-[10px]",
+                                isSelected ? "border-red-500 bg-red-500 text-white font-black" : "border-gray-600"
+                              )}>
+                                {isSelected ? '✓' : ''}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
-                  <p className="text-xs text-brand-muted">
-                    Deseja realmente solicitar o cancelamento da sua escala para esta data? Os administradores serão notificados imediatamente.
+
+                  {activeWorkDays.length === 1 && (() => {
+                    const targetWorkDay = activeWorkDays[0];
+                    const isPartyDay = targetWorkDay?.type === 'party';
+                    const matchedParty = isPartyDay
+                      ? (targetWorkDay?.partyId 
+                          ? config.parties?.find(p => p.id === targetWorkDay.partyId) 
+                          : config.parties?.find(p => p.name === targetWorkDay?.partyName))
+                      : undefined;
+                    const pName = targetWorkDay?.partyName || matchedParty?.name || (config.parties?.[0]?.name);
+                    const pTime = matchedParty?.time || targetWorkDay?.shift || config.partyTime;
+
+                    return isPartyDay && pName ? (
+                      <div className="p-2.5 bg-brand-party/10 border border-brand-party/20 rounded-xl text-xs font-bold text-brand-party dark:text-brand-party">
+                        🎉 Festa: <span className="font-black text-brand-text">{pName}</span>
+                        {pTime && <span className="block text-[11px] text-brand-party dark:text-brand-party/90 font-semibold mt-0.5">⏰ Horário: {pTime}</span>}
+                      </div>
+                    ) : (
+                      <div className="p-2.5 bg-brand-primary/10 border border-brand-primary/20 rounded-xl text-xs font-bold text-brand-primary">
+                        🎡 Diária CCSP: <span className="font-black text-brand-text">{targetWorkDay?.shift || 'Brinquedoteca'}</span>
+                      </div>
+                    );
+                  })()}
+
+                  <p className="text-xs text-brand-muted text-center pt-1">
+                    Deseja realmente solicitar o cancelamento? Os administradores serão notificados imediatamente.
                   </p>
                 </div>
               </div>
@@ -3493,6 +3574,7 @@ export default function CalendarView({
                   onClick={() => {
                     setIsCancelModalOpen(false);
                     setCancelTargetDate(null);
+                    setCancelTargetWorkDayKey(null);
                   }}
                   className="flex-1 bg-slate-700 hover:bg-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold py-2.5 px-4 rounded-xl transition-all text-sm disabled:opacity-50"
                 >

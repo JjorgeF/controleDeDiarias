@@ -11,6 +11,7 @@ interface DayWorkModeEditorProps {
   onClose?: () => void;
   isAdmin?: boolean;
   isReadOnly?: boolean;
+  initialTargetKey?: string;
 }
 
 export default function DayWorkModeEditor({
@@ -20,11 +21,28 @@ export default function DayWorkModeEditor({
   onClose,
   isAdmin = true,
   isReadOnly = false,
+  initialTargetKey
 }: DayWorkModeEditorProps) {
   const canEdit = isAdmin && !isReadOnly;
 
-  // Find the employee's work day on this date
-  const dayData = employee.workDays.find(d => d.date === selectedDayStr && !d.isCancelled);
+  // Find all active work days for this employee on this date
+  const activeDaysOnDate = employee.workDays.filter(d => d.date === selectedDayStr && !d.isCancelled);
+
+  // Active assignment selector state (when employee works in 2 or more events on this day)
+  const [selectedAssignmentKey, setSelectedAssignmentKey] = useState<string>(() => {
+    if (initialTargetKey) return initialTargetKey;
+    if (activeDaysOnDate.length > 0) {
+      const first = activeDaysOnDate[0];
+      return first.type === 'common' ? 'common' : (first.partyId || first.partyName || 'party');
+    }
+    return 'common';
+  });
+
+  // Target assignment dayData
+  const dayData = activeDaysOnDate.find(d => {
+    if (selectedAssignmentKey === 'common') return d.type === 'common';
+    return d.type === 'party' && (d.partyId === selectedAssignmentKey || d.partyName === selectedAssignmentKey || (!d.partyId && selectedAssignmentKey === 'party'));
+  }) || activeDaysOnDate[0];
 
   // Compute saved values from the database
   const savedMode: 'normal' | 'reduced' | 'overnight' = 
@@ -53,7 +71,7 @@ export default function DayWorkModeEditor({
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
-  // Synchronize draft state if employee or date changes externally
+  // Synchronize draft state if employee, target assignment, or date changes externally
   useEffect(() => {
     setSelectedMode(savedMode);
     setCustomHoursText(savedCustomHours);
@@ -66,7 +84,20 @@ export default function DayWorkModeEditor({
       : ((employee.extraHourRate && employee.extraHourRate > 0) ? employee.extraHourRate : 30);
     setExtraHourRateInput(activeExtraRate);
     setStatusMessage(null);
-  }, [employee.id, selectedDayStr, dayData?.isOvernight, dayData?.isReducedHours, dayData?.customHoursText, dayData?.customTotalPay, dayData?.overnightHoursText, dayData?.overnightPay, dayData?.extraHours, dayData?.extraHourRateAtTime, employee.extraHourRate]);
+  }, [
+    employee.id, 
+    selectedDayStr, 
+    selectedAssignmentKey,
+    dayData?.isOvernight, 
+    dayData?.isReducedHours, 
+    dayData?.customHoursText, 
+    dayData?.customTotalPay, 
+    dayData?.overnightHoursText, 
+    dayData?.overnightPay, 
+    dayData?.extraHours, 
+    dayData?.extraHourRateAtTime, 
+    employee.extraHourRate
+  ]);
 
   const numericExtraHours = Math.max(0, Number(extraHours) || 0);
   const numericExtraHourRate = Number(extraHourRateInput) > 0 ? Number(extraHourRateInput) : defaultExtraRate;
@@ -101,6 +132,11 @@ export default function DayWorkModeEditor({
       return;
     }
 
+    if (!dayData) {
+      setStatusMessage({ type: 'error', text: 'Nenhuma escala selecionada para salvar.' });
+      return;
+    }
+
     if (selectedMode === 'reduced') {
       const pay = Number(customTotalPay);
       if (isNaN(pay) || pay < 0) {
@@ -122,7 +158,18 @@ export default function DayWorkModeEditor({
 
     try {
       const newDays = employee.workDays.map(d => {
-        if (d.date === selectedDayStr && !d.isCancelled) {
+        // Only modify the specific target assignment
+        const matchesTarget = d.date === selectedDayStr && !d.isCancelled && (
+          d === dayData || (
+            d.type === dayData.type && (
+              dayData.type === 'common' || 
+              (d.partyId && dayData.partyId && d.partyId === dayData.partyId) ||
+              (!d.partyId && !dayData.partyId && d.partyName === dayData.partyName)
+            )
+          )
+        );
+
+        if (matchesTarget) {
           const updated: WorkDay = { ...d };
 
           if (selectedMode === 'normal') {
@@ -166,7 +213,7 @@ export default function DayWorkModeEditor({
       const sanitizedDays = removeUndefinedFields(newDays);
       await onUpdateDays(employee.id, sanitizedDays);
 
-      setStatusMessage({ type: 'success', text: 'Alterações salvas com sucesso!' });
+      setStatusMessage({ type: 'success', text: `Configurações de ${dayData.partyName || (dayData.type === 'common' ? 'CCSP' : 'Festa')} salvas com sucesso!` });
       setTimeout(() => {
         setStatusMessage(null);
       }, 3000);
@@ -205,6 +252,53 @@ export default function DayWorkModeEditor({
         <div className="flex items-center gap-2 text-xs bg-amber-500/10 text-amber-400 border border-amber-500/30 p-2.5 rounded-lg">
           <ShieldAlert size={14} className="shrink-0" />
           <span>Modo de visualização. Apenas administradores podem modificar ou salvar configurações de escala.</span>
+        </div>
+      )}
+
+      {/* Multi-assignment tabs selector: when employee has 2+ workdays on this date */}
+      {activeDaysOnDate.length > 1 && (
+        <div className="p-2 bg-brand-bg/90 rounded-xl border border-brand-border space-y-1.5">
+          <div className="flex items-center justify-between text-[11px] font-bold text-brand-muted">
+            <span>Selecione qual atividade deseja configurar:</span>
+            <span className="text-[10px] bg-brand-primary/20 text-brand-primary px-1.5 py-0.5 rounded font-black">
+              {activeDaysOnDate.length} escalas no dia
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {activeDaysOnDate.map(wd => {
+              const key = wd.type === 'common' ? 'common' : (wd.partyId || wd.partyName || 'party');
+              const isSelected = selectedAssignmentKey === key;
+              const isCommon = wd.type === 'common';
+              const label = isCommon ? 'CCSP (Diária)' : (wd.partyName || 'Festa');
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setSelectedAssignmentKey(key)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center gap-1.5 shadow-sm",
+                    isSelected
+                      ? isCommon
+                        ? "bg-brand-primary text-slate-950 border-brand-primary font-black shadow-md"
+                        : "bg-brand-party text-white border-brand-party font-black shadow-md"
+                      : "bg-brand-card text-brand-muted border-brand-border hover:text-white hover:bg-brand-card/80"
+                  )}
+                >
+                  <span>{label}</span>
+                  {wd.extraHours ? (
+                    <span className="text-[9px] bg-amber-400 text-slate-950 px-1 py-0.2 rounded font-black">
+                      +{wd.extraHours}h
+                    </span>
+                  ) : null}
+                  {wd.isReducedHours ? (
+                    <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-black">
+                      Reduzido
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 

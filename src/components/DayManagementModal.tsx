@@ -3,7 +3,7 @@ import { X, Search, UserPlus, UserMinus, Clock, Copy, ClipboardPaste, Users, Plu
 import { Employee, WorkDay, DayType, DayConfig, PartyConfig } from '../types';
 import { format, isSunday, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { cn, formatCurrency } from '../lib/utils';
+import { cn, formatCurrency, checkShiftsOverlap } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import ShiftSelector from './ShiftSelector';
 import DayWorkModeEditor from './DayWorkModeEditor';
@@ -235,19 +235,22 @@ export default function DayManagementModal({
       .sort(sortByName);
   }, [filteredAvailable, dayConfig, normalizedParties, selectedDayStr]);
 
-  // Main assignment function ensuring strict 1 assignment per person per day
+  // Main assignment function supporting multiple assignments per person per day (CCSP + Parties)
   const assignEmployee = (employee: Employee, targetType: 'common' | 'party', party?: PartyConfig) => {
-    const currentWork = employee.workDays.find(d => d.date === selectedDayStr && !d.isCancelled);
+    const currentWorkDays = employee.workDays || [];
 
     if (targetType === 'common') {
-      if (currentWork && currentWork.type === 'common') {
-        const newDays = employee.workDays.filter(d => d.date !== selectedDayStr);
+      const existingCommon = currentWorkDays.find(d => d.date === selectedDayStr && d.type === 'common' && !d.isCancelled);
+      if (existingCommon) {
+        // Toggle OFF CCSP only (leaves any party workdays on this date intact!)
+        const newDays = currentWorkDays.filter(d => !(d.date === selectedDayStr && d.type === 'common'));
         onUpdateDays(employee.id, newDays);
         return;
       }
-      const filtered = employee.workDays.filter(d => d.date !== selectedDayStr);
-      const defaultShift = 'Definir Horário';
-      const newDays: WorkDay[] = [...filtered, {
+
+      const defaultShift = (selectedDay && isSunday(selectedDay)) ? 'Brinquedoteca (9h - 18h)' : 'Brinquedoteca 1 (9h - 18h)';
+      const newDays: WorkDay[] = [...currentWorkDays, {
+        id: `${selectedDayStr}_common_${Date.now()}`,
         date: selectedDayStr,
         type: 'common',
         shift: defaultShift,
@@ -259,17 +262,56 @@ export default function DayManagementModal({
       }];
       onUpdateDays(employee.id, newDays);
     } else if (targetType === 'party' && party) {
-      const isThisParty = currentWork && currentWork.type === 'party' && 
-        (currentWork.partyId === party.id || (!currentWork.partyId && party.id === 'default_party') || currentWork.partyName === party.name);
+      const isThisParty = (d: WorkDay) => 
+        d.date === selectedDayStr && 
+        d.type === 'party' && 
+        !d.isCancelled &&
+        (d.partyId === party.id || (!d.partyId && party.id === 'default_party') || d.partyName === party.name);
 
-      if (isThisParty) {
-        const newDays = employee.workDays.filter(d => d.date !== selectedDayStr);
+      const existingParty = currentWorkDays.find(isThisParty);
+      if (existingParty) {
+        // Toggle OFF this specific party only (leaves CCSP or other parties intact!)
+        const newDays = currentWorkDays.filter(d => !isThisParty(d));
         onUpdateDays(employee.id, newDays);
         return;
       }
 
-      const filtered = employee.workDays.filter(d => d.date !== selectedDayStr);
-      const newDays: WorkDay[] = [...filtered, {
+      const isOffice = (party.name || '').toLowerCase().includes('escritório') || (party.name || '').toLowerCase().includes('escritorio');
+      const isJanitor = (party.name || '').toLowerCase().includes('zelador');
+
+      let customTotalPay: number | undefined = undefined;
+      let isReducedHours = false;
+      let customHoursText = '';
+
+      if (isOffice) {
+        const timeStr = party.time || dayConfig?.partyTime || '';
+        const parts = timeStr.split(/\s*até\s*/i);
+        let hours = 0;
+        if (parts.length === 2) {
+          const s = parts[0].replace(/h$/i, '').trim();
+          const e = parts[1].replace(/h$/i, '').trim();
+          const parseTime = (t: string) => {
+            const [h, m] = t.split(':').map(Number);
+            return (h || 0) + (m || 0) / 60;
+          };
+          if (s.includes(':') && e.includes(':')) {
+            const startH = parseTime(s);
+            const endH = parseTime(e);
+            hours = endH >= startH ? endH - startH : (endH + 24) - startH;
+          }
+        }
+        isReducedHours = true;
+        const formattedHours = hours > 0 ? hours.toString().replace('.', ',') + 'h' : 'Acordo';
+        customHoursText = `${formattedHours} (Escritório)`;
+        customTotalPay = hours > 0 ? hours * (employee.officeHourRate || 0) : 0;
+      } else if (isJanitor) {
+        isReducedHours = true;
+        customHoursText = 'Zeladoria';
+        customTotalPay = employee.janitorRate || 0;
+      }
+
+      const newDays: WorkDay[] = [...currentWorkDays, {
+        id: `${selectedDayStr}_party_${party.id}_${Date.now()}`,
         date: selectedDayStr,
         type: 'party',
         partyId: party.id,
@@ -279,7 +321,12 @@ export default function DayManagementModal({
         dailyRateAtTime: employee.dailyRate,
         partyRateAtTime: employee.partyRate,
         extraHourRateAtTime: (employee.extraHourRate && employee.extraHourRate > 0) ? employee.extraHourRate : 30,
-        levelAtTime: employee.level
+        levelAtTime: employee.level,
+        ...((isOffice || isJanitor) && {
+          isReducedHours,
+          customHoursText,
+          customTotalPay
+        })
       }];
       onUpdateDays(employee.id, newDays);
     }
@@ -287,6 +334,11 @@ export default function DayManagementModal({
 
   const removeAllWork = (employee: Employee) => {
     const newDays = employee.workDays.filter(d => d.date !== selectedDayStr);
+    onUpdateDays(employee.id, newDays);
+  };
+
+  const removeSingleWork = (employee: Employee, targetWorkDay: WorkDay) => {
+    const newDays = employee.workDays.filter(d => d !== targetWorkDay);
     onUpdateDays(employee.id, newDays);
   };
 
@@ -1080,35 +1132,59 @@ export default function DayManagementModal({
                 </div>
                 <div className="grid grid-cols-1 gap-2">
                   {employeesWorking.map(emp => {
-                    const workDay = emp.workDays.find(d => d.date === selectedDayStr && !d.isCancelled);
-                    const isCommon = workDay?.type === 'common';
-                    const isParty = workDay?.type === 'party';
-                    const currentPartyId = workDay?.partyId;
-                    const currentPartyName = workDay?.partyName;
-                    const isCoordination = isParty && (currentPartyName || '').toLowerCase().includes('coordena');
+                    const dayWorkDays = emp.workDays.filter(d => d.date === selectedDayStr && !d.isCancelled);
+                    const hasCommon = dayWorkDays.some(d => d.type === 'common');
+                    const commonWorkDay = dayWorkDays.find(d => d.type === 'common');
+                    const partyWorkDays = dayWorkDays.filter(d => d.type === 'party');
                     const isExpanded = expandedEmployeeId === emp.id;
+
+                    const isAnyCoordination = partyWorkDays.some(d => (d.partyName || '').toLowerCase().includes('coordena'));
+                    const isAnyParty = partyWorkDays.length > 0;
+
+                    // Check for time overlap between active assignments for this employee
+                    const timeOverlapAlerts: string[] = [];
+                    if (dayWorkDays.length > 1) {
+                      for (let i = 0; i < dayWorkDays.length; i++) {
+                        for (let j = i + 1; j < dayWorkDays.length; j++) {
+                          const a = dayWorkDays[i];
+                          const b = dayWorkDays[j];
+                          const shiftA = a.shift || (a.type === 'common' ? '11h - 21h' : '14h até 18h');
+                          const shiftB = b.shift || (b.type === 'common' ? '11h - 21h' : '14h até 18h');
+                          const nameA = a.type === 'common' ? 'CCSP' : (a.partyName || 'Festa');
+                          const nameB = b.type === 'common' ? 'CCSP' : (b.partyName || 'Festa');
+                          const overlap = checkShiftsOverlap(shiftA, shiftB);
+                          if (overlap.hasOverlap) {
+                            timeOverlapAlerts.push(`${nameA} (${shiftA}) e ${nameB} (${shiftB})`);
+                          }
+                        }
+                      }
+                    }
                     
                     return (
                       <div 
                         key={emp.id} 
                         className={cn(
                           "px-3 py-2.5 rounded-xl transition-all border group",
-                          isCoordination
-                            ? "bg-cyan-950/20 border-cyan-500/30 hover:border-cyan-500/50"
-                            : isParty
-                              ? "bg-brand-party/20 border-brand-party/30 hover:border-brand-party/50"
-                              : "bg-brand-primary/5 border-brand-primary/20 hover:border-brand-primary/40"
+                          dayWorkDays.length > 1
+                            ? "bg-purple-950/20 border-purple-500/40 hover:border-purple-500/60 shadow-sm"
+                            : isAnyCoordination
+                              ? "bg-cyan-950/20 border-cyan-500/30 hover:border-cyan-500/50"
+                              : isAnyParty
+                                ? "bg-brand-party/20 border-brand-party/30 hover:border-brand-party/50"
+                                : "bg-brand-primary/5 border-brand-primary/20 hover:border-brand-primary/40"
                         )}
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="cursor-pointer min-w-0 flex-1 flex items-center gap-2.5" onClick={() => setExpandedEmployeeId(isExpanded ? null : emp.id)}>
                             <div className={cn(
                               "w-8 h-8 rounded-full shrink-0 overflow-hidden flex items-center justify-center text-xs font-bold border shadow-sm",
-                              isCoordination
-                                ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
-                                : isParty
-                                  ? "bg-brand-party/20 text-brand-party border-brand-party/40"
-                                  : "bg-brand-primary/20 text-brand-primary border-brand-primary/30"
+                              dayWorkDays.length > 1
+                                ? "bg-purple-500/20 text-purple-300 border-purple-500/50"
+                                : isAnyCoordination
+                                  ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
+                                  : isAnyParty
+                                    ? "bg-brand-party/20 text-brand-party border-brand-party/40"
+                                    : "bg-brand-primary/20 text-brand-primary border-brand-primary/30"
                             )}>
                               {emp.photoUrl ? (
                                 <img src={emp.photoUrl} alt={emp.name} className="w-full h-full object-cover" />
@@ -1117,33 +1193,43 @@ export default function DayManagementModal({
                               )}
                             </div>
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <p className="text-xs font-bold text-white truncate group-hover:text-brand-primary transition-colors">{emp.artisticName || emp.name}</p>
                                 <span className="text-[10px] text-brand-primary font-black uppercase shrink-0">{emp.level}</span>
+                                {dayWorkDays.length > 1 && (
+                                  <span className="text-[9px] font-black bg-purple-500/25 text-purple-200 border border-purple-500/40 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm animate-pulse">
+                                    <span>✨</span>
+                                    <span>{dayWorkDays.length} Escalas</span>
+                                  </span>
+                                )}
                               </div>
                               
-                              {/* Switcher Pills: Clicking another event moves the employee to that event (1 event per day limit) */}
-                              <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                              {/* Multi-Select Activity Pills */}
+                              <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                                 {dayConfig.isCommon !== false && (
                                   <button
+                                    type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       assignEmployee(emp, 'common');
                                     }}
                                     className={cn(
-                                      "text-[9px] font-black px-2.5 py-1 rounded-lg transition-all uppercase tracking-wider flex items-center gap-1",
-                                      isCommon 
-                                        ? "bg-brand-primary text-brand-bg shadow-md" 
-                                        : "bg-brand-bg border border-brand-border text-gray-400 hover:border-brand-primary/50 hover:text-brand-primary"
+                                      "text-[9px] font-black px-2.5 py-1 rounded-lg transition-all uppercase tracking-wider flex items-center gap-1 border",
+                                      hasCommon 
+                                        ? "bg-brand-primary text-slate-950 border-brand-primary shadow-md ring-1 ring-brand-primary" 
+                                        : "bg-brand-bg border-brand-border text-gray-400 hover:border-brand-primary/50 hover:text-brand-primary"
                                     )}
+                                    title={hasCommon ? "Clique para remover CCSP" : "Clique para escalar no CCSP"}
                                   >
-                                    CCSP
+                                    {hasCommon && <Check size={11} strokeWidth={3} className="shrink-0" />}
+                                    <span>CCSP</span>
                                   </button>
                                 )}
 
                                 {normalizedParties.map((party) => {
-                                  const isAssignedToThisParty = isParty && 
-                                    (currentPartyId === party.id || (!currentPartyId && party.id === 'default_party') || currentPartyName === party.name);
+                                  const isAssignedToThisParty = partyWorkDays.some(d => 
+                                    (d.partyId === party.id || (!d.partyId && party.id === 'default_party') || d.partyName === party.name)
+                                  );
                                   const isCoord = (party.name || '').toLowerCase().includes('coordena');
                                   const isOffice = (party.name || '').toLowerCase().includes('escritório') || (party.name || '').toLowerCase().includes('escritorio');
                                   const isJanitor = (party.name || '').toLowerCase().includes('zelador');
@@ -1151,6 +1237,7 @@ export default function DayManagementModal({
                                   return (
                                     <button
                                       key={party.id}
+                                      type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         assignEmployee(emp, 'party', party);
@@ -1173,9 +1260,19 @@ export default function DayManagementModal({
                                                 ? "bg-cyan-950/40 border-cyan-500/50 text-cyan-300 hover:border-cyan-400 hover:bg-cyan-900/60"
                                                 : "bg-brand-bg border-brand-border text-gray-400 hover:border-brand-party/50 hover:text-brand-party"
                                       )}
-                                      title={`Escalar para ${party.name}${party.time ? ` (${party.time})` : ''}`}
+                                      title={isAssignedToThisParty ? `Clique para remover de ${party.name}` : `Escalar para ${party.name}${party.time ? ` (${party.time})` : ''}`}
                                     >
-                                      {isOffice ? <Briefcase size={11} className={cn("shrink-0", isAssignedToThisParty ? "text-white" : "text-blue-300")} /> : isJanitor ? <Wrench size={11} className={cn("shrink-0", isAssignedToThisParty ? "text-white" : "text-zinc-300")} /> : isCoord ? <ShieldCheck size={11} className={cn("shrink-0", isAssignedToThisParty ? "text-slate-950" : "text-cyan-300")} /> : <span>🎉</span>}
+                                      {isAssignedToThisParty ? (
+                                        <Check size={11} strokeWidth={3} className="shrink-0" />
+                                      ) : isOffice ? (
+                                        <Briefcase size={11} className="shrink-0 text-blue-300" />
+                                      ) : isJanitor ? (
+                                        <Wrench size={11} className="shrink-0 text-zinc-300" />
+                                      ) : isCoord ? (
+                                        <ShieldCheck size={11} className="shrink-0 text-cyan-300" />
+                                      ) : (
+                                        <span className="shrink-0">🎉</span>
+                                      )}
                                       <span className="truncate">{party.name}</span>
                                     </button>
                                   );
@@ -1183,77 +1280,91 @@ export default function DayManagementModal({
                               </div>
 
                               {/* Shift Selector for CCSP */}
-                              {isCommon && (
+                              {hasCommon && (
                                 <div className="mt-2 pt-2 border-t border-brand-primary/10" onClick={(e) => e.stopPropagation()}>
                                   <ShiftSelector
-                                    currentShift={workDay?.shift || 'Definir Horário'}
+                                    currentShift={commonWorkDay?.shift || 'Definir Horário'}
                                     dateStr={selectedDayStr}
                                     onChange={(newShift) => updateShift(emp, newShift)}
                                   />
                                 </div>
                               )}
-                              {workDay?.isOvernight ? (
-                                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                                  <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/40 shadow-sm">
-                                    <Moon size={10} className="text-indigo-300" /> Pernoite ({workDay.overnightHoursText || '22h às 08h'}) +{formatCurrency(workDay.overnightPay || 0)}
-                                  </span>
-                                  {!!workDay.extraHours && (
-                                    <span className="text-[9px] font-black text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                                      +{workDay.extraHours}h extra
-                                    </span>
-                                  )}
+
+                              {/* Badges for active modes / extra hours per assignment */}
+                              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                {dayWorkDays.map(wd => {
+                                  const label = wd.type === 'common' ? 'CCSP' : (wd.partyName || 'Festa');
+                                  const showName = dayWorkDays.length > 1;
+                                  return (
+                                    <React.Fragment key={wd.id || `${wd.type}_${wd.partyId}`}>
+                                      {wd.isOvernight && (
+                                        <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/40 shadow-sm">
+                                          <Moon size={10} className="text-indigo-300" /> {showName ? `${label}: ` : ''}Pernoite ({wd.overnightHoursText || '22h às 08h'}) +{formatCurrency(wd.overnightPay || 0)}
+                                        </span>
+                                      )}
+                                      {wd.isReducedHours && (
+                                        <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/40 shadow-sm">
+                                          <Clock size={10} className="text-amber-300" /> {showName ? `${label}: ` : ''}Reduzido ({wd.customHoursText || 'Acordo'}): {formatCurrency(wd.customTotalPay || 0)}
+                                        </span>
+                                      )}
+                                      {!!wd.extraHours && (
+                                        <span className="text-[9px] font-black text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                          {showName ? `${label}: ` : ''}+{wd.extraHours}h extra ({formatCurrency(wd.extraHours * ((wd.extraHourRateAtTime && wd.extraHourRateAtTime > 0) ? wd.extraHourRateAtTime : (emp.extraHourRate || 0)))})
+                                        </span>
+                                      )}
+                                    </React.Fragment>
+                                  );
+                                })}
+                              </div>
+
+                              {/* Visual Alert for Time Overlap / Conflict */}
+                              {timeOverlapAlerts.length > 0 && (
+                                <div className="mt-2 p-2 bg-amber-500/15 border border-amber-500/40 rounded-xl text-[11px] text-amber-200 flex items-start gap-2 shadow-sm animate-in fade-in">
+                                  <span className="text-amber-400 text-sm leading-none shrink-0 mt-0.5">⚠️</span>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-extrabold text-amber-300">Atenção: Choque de Horários</p>
+                                    <p className="text-[10px] text-amber-100 font-medium leading-tight mt-0.5">
+                                      {timeOverlapAlerts.join(' coincide com ')}.
+                                    </p>
+                                    <p className="text-[9px] text-amber-300/80 font-bold mt-1">
+                                      ✓ Conforme regra definida, ambas as escalas serão mantidas e remuneradas com valor integral.
+                                    </p>
+                                  </div>
                                 </div>
-                              ) : workDay?.isReducedHours ? (
-                                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                                  <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/40 shadow-sm">
-                                    <Clock size={10} className="text-amber-300" /> Horário Reduzido ({workDay.customHoursText || 'Acordo'}): {formatCurrency(workDay.customTotalPay || 0)}
-                                  </span>
-                                  {!!workDay.extraHours && (
-                                    <span className="text-[9px] font-black text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                                      +{workDay.extraHours}h extra
-                                    </span>
-                                  )}
-                                </div>
-                              ) : !!workDay?.extraHours ? (
-                                <div className="mt-1.5">
-                                  <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                                    +{workDay.extraHours}h extra ({formatCurrency(workDay.extraHours * ((workDay.extraHourRateAtTime && workDay.extraHourRateAtTime > 0) ? workDay.extraHourRateAtTime : (emp.extraHourRate || 0)))})
-                                  </span>
-                                </div>
-                              ) : null}
+                              )}
                             </div>
                           </div>
 
                           <div className="flex items-center gap-1 shrink-0">
-                            {(isCommon || isParty) && (
+                            {dayWorkDays.length > 0 && (
                               <button 
                                 onClick={() => setExpandedEmployeeId(isExpanded ? null : emp.id)}
                                 className={cn(
                                   "p-1.5 rounded-lg transition-colors",
                                   isExpanded 
                                     ? "text-brand-primary bg-brand-primary/20" 
-                                    : workDay?.isOvernight
+                                    : dayWorkDays.some(d => d.isOvernight)
                                       ? "text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20"
-                                      : workDay?.isReducedHours
+                                      : dayWorkDays.some(d => d.isReducedHours)
                                         ? "text-amber-400 bg-amber-500/10 hover:bg-amber-500/20"
                                         : "text-gray-500 hover:text-brand-primary hover:bg-brand-primary/10"
                                 )}
-                                title={workDay?.isOvernight ? "Configurar Pernoite" : workDay?.isReducedHours ? "Configurar Horário Reduzido" : "Horas Extras e Configurações"}
+                                title={dayWorkDays.some(d => d.isOvernight) ? "Configurar Pernoite" : dayWorkDays.some(d => d.isReducedHours) ? "Configurar Horário Reduzido" : "Horas Extras e Configurações"}
                               >
-                                {workDay?.isOvernight ? <Moon size={16} /> : <Clock size={16} />}
+                                {dayWorkDays.some(d => d.isOvernight) ? <Moon size={16} /> : <Clock size={16} />}
                               </button>
                             )}
                             <button 
                               onClick={() => removeAllWork(emp)}
                               className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                              title="Remover escala"
+                              title="Remover todas as escalas deste dia"
                             >
                               <UserMinus size={18} />
                             </button>
                           </div>
                         </div>
                         
-                        {isExpanded && (isCommon || isParty) && (
+                        {isExpanded && dayWorkDays.length > 0 && (
                           <DayWorkModeEditor
                             employee={emp}
                             selectedDayStr={selectedDayStr}

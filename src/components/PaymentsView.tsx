@@ -72,6 +72,7 @@ interface CCSPPaymentItem {
   dueDateFormatted: string;
   referenceCycleText: string;
   hasRolloverDays?: boolean;
+  sameDayWithPartyDates: string[];
   isPaid: boolean;
   workDays: WorkDay[];
 }
@@ -87,6 +88,8 @@ interface PartyPaymentItem {
   dueDateFormatted: string;
   amount: number;
   isPaid: boolean;
+  partyUniqueKey: string;
+  sameDayOtherWork: string[];
   workDay: WorkDay;
 }
 
@@ -166,17 +169,33 @@ export default function PaymentsView({
     }
   };
 
-  // Toggle Party Payment
-  const handleTogglePartyPayment = async (employee: Employee, dueDateStr: string, isPaid: boolean) => {
-    const itemKey = `party-${employee.id}-${dueDateStr}`;
+  // Toggle Party Payment (individual per party assignment to avoid cross-quitação)
+  const handleTogglePartyPayment = async (employee: Employee, partyUniqueKey: string, isPaid: boolean, targetWorkDay?: WorkDay) => {
+    const itemKey = `party-${employee.id}-${partyUniqueKey}`;
     try {
       setIsProcessing(itemKey);
       const currentPaid = employee.paidDates || [];
       const newPaid = isPaid
-        ? currentPaid.filter(d => d !== dueDateStr)
-        : [...currentPaid, dueDateStr];
+        ? currentPaid.filter(d => d !== partyUniqueKey)
+        : [...currentPaid, partyUniqueKey];
 
-      await onUpdateDetails(employee.id, { paidDates: newPaid });
+      // Sincroniza isPaid diretamente no próprio workDay do colaborador para 100% de consistência
+      const updatedWorkDays = (employee.workDays || []).map(wd => {
+        const isMatch = targetWorkDay ? wd === targetWorkDay : (
+          wd.date === targetWorkDay?.date && 
+          wd.type === 'party' && 
+          (wd.partyId === targetWorkDay?.partyId || (!wd.partyId && !targetWorkDay?.partyId && wd.partyName === targetWorkDay?.partyName))
+        );
+        if (isMatch) {
+          return { ...wd, isPaid: !isPaid };
+        }
+        return wd;
+      });
+
+      await onUpdateDetails(employee.id, { 
+        paidDates: newPaid,
+        workDays: updatedWorkDays
+      });
     } catch (error) {
       console.error('Erro ao alternar status do pagamento de festa:', error);
     } finally {
@@ -222,6 +241,17 @@ export default function PaymentsView({
         const firstCycleInfo = getCcspCycleAndDueDate(matchingCcspDays[0].date);
         const hasRolloverDays = matchingCcspDays.some(d => getCcspCycleAndDueDate(d.date).isRollover);
 
+        // Identifica diárias do CCSP realizadas em dias onde o recreador também fez festa (dupla escala)
+        const sameDayWithPartyDates = matchingCcspDays.filter(cd => 
+          (emp.workDays || []).some(wd => !wd.isCancelled && wd.date === cd.date && wd.type === 'party')
+        ).map(cd => {
+          try {
+            return format(parseISO(cd.date), 'dd/MM');
+          } catch {
+            return cd.date;
+          }
+        });
+
         ccspList.push({
           id: `ccsp-${emp.id}-${currentMonthCcspKey}`,
           type: 'ccsp',
@@ -232,6 +262,7 @@ export default function PaymentsView({
           dueDateFormatted: `15/${format(currentMonth, 'MM/yyyy')}`,
           referenceCycleText: `Competência: ${firstCycleInfo.cycleMonthName}`,
           hasRolloverDays,
+          sameDayWithPartyDates,
           isPaid,
           workDays: matchingCcspDays
         });
@@ -251,7 +282,13 @@ export default function PaymentsView({
           }
 
           const dueDateStr = format(forecastDate, 'yyyy-MM-dd');
-          const isPaid = (emp.paidDates || []).includes(dueDateStr) || (emp.paidDates || []).includes(pd.date) || !!pd.isPaid;
+          const partyUniqueKey = `party_${pd.date}_${pd.partyId || pd.partyName || idx}`;
+
+          // Reconhece como pago se a chave única estiver em paidDates, ou se pd.isPaid for true, ou retrocompatibilidade se data/vencimento estiver pago e houver apenas 1 festa
+          const isPaid = (emp.paidDates || []).includes(partyUniqueKey) || 
+                         !!pd.isPaid || 
+                         ((emp.paidDates || []).includes(dueDateStr) && allPartyDays.filter(p => p.date === pd.date).length === 1) ||
+                         ((emp.paidDates || []).includes(pd.date) && allPartyDays.filter(p => p.date === pd.date).length === 1);
 
           let rate = pd.isReducedHours && pd.customTotalPay !== undefined && pd.customTotalPay >= 0
             ? pd.customTotalPay
@@ -263,8 +300,16 @@ export default function PaymentsView({
           const extra = (pd.extraHours || 0) * extraRate;
           const amount = rate + extra;
 
+          // Detecta outras escalas no mesmo dia para indicar dupla escala (CCSP ou outra festa)
+          const otherWorkOnSameDay = (emp.workDays || []).filter(wd => 
+            !wd.isCancelled && wd.date === pd.date && wd !== pd
+          );
+          const sameDayOtherWork = otherWorkOnSameDay.map(wd => 
+            wd.type === 'common' ? 'CCSP' : (wd.partyName || 'Outra Festa')
+          );
+
           partyList.push({
-            id: `party-${emp.id}-${idx}-${pd.date}`,
+            id: `party-${emp.id}-${pd.partyId || idx}-${pd.date}`,
             type: 'party',
             employee: emp,
             partyName: pd.partyName || 'Evento / Festa',
@@ -274,6 +319,8 @@ export default function PaymentsView({
             dueDateFormatted: format(forecastDate, 'dd/MM/yyyy'),
             amount,
             isPaid,
+            partyUniqueKey,
+            sameDayOtherWork,
             workDay: pd
           });
         } catch (e) {
@@ -798,6 +845,11 @@ export default function PaymentsView({
                             ✨ Inclui diárias da virada de mês anterior
                           </span>
                         )}
+                        {item.sameDayWithPartyDates && item.sameDayWithPartyDates.length > 0 && (
+                          <span className="text-[9px] text-purple-300 font-bold block mt-0.5">
+                            ✨ Dupla Escala: Inclui diária em dia com evento ({item.sameDayWithPartyDates.join(', ')})
+                          </span>
+                        )}
                       </div>
                       <div className="text-right">
                         <span className="text-[10px] text-brand-muted uppercase font-bold block">
@@ -908,7 +960,7 @@ export default function PaymentsView({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
               {filteredPartyItems.map(item => {
                 const emp = item.employee;
-                const isItemProcessing = isProcessing === `party-${emp.id}-${item.dueDateStr}`;
+                const isItemProcessing = isProcessing === `party-${emp.id}-${item.partyUniqueKey}`;
                 const isDueDatePast = isBefore(parseISO(item.dueDateStr), new Date());
 
                 return (
@@ -964,6 +1016,17 @@ export default function PaymentsView({
                         {item.isPaid ? 'Quitado' : 'Pendente'}
                       </span>
                     </div>
+
+                    {/* Aviso de Dupla Escala no mesmo dia se houver */}
+                    {item.sameDayOtherWork && item.sameDayOtherWork.length > 0 && (
+                      <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-2.5 py-1.5 flex items-start gap-1.5 text-[11px] text-amber-300">
+                        <Sparkles size={13} className="shrink-0 text-amber-400 mt-0.5" />
+                        <div>
+                          <span className="font-bold">Múltiplas escalas neste dia: </span>
+                          <span>Também escalado em {item.sameDayOtherWork.join(', ')}. Este pagamento quita somente este evento.</span>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Dados do Evento e Datas */}
                     <div className="bg-brand-bg/60 rounded-xl p-3 border border-brand-border/60 space-y-1.5">
@@ -1039,7 +1102,7 @@ export default function PaymentsView({
                       )}
 
                       <button
-                        onClick={() => handleTogglePartyPayment(emp, item.dueDateStr, item.isPaid)}
+                        onClick={() => handleTogglePartyPayment(emp, item.partyUniqueKey, item.isPaid, item.workDay)}
                         disabled={isItemProcessing}
                         className={cn(
                           "ml-auto px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-md active:scale-95 disabled:opacity-50",
