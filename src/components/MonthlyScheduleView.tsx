@@ -763,7 +763,7 @@ export default function MonthlyScheduleView({
 
                                   return (
                                     <div 
-                                      key={`${employee.id}_${workDay.date}_${workDay.type}`}
+                                      key={`${employee.id}_${workDay.date}_${workDay.type}_${workDay.partyId || workDay.id || ''}`}
                                       className={cn(
                                         "flex items-center justify-between gap-2 p-1.5 rounded-xl transition-all border text-xs",
                                         isThisHighlighted
@@ -968,7 +968,7 @@ export default function MonthlyScheduleView({
 
                         return (
                           <div 
-                            key={employee.id}
+                            key={`${employee.id}_${workDay.date}_${workDay.type}_${workDay.partyId || workDay.id || ''}`}
                             className={cn(
                               "flex items-center justify-between p-2.5 rounded-xl border text-xs",
                               isThisHighlighted
@@ -1101,7 +1101,7 @@ export default function MonthlyScheduleView({
 
                     return (
                       <div 
-                        key={`${employee.id}_${workDay.type}`}
+                        key={`${employee.id}_${workDay.date}_${workDay.type}_${workDay.partyId || workDay.id || ''}`}
                         className={cn(
                           "flex items-center justify-between p-3 rounded-xl border transition-all text-xs",
                           isHighlighted
