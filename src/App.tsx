@@ -429,11 +429,13 @@ export default function App() {
       (emp.workDays || []).forEach(wd => {
         if (wd.isCancelled && !wd.cancellationDismissed && !wd.cancellationIgnored) {
           list.push({
-            id: `${emp.id}_${wd.date}`,
+            id: `${emp.id}_${wd.date}_${wd.type}${wd.partyId ? `_${wd.partyId}` : ''}`,
             employeeId: emp.id,
             employeeName: emp.artisticName || emp.name,
             date: wd.date,
             type: wd.type as 'common' | 'party',
+            partyId: wd.partyId,
+            partyName: wd.partyName,
             cancelledAt: wd.cancelledAt || new Date().toISOString(),
             viewedByAdmins: !!wd.cancellationViewed
           });
@@ -552,16 +554,19 @@ export default function App() {
       cancellations.forEach(c => {
         const notifId = `cancellation_${c.id}`;
         if (!dismissedNotificationIds.includes(notifId)) {
-          list.push({
-            id: notifId,
-            type: 'cancellation',
-            title: `Cancelamento: ${c.employeeName}`,
-            message: `Solicitou o cancelamento da escala do dia ${format(parseISO(c.date), 'dd/MM/yyyy')} (${c.type === 'party' ? 'Festa 🥳' : 'Diária CCSP'}).`,
-            date: c.cancelledAt,
-            isRead: c.viewedByAdmins || readNotificationIds.includes(notifId),
-            employeeId: c.employeeId,
-            targetDate: c.date
-          });
+            const eventDesc = c.type === 'party' 
+              ? `Festa 🥳${c.partyName ? ` (${c.partyName})` : ''}` 
+              : 'Diária CCSP';
+            list.push({
+              id: notifId,
+              type: 'cancellation',
+              title: `Cancelamento: ${c.employeeName}`,
+              message: `Solicitou o cancelamento da escala do dia ${format(parseISO(c.date), 'dd/MM/yyyy')} (${eventDesc}).`,
+              date: c.cancelledAt,
+              isRead: c.viewedByAdmins || readNotificationIds.includes(notifId),
+              employeeId: c.employeeId,
+              targetDate: c.date
+            });
         }
       });
 
@@ -1145,19 +1150,22 @@ export default function App() {
 
       daysInMonth.forEach(day => {
         const dayStr = format(day, 'yyyy-MM-dd');
-        const workDay = monthDays.find(d => d.date === dayStr);
+        const workDaysOnDate = monthDays.filter(d => d.date === dayStr);
         const dayLabel = format(day, 'dd/MM');
         
-        if (workDay) {
-          let typeLabel = workDay.type === 'common' ? 'CCSP' : 'Festa';
-          if (workDay.isReducedHours) {
-            typeLabel += ` [Reduzido: ${workDay.customHoursText || 'Acordo'} - R$${workDay.customTotalPay || 0}]`;
-          }
-          if (workDay.isOvernight) {
-            typeLabel += ` [Pernoite: ${workDay.overnightHoursText || 'Acordo'} +R$${workDay.overnightPay || 0}]`;
-          }
-          if (workDay.extraHours) typeLabel += ` (+${workDay.extraHours}h)`;
-          row[dayLabel] = typeLabel;
+        if (workDaysOnDate.length > 0) {
+          const labels = workDaysOnDate.map(workDay => {
+            let typeLabel = workDay.type === 'common' ? 'CCSP' : (workDay.partyName ? `Festa (${workDay.partyName})` : 'Festa');
+            if (workDay.isReducedHours) {
+              typeLabel += ` [Reduzido: ${workDay.customHoursText || 'Acordo'} - R$${workDay.customTotalPay || 0}]`;
+            }
+            if (workDay.isOvernight) {
+              typeLabel += ` [Pernoite: ${workDay.overnightHoursText || 'Acordo'} +R$${workDay.overnightPay || 0}]`;
+            }
+            if (workDay.extraHours) typeLabel += ` (+${workDay.extraHours}h)`;
+            return typeLabel;
+          });
+          row[dayLabel] = labels.join(' + ');
         } else {
           row[dayLabel] = '-';
         }
@@ -1388,7 +1396,14 @@ export default function App() {
     }
   };
 
-  const handleCancelWorkDay = async (employeeId: string, dateStr: string, type: 'common' | 'party', employeeName: string) => {
+  const handleCancelWorkDay = async (
+    employeeId: string, 
+    dateStr: string, 
+    type: 'common' | 'party', 
+    employeeName: string,
+    partyId?: string,
+    partyName?: string
+  ) => {
     if (!user || !db) return;
     // Permissão: Apenas administradores OU o próprio funcionário logado
     if (!isAdmin && (!currentLoggedInEmployee || currentLoggedInEmployee.id !== employeeId)) {
@@ -1409,7 +1424,10 @@ export default function App() {
       if (empSnap.exists()) {
         const empData = empSnap.data() as Employee;
         const updatedWorkDays = (empData.workDays || []).map(d => {
-          if (d.date === dateStr) {
+          const isTarget = d.date === dateStr && 
+            d.type === type && 
+            (!partyId || d.partyId === partyId || (!d.partyId && partyName && d.partyName === partyName));
+          if (isTarget) {
             return {
               ...d,
               isCancelled: true,
@@ -1420,11 +1438,15 @@ export default function App() {
           return d;
         });
 
-        // Remove the availability for this date so the employee doesn't show as available anymore after cancelling
+        // Remove only the specific availability so other events remain valid if applicable
         const currentAvailabilities = empData.availabilities || [];
-        const updatedAvailabilities = currentAvailabilities.filter(av => 
-          av !== dateStr && av !== `${dateStr}_common` && av !== `${dateStr}_party`
-        );
+        const updatedAvailabilities = currentAvailabilities.filter(av => {
+          if (type === 'common') {
+            return av !== dateStr && av !== `${dateStr}_common`;
+          } else {
+            return av !== `${dateStr}_party` && av !== `${dateStr}_party_${partyId}`;
+          }
+        });
 
         await updateDoc(empRef, { 
           workDays: removeUndefinedFields(updatedWorkDays),
@@ -1440,7 +1462,12 @@ export default function App() {
   const handleMarkCancellationRead = async (cancellationId: string) => {
     if (!db) return;
     try {
-      const [employeeId, dateStr] = cancellationId.split('_');
+      const parts = cancellationId.split('_');
+      const employeeId = parts[0];
+      const dateStr = parts[1];
+      const type = parts[2];
+      const partyId = parts[3];
+
       if (!isAdmin && (!currentLoggedInEmployee || currentLoggedInEmployee.id !== employeeId)) {
         return;
       }
@@ -1450,7 +1477,8 @@ export default function App() {
         if (empSnap.exists()) {
           const empData = empSnap.data() as Employee;
           const updatedWorkDays = (empData.workDays || []).map(d => {
-            if (d.date === dateStr) {
+            const matches = d.date === dateStr && (!type || d.type === type) && (!partyId || d.partyId === partyId);
+            if (matches) {
               return { ...d, cancellationViewed: true };
             }
             return d;
@@ -1466,7 +1494,12 @@ export default function App() {
   const handleDismissCancellation = async (cancellationId: string) => {
     if (!db) return;
     try {
-      const [employeeId, dateStr] = cancellationId.split('_');
+      const parts = cancellationId.split('_');
+      const employeeId = parts[0];
+      const dateStr = parts[1];
+      const type = parts[2];
+      const partyId = parts[3];
+
       if (!isAdmin && (!currentLoggedInEmployee || currentLoggedInEmployee.id !== employeeId)) {
         return;
       }
@@ -1476,7 +1509,8 @@ export default function App() {
         if (empSnap.exists()) {
           const empData = empSnap.data() as Employee;
           const updatedWorkDays = (empData.workDays || []).map(d => {
-            if (d.date === dateStr) {
+            const matches = d.date === dateStr && (!type || d.type === type) && (!partyId || d.partyId === partyId);
+            if (matches) {
               return { ...d, cancellationDismissed: true };
             }
             return d;
