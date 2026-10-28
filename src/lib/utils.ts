@@ -201,3 +201,73 @@ export function getPartyPaymentDueDate(partyDateStrOrObj: string | Date, isManag
   return getNextBusinessDay(nextMon);
 }
 
+/**
+ * Converte strings de horários em minutos desde a meia-noite para cálculo de choque de horário.
+ * Exemplos aceitos:
+ * - "11h - 21h00", "11:00 às 21:00", "14h até 18h", "14:00 até 18:00", "14:00", "14h"
+ */
+export function parseShiftHours(str?: string): { startMinutes: number; endMinutes: number } | null {
+  if (!str) return null;
+  const cleaned = str.trim().toLowerCase();
+
+  // Caso com intervalo (ex: "11h - 21h00", "11:00 às 21:00", "14h até 18h")
+  const intervalRegex = /(\d{1,2})(?:[h:](\d{2})?)?\s*(?:h)?\s*(?:-|até|às|as|a)\s*(\d{1,2})(?:[h:](\d{2})?)?\s*(?:h)?/;
+  const match = cleaned.match(intervalRegex);
+  if (match) {
+    const startH = parseInt(match[1], 10);
+    const startM = match[2] ? parseInt(match[2], 10) : 0;
+    const endH = parseInt(match[3], 10);
+    const endM = match[4] ? parseInt(match[4], 10) : 0;
+
+    let startMin = startH * 60 + startM;
+    let endMin = endH * 60 + endM;
+
+    // Se o horário final for menor ou igual ao inicial, cruza a meia-noite (ex: pernoite 22h às 08h)
+    if (endMin <= startMin) {
+      endMin += 24 * 60;
+    }
+    return { startMinutes: startMin, endMinutes: endMin };
+  }
+
+  // Caso com apenas horário inicial (ex: "14:00" ou "14h") -> assume duração padrão de 4 horas para festa
+  const singleRegex = /^(\d{1,2})(?:[h:](\d{2})?)?\s*(?:h)?$/;
+  const singleMatch = cleaned.match(singleRegex);
+  if (singleMatch) {
+    const startH = parseInt(singleMatch[1], 10);
+    const startM = singleMatch[2] ? parseInt(singleMatch[2], 10) : 0;
+    const startMin = startH * 60 + startM;
+    return { startMinutes: startMin, endMinutes: startMin + 4 * 60 };
+  }
+
+  return null;
+}
+
+/**
+ * Verifica se dois turnos/atividades possuem choque de horário (sobreposição)
+ */
+export function checkShiftsOverlap(shift1?: string, shift2?: string): { hasOverlap: boolean; message?: string } {
+  if (!shift1 || !shift2) return { hasOverlap: false };
+  const t1 = parseShiftHours(shift1);
+  const t2 = parseShiftHours(shift2);
+  if (!t1 || !t2) return { hasOverlap: false };
+
+  // Dois intervalos [A, B] e [C, D] se sobrepõem se A < D e C < B
+  const overlaps = t1.startMinutes < t2.endMinutes && t2.startMinutes < t1.endMinutes;
+  if (overlaps) {
+    return {
+      hasOverlap: true,
+      message: `Sobreposição de horários: "${shift1}" coincide com "${shift2}".`
+    };
+  }
+  return { hasOverlap: false };
+}
+
+/**
+ * Gera chave identificadora única para uma atividade/escala de trabalho
+ */
+export function getWorkDayUniqueKey(date: string, type: 'common' | 'party', partyId?: string): string {
+  if (type === 'common') {
+    return `${date}_common`;
+  }
+  return `${date}_party_${partyId || 'default'}`;
+}
