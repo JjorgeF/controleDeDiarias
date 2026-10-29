@@ -61,6 +61,7 @@ import { cn, formatCurrency, getWorkDayUniqueKey } from '../lib/utils';
 import DayManagementModal from './DayManagementModal';
 import DayWorkModeEditor from './DayWorkModeEditor';
 import ShiftSelector from './ShiftSelector';
+import { EmployeeMonthOverview } from './EmployeeMonthOverview';
 
 interface CalendarViewProps {
   employees: Employee[];
@@ -1187,6 +1188,8 @@ export default function CalendarView({
 
 
 
+
+
   const toastTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const [deadlineToast, setDeadlineToast] = React.useState<{ show: boolean; message: string; submessage?: string; type: 'success' | 'info' } | null>(null);
 
@@ -2069,262 +2072,22 @@ export default function CalendarView({
             </div>
           </div>
 
-          {/* Employee Scheduled Days List (Below Calendar) */}
+          {/* Employee Schedule & Availabilities Overview (Below Calendar) */}
           {!isAdmin && myEmployee && (
-            <div className="bg-brand-card border border-brand-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-4">
-              <div className="p-3.5 md:p-5 border-b border-brand-border bg-brand-bg/30">
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <h3 className="text-sm md:text-base font-black text-brand-text flex items-center gap-2">
-                    <Calendar className="text-brand-primary shrink-0" size={18} />
-                    <span className="capitalize">Suas Escalas Confirmadas — {format(currentMonth, 'MMMM', { locale: ptBR })}</span>
-                  </h3>
-                  <span className="bg-brand-primary/10 text-brand-primary text-xs font-black px-2.5 py-0.5 rounded-full border border-brand-primary/20 shrink-0 whitespace-nowrap inline-flex items-center">
-                    {scheduledDaysThisMonth.length} {scheduledDaysThisMonth.length === 1 ? 'dia' : 'dias'}
-                  </span>
-                </div>
-                <p className="text-[10px] md:text-xs text-brand-muted font-semibold mt-1">
-                  Estes são os dias que você está escalado para trabalhar neste mês
-                </p>
-              </div>
-
-              <div className="p-4 md:p-6">
-                {scheduledDaysThisMonth.length > 0 ? (
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {scheduledDaysThisMonth.map((d) => {
-                        const dateObj = parseISO(d.date);
-                        const isParty = d.type === 'party';
-                        const config = getDayConfig(d.date);
-
-                        // Resolve party name and time
-                        let partyName = d.partyName;
-                        let partyTime = d.shift || config.partyTime;
-
-                        if (isParty) {
-                          const matchedParty = d.partyId 
-                            ? config.parties?.find(p => p.id === d.partyId) 
-                            : config.parties?.find(p => p.name === d.partyName);
-                          
-                          if (matchedParty) {
-                            if (!partyName || partyName === 'Festa') partyName = matchedParty.name;
-                            if (matchedParty.time) partyTime = matchedParty.time;
-                          } else if (config.parties && config.parties.length > 0) {
-                            if (!partyName || partyName === 'Festa') partyName = config.parties[0].name;
-                            if (config.parties[0].time) partyTime = config.parties[0].time;
-                          }
-                        }
-
-                        let dayBase = 0;
-                        if (d.isReducedHours && d.customTotalPay !== undefined && d.customTotalPay >= 0) {
-                          dayBase = d.customTotalPay;
-                        } else if (isParty) {
-                          dayBase = d.partyRateAtTime !== undefined ? d.partyRateAtTime : myEmployee.partyRate;
-                        } else {
-                          dayBase = d.dailyRateAtTime !== undefined ? d.dailyRateAtTime : myEmployee.dailyRate;
-                        }
-                        if (d.isOvernight && d.overnightPay !== undefined && d.overnightPay > 0) {
-                          dayBase += d.overnightPay;
-                        }
-                        const extraRate = (d.extraHourRateAtTime && d.extraHourRateAtTime > 0) ? d.extraHourRateAtTime : (myEmployee.extraHourRate || 0);
-                        const extra = (d.extraHours || 0) * extraRate;
-                        const dayTotal = dayBase + extra;
-                        const rawDateStr = format(dateObj, "EEEE, dd 'de' MMMM", { locale: ptBR });
-                        const formattedDateClean = rawDateStr.replace(/-feira/gi, '').replace(/\s+feira/gi, '');
-
-                        const isCoordination = isParty && (partyName || '').toLowerCase().includes('coordena');
-                        const isOfficeMode = isParty && ((partyName || '').toLowerCase().includes('escritório') || (partyName || '').toLowerCase().includes('escritorio'));
-                        const isJanitorMode = isParty && (partyName || '').toLowerCase().includes('zelador');
-
-                        return (
-                          <div 
-                            key={d.date}
-                            onClick={() => {
-                              setCancelTargetDate(dateObj);
-                              setIsCancelModalOpen(true);
-                            }}
-                            className={cn(
-                              "flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer select-none hover:scale-[1.01] duration-150 group gap-3",
-                              isOfficeMode
-                                ? "bg-blue-500/5 border-blue-500/20 hover:border-blue-500/45 hover:bg-blue-500/10"
-                                : isJanitorMode
-                                  ? "bg-zinc-500/5 border-zinc-500/20 hover:border-zinc-500/45 hover:bg-zinc-500/10"
-                                  : d.isReducedHours
-                                    ? "bg-amber-500/10 border-amber-500/30 hover:border-amber-500/50 hover:bg-amber-500/15"
-                                    : d.isOvernight
-                                      ? "bg-indigo-500/10 border-indigo-500/30 hover:border-indigo-500/50 hover:bg-indigo-500/15"
-                                      : isCoordination
-                                        ? "bg-cyan-500/5 border-cyan-500/20 hover:border-cyan-500/45 hover:bg-cyan-500/10"
-                                        : isParty 
-                                          ? "bg-brand-party/5 border-brand-party/20 hover:border-brand-party/45 hover:bg-brand-party/10" 
-                                          : "bg-brand-primary/5 border-brand-primary/20 hover:border-brand-primary/45 hover:bg-brand-primary/10"
-                            )}
-                          >
-                            <div className="flex items-center gap-3 animate-in fade-in duration-200 min-w-0">
-                              {/* Date circle badge */}
-                              <div className={cn(
-                                "w-11 h-11 rounded-xl flex flex-col items-center justify-center font-black shrink-0 shadow-md transition-all",
-                                isOfficeMode
-                                  ? "bg-blue-500 text-white group-hover:bg-blue-400"
-                                  : isJanitorMode
-                                    ? "bg-zinc-500 text-white group-hover:bg-zinc-400"
-                                    : d.isReducedHours
-                                      ? "bg-amber-500 text-slate-950 group-hover:bg-amber-400"
-                                      : d.isOvernight
-                                        ? "bg-indigo-500 text-white group-hover:bg-indigo-400"
-                                        : isCoordination
-                                          ? "bg-cyan-500 text-slate-950 group-hover:bg-cyan-400"
-                                          : isParty 
-                                            ? "bg-brand-party text-white group-hover:bg-brand-party" 
-                                            : "bg-brand-primary text-slate-900 group-hover:bg-brand-primary-hover"
-                              )}>
-                                <span className="text-sm leading-none">{format(dateObj, 'dd')}</span>
-                                <span className="text-[8px] uppercase tracking-wider leading-none mt-0.5 font-bold">
-                                  {format(dateObj, 'EEE', { locale: ptBR }).substring(0, 3)}
-                                </span>
-                              </div>
-
-                              {/* Details */}
-                              <div className="space-y-1 min-w-0">
-                                <p className="text-xs sm:text-sm font-bold text-brand-text capitalize truncate">
-                                  {formattedDateClean}
-                                </p>
-
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                  {/* Horário Reduzido ou Pernoite ou Onde é a escala (Festa, Coordenação ou CCSP) */}
-                                  {isOfficeMode ? (
-                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-blue-500/10 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded border border-blue-500/20">
-                                      <Briefcase size={10} className="shrink-0 text-blue-400" /> Escritório {d.customHoursText ? `(${d.customHoursText.replace(' (Escritório)', '')})` : ''}
-                                    </span>
-                                  ) : isJanitorMode ? (
-                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-zinc-500/10 dark:bg-zinc-500/20 text-zinc-700 dark:text-zinc-300 px-2 py-0.5 rounded border border-zinc-500/20">
-                                      <Wrench size={10} className="shrink-0 text-zinc-400" /> Zeladoria
-                                    </span>
-                                  ) : d.isOvernight ? (
-                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/40 shadow-sm">
-                                      <Moon size={10} className="text-indigo-300" /> Pernoite ({d.overnightHoursText || '22h às 08h'}) +{formatCurrency(d.overnightPay || 0)}
-                                    </span>
-                                  ) : d.isReducedHours ? (
-                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/40 shadow-sm">
-                                      <Clock size={10} className="text-amber-300" /> Horário Reduzido ({d.customHoursText || 'Acordo'})
-                                    </span>
-                                  ) : isCoordination ? (
-                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-cyan-500/10 dark:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 px-2 py-0.5 rounded border border-cyan-500/20">
-                                      <ShieldCheck size={10} className="shrink-0 text-cyan-300" /> Coordenação
-                                    </span>
-                                  ) : isParty ? (
-                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-brand-party/10 dark:bg-brand-party/20 text-brand-party dark:text-brand-party px-2 py-0.5 rounded border border-brand-party/20">
-                                      🎉 {partyName && partyName !== 'Festa' ? `Festa: ${partyName}` : 'Festa'}
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-brand-primary/10 dark:bg-brand-primary/20 text-amber-700 dark:text-brand-primary px-2 py-0.5 rounded border border-brand-primary/20">
-                                      Dia CCSP 🏢
-                                    </span>
-                                  )}
-
-                                  {!!d.extraHours && (
-                                    <span className="inline-flex items-center gap-1 text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                                      +{d.extraHours}h extra ({formatCurrency(d.extraHours * ((d.extraHourRateAtTime && d.extraHourRateAtTime > 0) ? d.extraHourRateAtTime : (myEmployee.extraHourRate || 0)))})
-                                    </span>
-                                  )}
-
-                                  {/* Valor a receber */}
-                                  <span className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                                    {formatCurrency(dayTotal)}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Turno / Horário */}
-                            <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-brand-border/30 gap-1 shrink-0">
-                              <div className="text-left sm:text-right">
-                                <span className="block text-[8px] text-brand-muted font-bold uppercase tracking-wider">Turno / Horário</span>
-                                <span className={cn(
-                                  "inline-block font-black text-[11px] md:text-xs px-2.5 py-1 rounded-lg shadow-sm border",
-                                  d.isReducedHours
-                                    ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
-                                    : d.isOvernight
-                                      ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-300"
-                                      : isParty
-                                        ? "bg-brand-party/10 dark:bg-brand-party/20 border-brand-party/30 text-brand-party dark:text-brand-party"
-                                        : "bg-brand-primary/10 border-brand-primary/20 text-amber-700 dark:text-brand-primary"
-                                )}>
-                                  {d.isReducedHours 
-                                    ? `Reduzido: ${d.customHoursText || 'Acordado'}` 
-                                    : d.isOvernight
-                                      ? `Pernoite: ${d.overnightHoursText || '22h às 08h'}`
-                                      : isParty ? (partyTime || "A definir") : (d.shift || "CCSP Padrão")}
-                                </span>
-                              </div>
-                              <span className="text-[9px] font-bold text-red-600 dark:text-red-400 group-hover:opacity-100 opacity-0 transition-opacity uppercase tracking-wider">
-                                Desistir ✕
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Final Earnings Summary Demonstrative Card */}
-                    <div className="pt-5 border-t border-brand-border/60 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-brand-primary/[0.02] p-5 rounded-2xl border border-brand-primary/10">
-                      <div className="space-y-1">
-                        <h4 className="text-sm font-bold text-brand-text uppercase tracking-wider font-playful">Demonstrativo de Ganhos Estimados</h4>
-                        <p className="text-[11px] text-brand-muted font-semibold">Valores baseados em suas diárias e horas extras acordadas</p>
-                      </div>
-                      
-                      <div className="flex flex-wrap items-center gap-4 md:gap-8 text-xs font-bold text-brand-muted">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] uppercase text-brand-muted font-extrabold tracking-wider">Dias CCSP ({scheduledDaysThisMonth.filter(d => d.type === 'common').length}x)</span>
-                          <span className="text-sm text-amber-700 dark:text-brand-primary font-black mt-0.5">
-                            {formatCurrency(scheduledDaysThisMonth.filter(d => d.type === 'common').reduce((acc, d) => {
-                              const rate = d.dailyRateAtTime !== undefined ? d.dailyRateAtTime : myEmployee.dailyRate;
-                              return acc + rate;
-                            }, 0))}
-                          </span>
-                        </div>
-                        
-                        <div className="flex flex-col">
-                          <span className="text-[10px] uppercase text-brand-muted font-extrabold tracking-wider">Dias Festa ({scheduledDaysThisMonth.filter(d => d.type === 'party').length}x)</span>
-                          <span className="text-sm text-brand-party dark:text-brand-party font-black mt-0.5">
-                            {formatCurrency(scheduledDaysThisMonth.filter(d => d.type === 'party').reduce((acc, d) => {
-                              const rate = d.partyRateAtTime !== undefined ? d.partyRateAtTime : myEmployee.partyRate;
-                              return acc + rate;
-                            }, 0))}
-                          </span>
-                        </div>
-
-                        {scheduledDaysThisMonth.reduce((acc, d) => acc + (d.extraHours || 0), 0) > 0 && (
-                          <div className="flex flex-col">
-                            <span className="text-[10px] uppercase text-brand-muted font-extrabold tracking-wider">Horas Extras ({scheduledDaysThisMonth.reduce((acc, d) => acc + (d.extraHours || 0), 0)}h)</span>
-                            <span className="text-sm text-yellow-600 dark:text-yellow-400 font-black mt-0.5">
-                              {formatCurrency(scheduledDaysThisMonth.reduce((acc, d) => {
-                                const rate = (d.extraHourRateAtTime && d.extraHourRateAtTime > 0) ? d.extraHourRateAtTime : (myEmployee.extraHourRate || 0);
-                                return acc + (d.extraHours || 0) * rate;
-                              }, 0))}
-                            </span>
-                          </div>
-                        )}
-                        
-                        <div className="flex flex-col bg-brand-primary/10 border border-brand-primary/20 px-4 py-2 rounded-xl">
-                          <span className="text-[9px] uppercase text-amber-700 dark:text-brand-primary tracking-wider font-black">Total Estimado</span>
-                          <span className="text-xl text-amber-700 dark:text-brand-primary font-black leading-none mt-1">
-                            {formatCurrency(totalEarningsThisMonth)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-12 px-4 border-2 border-dashed border-brand-border rounded-xl text-center">
-                    <div className="w-12 h-12 rounded-full bg-gray-800/50 flex items-center justify-center text-gray-500 mb-3">
-                      <Calendar size={24} />
-                    </div>
-                    <p className="text-sm text-gray-400 font-semibold">Nenhuma escala confirmada para este mês.</p>
-                    <p className="text-xs text-gray-500 mt-1">Marque suas disponibilidades no calendário acima para ser escalado.</p>
-                  </div>
-                )}
-              </div>
-            </div>
+            <EmployeeMonthOverview
+              myEmployee={myEmployee}
+              currentMonth={currentMonth}
+              currentMonthKey={currentMonthKey}
+              employees={employees}
+              dayConfigs={dayConfigs}
+              getDayConfig={getDayConfig}
+              scheduledDaysThisMonth={scheduledDaysThisMonth}
+              totalEarningsThisMonth={totalEarningsThisMonth}
+              onCancelDate={(date) => {
+                setCancelTargetDate(date);
+                setIsCancelModalOpen(true);
+              }}
+            />
           )}
 
           {/* Management Panel (Below Calendar) */}
