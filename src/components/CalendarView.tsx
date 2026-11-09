@@ -53,7 +53,8 @@ import {
   RotateCcw,
   Briefcase,
   Wrench,
-  Moon
+  Moon,
+  HelpCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Employee, WorkDay, DayType, CancellationLog, DayConfig, PartyConfig } from '../types';
@@ -62,6 +63,7 @@ import DayManagementModal from './DayManagementModal';
 import DayWorkModeEditor from './DayWorkModeEditor';
 import ShiftSelector from './ShiftSelector';
 import { EmployeeMonthOverview } from './EmployeeMonthOverview';
+import { CalendarLegendModal } from './CalendarLegendModal';
 
 interface CalendarViewProps {
   employees: Employee[];
@@ -480,6 +482,7 @@ export default function CalendarView({
   // Employee No Availability Modal State
   const [isNoAvailModalOpen, setIsNoAvailModalOpen] = React.useState(false);
   const [isNoAvailLoading, setIsNoAvailLoading] = React.useState(false);
+  const [isLegendModalOpen, setIsLegendModalOpen] = React.useState(false);
 
   const currentMonthKey = format(currentMonth, 'yyyy-MM');
 
@@ -1724,7 +1727,18 @@ export default function CalendarView({
                 </div>
               </div>
               
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                {/* Mobile / Tablet Legenda trigger button */}
+                <button
+                  type="button"
+                  onClick={() => setIsLegendModalOpen(true)}
+                  className="lg:hidden flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-brand-text border border-brand-border text-[11px] font-bold transition-all active:scale-95 shadow-xs"
+                  title="Ver significado das cores e legendas do calendário"
+                >
+                  <HelpCircle size={13} className="text-brand-primary" />
+                  <span>Legenda</span>
+                </button>
+
                 {!isAdmin && (
                   <div>
                     {hasDeclaredNoAvail ? (
@@ -1748,22 +1762,47 @@ export default function CalendarView({
                   </div>
                 )}
 
-                <div className="hidden sm:flex items-center gap-4 text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-widest">
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 bg-brand-primary rounded-full"></span>
-                    <span>Escalado</span>
+                {/* Desktop Full Legend (visible on lg screens and up) */}
+                <div className="hidden lg:flex items-center gap-2 text-[10px] font-bold">
+                  {/* Escalado CCSP */}
+                  <div className="flex items-center gap-1.5 bg-[#f2d861]/15 text-[#f2d861] border border-[#f2d861]/30 px-2 py-0.5 rounded-md">
+                    <span className="w-2 h-2 rounded-full bg-[#f2d861]" />
+                    <span>Escalado CCSP</span>
                   </div>
-                  {isAdmin ? (
-                    <div className="flex items-center gap-2">
-                      <span className="w-3 h-3 bg-emerald-500 rounded-full"></span>
-                      <span>Disponível</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <span className="w-3 h-3 bg-emerald-500 rounded-full"></span>
-                      <span>Sua Disponibilidade</span>
-                    </div>
-                  )}
+
+                  {/* Escalado Festa */}
+                  <div className="flex items-center gap-1 bg-brand-party/15 text-brand-party border border-brand-party/30 px-2 py-0.5 rounded-md">
+                    <span className="text-[10px]">🎉</span>
+                    <span>Escalado Festa</span>
+                  </div>
+
+                  {/* Disp CCSP */}
+                  <div className="flex items-center gap-1.5 bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-md">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span>{isAdmin ? 'Disp. CCSP' : 'Sua Disp. CCSP'}</span>
+                  </div>
+
+                  {/* Disp Festa */}
+                  <div className="flex items-center gap-1.5 bg-purple-500/15 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-md">
+                    <span className="w-2 h-2 rounded-full bg-purple-400" />
+                    <span>{isAdmin ? 'Disp. Festa' : 'Sua Disp. Festa'}</span>
+                  </div>
+
+                  {/* Abertura Extra */}
+                  <div className="flex items-center gap-1 bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-md">
+                    <Zap size={10} className="fill-amber-400 text-amber-400" />
+                    <span>Abertura Extra</span>
+                  </div>
+
+                  {/* Desktop icon button to open details */}
+                  <button
+                    type="button"
+                    onClick={() => setIsLegendModalOpen(true)}
+                    className="p-1 rounded-md text-brand-muted hover:text-brand-text hover:bg-slate-800 transition-colors ml-0.5"
+                    title="Ver detalhes completos da legenda"
+                  >
+                    <HelpCircle size={14} className="text-brand-primary" />
+                  </button>
                 </div>
               </div>
             </div>
@@ -3404,6 +3443,13 @@ export default function CalendarView({
           </div>
         </div>
       )}
+
+      {/* Calendar Legend Modal */}
+      <CalendarLegendModal
+        isOpen={isLegendModalOpen}
+        onClose={() => setIsLegendModalOpen(false)}
+        isAdmin={isAdmin}
+      />
     </div>
   );
 }
