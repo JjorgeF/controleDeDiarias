@@ -842,7 +842,7 @@ export default function PaymentsView({
                         </span>
                         {item.hasRolloverDays && (
                           <span className="text-[9px] text-cyan-300 font-bold block mt-0.5">
-                            ✨ Inclui diárias da virada de mês anterior
+                            Inclui diárias da virada de mês anterior
                           </span>
                         )}
                         {item.sameDayWithPartyDates && item.sameDayWithPartyDates.length > 0 && (
