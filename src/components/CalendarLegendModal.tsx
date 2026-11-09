@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, HelpCircle, Zap, Lock, Calendar, Sparkles } from 'lucide-react';
+import { X, HelpCircle, Zap, Lock, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface CalendarLegendModalProps {
@@ -62,27 +62,31 @@ export const CalendarLegendModal: React.FC<CalendarLegendModalProps> = ({
               </span>
 
               {/* Escalado CCSP */}
-              <div className="flex items-start gap-3 p-3 rounded-xl bg-brand-bg/50 border border-brand-border/60">
-                <div className="bg-[#f2d861] text-slate-950 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider shrink-0 shadow-xs mt-0.5">
-                  Escalado
+              <div className="flex items-center gap-3.5 p-3 rounded-xl bg-brand-bg/50 border border-brand-border/60">
+                <div className="w-20 sm:w-24 shrink-0 flex items-center justify-center">
+                  <span className="bg-[#f2d861] text-slate-950 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider shadow-xs text-center whitespace-nowrap">
+                    Escalado
+                  </span>
                 </div>
-                <div className="text-xs">
+                <div className="text-xs min-w-0">
                   <p className="font-bold text-brand-text">Escala CCSP Confirmada</p>
-                  <p className="text-[11px] text-brand-muted mt-0.5">
+                  <p className="text-[11px] text-brand-muted mt-0.5 leading-relaxed">
                     Você está escalado para trabalhar nas atividades normais do CCSP nesta data.
                   </p>
                 </div>
               </div>
 
               {/* Escalado Festa */}
-              <div className="flex items-start gap-3 p-3 rounded-xl bg-brand-bg/50 border border-brand-border/60">
-                <div className="bg-brand-party text-white px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider shrink-0 shadow-xs flex items-center gap-1 mt-0.5">
-                  <span>🎉</span>
-                  <span>Escalado</span>
+              <div className="flex items-center gap-3.5 p-3 rounded-xl bg-brand-bg/50 border border-brand-border/60">
+                <div className="w-20 sm:w-24 shrink-0 flex items-center justify-center">
+                  <span className="bg-brand-party text-white px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider shadow-xs flex items-center gap-1 text-center whitespace-nowrap">
+                    <span>🎉</span>
+                    <span>Escalado</span>
+                  </span>
                 </div>
-                <div className="text-xs">
+                <div className="text-xs min-w-0">
                   <p className="font-bold text-brand-text">Escala de Festa Confirmada</p>
-                  <p className="text-[11px] text-brand-muted mt-0.5">
+                  <p className="text-[11px] text-brand-muted mt-0.5 leading-relaxed">
                     Você foi escalado para uma Festa/Evento. O nome e horário aparecem na lista detalhada abaixo do calendário.
                   </p>
                 </div>
@@ -96,28 +100,32 @@ export const CalendarLegendModal: React.FC<CalendarLegendModalProps> = ({
               </span>
 
               {/* Disp CCSP */}
-              <div className="flex items-start gap-3 p-3 rounded-xl bg-brand-bg/50 border border-brand-border/60">
-                <div className="bg-emerald-600 text-white px-2 py-0.5 rounded text-[9px] font-black tracking-tight uppercase shrink-0 flex items-center gap-1 shadow-xs mt-0.5">
-                  <span>CCSP</span>
-                  <span className="font-mono">1/1</span>
+              <div className="flex items-center gap-3.5 p-3 rounded-xl bg-brand-bg/50 border border-brand-border/60">
+                <div className="w-20 sm:w-24 shrink-0 flex items-center justify-center">
+                  <span className="bg-emerald-600 text-white px-2 py-0.5 rounded text-[9px] font-black tracking-tight uppercase flex items-center gap-1 shadow-xs text-center whitespace-nowrap">
+                    <span>CCSP</span>
+                    <span className="font-mono">1/1</span>
+                  </span>
                 </div>
-                <div className="text-xs">
+                <div className="text-xs min-w-0">
                   <p className="font-bold text-brand-text">Disponibilidade CCSP Enviada</p>
-                  <p className="text-[11px] text-brand-muted mt-0.5">
+                  <p className="text-[11px] text-brand-muted mt-0.5 leading-relaxed">
                     Você informou que está apto para trabalhar no CCSP neste dia e está aguardando a coordenação montar a escala.
                   </p>
                 </div>
               </div>
 
               {/* Disp Festa */}
-              <div className="flex items-start gap-3 p-3 rounded-xl bg-brand-bg/50 border border-brand-border/60">
-                <div className="bg-brand-party/95 text-white px-2 py-0.5 rounded text-[9px] font-black tracking-tight uppercase shrink-0 flex items-center gap-1 shadow-xs mt-0.5">
-                  <span>🎉</span>
-                  <span className="font-mono">1/2</span>
+              <div className="flex items-center gap-3.5 p-3 rounded-xl bg-brand-bg/50 border border-brand-border/60">
+                <div className="w-20 sm:w-24 shrink-0 flex items-center justify-center">
+                  <span className="bg-brand-party/95 text-white px-2 py-0.5 rounded text-[9px] font-black tracking-tight uppercase flex items-center gap-1 shadow-xs text-center whitespace-nowrap">
+                    <span>🎉</span>
+                    <span className="font-mono">1/2</span>
+                  </span>
                 </div>
-                <div className="text-xs">
+                <div className="text-xs min-w-0">
                   <p className="font-bold text-brand-text">Disponibilidade para Festa</p>
-                  <p className="text-[11px] text-brand-muted mt-0.5">
+                  <p className="text-[11px] text-brand-muted mt-0.5 leading-relaxed">
                     A fração mostra para quantas festas você deu disponibilidade em relação ao total de festas cadastradas no dia (ex: 1 de 2 festas).
                   </p>
                 </div>
@@ -131,41 +139,47 @@ export const CalendarLegendModal: React.FC<CalendarLegendModalProps> = ({
               </span>
 
               {/* Abertura Extra */}
-              <div className="flex items-start gap-3 p-3 rounded-xl bg-brand-bg/50 border border-brand-border/60">
-                <div className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider shrink-0 flex items-center gap-1 shadow-xs mt-0.5">
-                  <Zap size={10} className="fill-amber-400 text-amber-400" />
-                  <span>Extra</span>
+              <div className="flex items-center gap-3.5 p-3 rounded-xl bg-brand-bg/50 border border-brand-border/60">
+                <div className="w-20 sm:w-24 shrink-0 flex items-center justify-center">
+                  <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-xs text-center whitespace-nowrap">
+                    <Zap size={10} className="fill-amber-400 text-amber-400" />
+                    <span>Extra</span>
+                  </span>
                 </div>
-                <div className="text-xs">
+                <div className="text-xs min-w-0">
                   <p className="font-bold text-brand-text">Abertura Extraordinária</p>
-                  <p className="text-[11px] text-brand-muted mt-0.5">
+                  <p className="text-[11px] text-brand-muted mt-0.5 leading-relaxed">
                     Dia liberado pela coordenação para envio de novas disponibilidades fora do prazo padrão para suprir demanda.
                   </p>
                 </div>
               </div>
 
               {/* Borda Iluminada */}
-              <div className="flex items-start gap-3 p-3 rounded-xl bg-brand-bg/50 border border-brand-border/60">
-                <div className="w-7 h-7 rounded-lg border-2 border-emerald-400/80 bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0 mt-0.5">
-                  <Sparkles size={13} />
+              <div className="flex items-center gap-3.5 p-3 rounded-xl bg-brand-bg/50 border border-brand-border/60">
+                <div className="w-20 sm:w-24 shrink-0 flex items-center justify-center">
+                  <div className="w-7 h-7 rounded-lg border-2 border-emerald-400/80 bg-emerald-500/10 flex items-center justify-center text-emerald-400 shadow-xs">
+                    <Sparkles size={13} />
+                  </div>
                 </div>
-                <div className="text-xs">
+                <div className="text-xs min-w-0">
                   <p className="font-bold text-brand-text">Borda Iluminada no Dia</p>
-                  <p className="text-[11px] text-brand-muted mt-0.5">
+                  <p className="text-[11px] text-brand-muted mt-0.5 leading-relaxed">
                     Borda verde = dia em que você marcou disponibilidade. Borda azul = dia aberto com vagas para preenchimento.
                   </p>
                 </div>
               </div>
 
               {/* Prazo Fechado */}
-              <div className="flex items-start gap-3 p-3 rounded-xl bg-brand-bg/50 border border-brand-border/60">
-                <div className="bg-red-500/15 text-red-400 border border-red-500/30 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider shrink-0 flex items-center gap-1 shadow-xs mt-0.5">
-                  <Lock size={10} />
-                  <span>Bloqueado</span>
+              <div className="flex items-center gap-3.5 p-3 rounded-xl bg-brand-bg/50 border border-brand-border/60">
+                <div className="w-20 sm:w-24 shrink-0 flex items-center justify-center">
+                  <span className="bg-red-500/15 text-red-400 border border-red-500/30 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-xs text-center whitespace-nowrap">
+                    <Lock size={10} />
+                    <span>Bloqueado</span>
+                  </span>
                 </div>
-                <div className="text-xs">
+                <div className="text-xs min-w-0">
                   <p className="font-bold text-brand-text">Prazo Encerrado</p>
-                  <p className="text-[11px] text-brand-muted mt-0.5">
+                  <p className="text-[11px] text-brand-muted mt-0.5 leading-relaxed">
                     O período de envio/edição de disponibilidades para este mês já se encerrou.
                   </p>
                 </div>
@@ -173,8 +187,8 @@ export const CalendarLegendModal: React.FC<CalendarLegendModalProps> = ({
 
               {/* Admin counters */}
               {isAdmin && (
-                <div className="flex items-start gap-3 p-3 rounded-xl bg-brand-bg/50 border border-brand-border/60">
-                  <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                <div className="flex items-center gap-3.5 p-3 rounded-xl bg-brand-bg/50 border border-brand-border/60">
+                  <div className="w-20 sm:w-24 shrink-0 flex items-center justify-center gap-1">
                     <span className="bg-brand-primary/20 text-brand-primary px-1.5 py-0.5 rounded-full text-[9px] font-black">
                       3 C
                     </span>
@@ -182,9 +196,9 @@ export const CalendarLegendModal: React.FC<CalendarLegendModalProps> = ({
                       2 F
                     </span>
                   </div>
-                  <div className="text-xs">
+                  <div className="text-xs min-w-0">
                     <p className="font-bold text-brand-text">Total de Escalados (Gestão)</p>
-                    <p className="text-[11px] text-brand-muted mt-0.5">
+                    <p className="text-[11px] text-brand-muted mt-0.5 leading-relaxed">
                       Número total de recreadores escalados para o dia: C = CCSP, F = Festas.
                     </p>
                   </div>
