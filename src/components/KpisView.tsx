@@ -56,11 +56,11 @@ interface KpisViewProps {
 
 const LEVEL_COLORS: Record<string, string> = {
   'Trainee': '#94a3b8',
-  'Aprendiz': '#38bdf8',
+  'Aprendiz': '#10b981',
   'Recreador(a)': '#c093ff',
   'Recreador(a) Experiente': '#f59e0b',
   'Coordenador(a)': '#06b6d4',
-  'Motorista': '#10b981'
+  'Motorista': '#6366f1'
 };
 
 export function KpisView({ employees, monthConfigs, promotions = [], currentMonth: initialMonth }: KpisViewProps) {
