@@ -83,6 +83,7 @@ export interface WorkDay {
   isOvernight?: boolean; // When employee works an overnight shift
   overnightHoursText?: string; // e.g. "22h às 08h"
   overnightPay?: number; // Additional overnight pay added to standard rate
+  isManualAssignment?: boolean; // Set when admin manually assigns employee for an activity they did not mark availability for
 }
 
 export interface Promotion {
