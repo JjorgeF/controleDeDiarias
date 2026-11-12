@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Search, UserPlus, UserMinus, Clock, Copy, ClipboardPaste, Users, Plus, Trash2, PartyPopper, ChevronDown, ChevronUp, Zap, Lock, ShieldCheck, Target, Check, Wrench, Briefcase, Moon } from 'lucide-react';
+import { X, Search, UserPlus, UserMinus, Clock, Copy, ClipboardPaste, Users, Plus, Trash2, PartyPopper, ChevronDown, ChevronUp, Zap, Lock, ShieldCheck, Target, Check, Wrench, Briefcase, Moon, AlertTriangle } from 'lucide-react';
 import { Employee, WorkDay, DayType, DayConfig, PartyConfig } from '../types';
 import { format, isSunday, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -42,6 +42,13 @@ export default function DayManagementModal({
   const [expandedEmployeeId, setExpandedEmployeeId] = React.useState<string | null>(null);
   const [isEventsExpanded, setIsEventsExpanded] = React.useState(true);
   const [isApoioMenuOpen, setIsApoioMenuOpen] = React.useState(false);
+  const [manualOverrideTarget, setManualOverrideTarget] = React.useState<{
+    employee: Employee;
+    targetType: 'common' | 'party';
+    party?: PartyConfig;
+    targetActivityName: string;
+    markedSummary: string;
+  } | null>(null);
 
   const selectedDayStr = selectedDay ? format(selectedDay, 'yyyy-MM-dd') : '';
 
@@ -236,7 +243,7 @@ export default function DayManagementModal({
   }, [filteredAvailable, dayConfig, normalizedParties, selectedDayStr]);
 
   // Main assignment function supporting multiple assignments per person per day (CCSP + Parties)
-  const assignEmployee = (employee: Employee, targetType: 'common' | 'party', party?: PartyConfig) => {
+  const assignEmployee = (employee: Employee, targetType: 'common' | 'party', party?: PartyConfig, isManualAssignment?: boolean) => {
     const currentWorkDays = employee.workDays || [];
 
     if (targetType === 'common') {
@@ -248,6 +255,7 @@ export default function DayManagementModal({
         return;
       }
 
+      const hadCommonAvail = (employee.availabilities || []).some(a => a === selectedDayStr || a === `${selectedDayStr}_common`);
       const defaultShift = (selectedDay && isSunday(selectedDay)) ? 'Brinquedoteca (9h - 18h)' : 'Brinquedoteca 1 (9h - 18h)';
       const newDays: WorkDay[] = [...currentWorkDays, {
         id: `${selectedDayStr}_common_${Date.now()}`,
@@ -258,7 +266,8 @@ export default function DayManagementModal({
         dailyRateAtTime: employee.dailyRate,
         partyRateAtTime: employee.partyRate,
         extraHourRateAtTime: (employee.extraHourRate && employee.extraHourRate > 0) ? employee.extraHourRate : 30,
-        levelAtTime: employee.level
+        levelAtTime: employee.level,
+        isManualAssignment: isManualAssignment !== undefined ? isManualAssignment : !hadCommonAvail
       }];
       onUpdateDays(employee.id, newDays);
     } else if (targetType === 'party' && party) {
@@ -275,6 +284,9 @@ export default function DayManagementModal({
         onUpdateDays(employee.id, newDays);
         return;
       }
+
+      const isPartyGeneral = (employee.availabilities || []).includes(`${selectedDayStr}_party`);
+      const hadPartyAvail = isPartyGeneral || (employee.availabilities || []).includes(`${selectedDayStr}_party_${party.id}`);
 
       const isOffice = (party.name || '').toLowerCase().includes('escritório') || (party.name || '').toLowerCase().includes('escritorio');
       const isJanitor = (party.name || '').toLowerCase().includes('zelador');
@@ -322,6 +334,7 @@ export default function DayManagementModal({
         partyRateAtTime: employee.partyRate,
         extraHourRateAtTime: (employee.extraHourRate && employee.extraHourRate > 0) ? employee.extraHourRate : 30,
         levelAtTime: employee.level,
+        isManualAssignment: isManualAssignment !== undefined ? isManualAssignment : !hadPartyAvail,
         ...((isOffice || isJanitor) && {
           isReducedHours,
           customHoursText,
@@ -330,6 +343,77 @@ export default function DayManagementModal({
       }];
       onUpdateDays(employee.id, newDays);
     }
+  };
+
+  const handleAssignClick = (employee: Employee, targetType: 'common' | 'party', party?: PartyConfig) => {
+    const currentWorkDays = employee.workDays || [];
+
+    // If toggling off, do not prompt
+    if (targetType === 'common') {
+      const existingCommon = currentWorkDays.find(d => d.date === selectedDayStr && d.type === 'common' && !d.isCancelled);
+      if (existingCommon) {
+        assignEmployee(employee, 'common');
+        return;
+      }
+    } else if (targetType === 'party' && party) {
+      const isThisParty = (d: WorkDay) => 
+        d.date === selectedDayStr && 
+        d.type === 'party' && 
+        !d.isCancelled &&
+        (d.partyId === party.id || (!d.partyId && party.id === 'default_party') || d.partyName === party.name);
+      const existingParty = currentWorkDays.find(isThisParty);
+      if (existingParty) {
+        assignEmployee(employee, 'party', party);
+        return;
+      }
+    }
+
+    // Check availability
+    let hasAvail = false;
+    let targetActivityName = '';
+
+    if (targetType === 'common') {
+      targetActivityName = 'CCSP';
+      hasAvail = (employee.availabilities?.includes(selectedDayStr) || employee.availabilities?.includes(`${selectedDayStr}_common`));
+    } else if (targetType === 'party' && party) {
+      targetActivityName = party.name || 'Festa';
+      const isDispPartyGeneral = employee.availabilities?.includes(`${selectedDayStr}_party`);
+      hasAvail = isDispPartyGeneral || !!employee.availabilities?.includes(`${selectedDayStr}_party_${party.id}`);
+    }
+
+    if (hasAvail) {
+      assignEmployee(employee, targetType, party, false);
+      return;
+    }
+
+    // Not marked: gather marked details and show confirmation modal
+    const dayAvails = (employee.availabilities || []).filter(a => a === selectedDayStr || a.startsWith(`${selectedDayStr}_`));
+    const markedLabels: string[] = [];
+    if (dayAvails.some(a => a === selectedDayStr || a === `${selectedDayStr}_common`)) {
+      markedLabels.push('CCSP');
+    }
+    const partyAvails = dayAvails.filter(a => a.startsWith(`${selectedDayStr}_party`));
+    partyAvails.forEach(a => {
+      if (a === `${selectedDayStr}_party`) {
+        markedLabels.push(dayConfig.parties?.[0]?.name || 'Festa');
+      } else {
+        const pId = a.replace(`${selectedDayStr}_party_`, '');
+        const p = dayConfig.parties?.find(partyItem => partyItem.id === pId);
+        markedLabels.push(p ? p.name : 'Festa');
+      }
+    });
+
+    const markedSummary = markedLabels.length > 0 
+      ? markedLabels.join(', ')
+      : 'Nenhuma disponibilidade informada para este dia';
+
+    setManualOverrideTarget({
+      employee,
+      targetType,
+      party,
+      targetActivityName,
+      markedSummary
+    });
   };
 
   const removeAllWork = (employee: Employee) => {
@@ -1138,6 +1222,19 @@ export default function DayManagementModal({
                     const partyWorkDays = dayWorkDays.filter(d => d.type === 'party');
                     const isExpanded = expandedEmployeeId === emp.id;
 
+                    const hasAnyManualAssignment = dayWorkDays.some(d => {
+                      if (d.isManualAssignment) return true;
+                      if (d.type === 'common') {
+                        const hadCommonAvail = (emp.availabilities || []).some(a => a === selectedDayStr || a === `${selectedDayStr}_common`);
+                        return !hadCommonAvail;
+                      } else if (d.type === 'party') {
+                        const isPartyGeneral = (emp.availabilities || []).includes(`${selectedDayStr}_party`);
+                        const hadPartyAvail = isPartyGeneral || (emp.availabilities || []).includes(`${selectedDayStr}_party_${d.partyId}`);
+                        return !hadPartyAvail;
+                      }
+                      return false;
+                    });
+
                     const isAnyCoordination = partyWorkDays.some(d => (d.partyName || '').toLowerCase().includes('coordena'));
                     const isAnyParty = partyWorkDays.length > 0;
 
@@ -1202,6 +1299,15 @@ export default function DayManagementModal({
                                     <span>{dayWorkDays.length} Escalas</span>
                                   </span>
                                 )}
+                                {hasAnyManualAssignment && (
+                                  <span 
+                                    className="text-[9px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs"
+                                    title="Escala manual realizada pela gestão (colaborador(a) não havia sinalizado disponibilidade para esta atividade)"
+                                  >
+                                    <AlertTriangle size={10} className="text-amber-400 shrink-0" />
+                                    <span>Escala Manual</span>
+                                  </span>
+                                )}
                               </div>
                               
                               {/* Multi-Select Activity Pills */}
@@ -1211,7 +1317,7 @@ export default function DayManagementModal({
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      assignEmployee(emp, 'common');
+                                      handleAssignClick(emp, 'common');
                                     }}
                                     className={cn(
                                       "text-[9px] font-black px-2.5 py-1 rounded-lg transition-all uppercase tracking-wider flex items-center gap-1 border",
@@ -1240,7 +1346,7 @@ export default function DayManagementModal({
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        assignEmployee(emp, 'party', party);
+                                        handleAssignClick(emp, 'party', party);
                                       }}
                                       className={cn(
                                         "text-[9px] font-black px-2.5 py-1 rounded-lg transition-all uppercase tracking-wider flex items-center gap-1 max-w-[200px] truncate border",
@@ -1473,47 +1579,102 @@ export default function DayManagementModal({
                             </div>
                             
                             <div className="flex flex-wrap items-center gap-1 shrink-0">
-                              {isDispCommon && (
-                                <button 
-                                  onClick={() => assignEmployee(emp, 'common')}
-                                  className="text-[10px] font-black bg-brand-primary/10 hover:bg-brand-primary text-brand-primary hover:text-brand-bg px-2 py-1 rounded-lg border border-brand-primary/30 transition-all flex items-center gap-1 uppercase"
-                                  title="Escalar para CCSP (Optado pelo recreador)"
-                                >
-                                  <UserPlus size={12} />
-                                  CCSP
-                                </button>
+                              {/* CCSP Button */}
+                              {dayConfig.isCommon !== false && (
+                                isDispCommon ? (
+                                  <button 
+                                    onClick={() => handleAssignClick(emp, 'common')}
+                                    className="text-[10px] font-black bg-brand-primary/10 hover:bg-brand-primary text-brand-primary hover:text-brand-bg px-2 py-1 rounded-lg border border-brand-primary/30 transition-all flex items-center gap-1 uppercase active:scale-95 shadow-xs"
+                                    title="Escalar para CCSP (Optado pelo recreador)"
+                                  >
+                                    <UserPlus size={12} />
+                                    CCSP
+                                  </button>
+                                ) : (
+                                  <button 
+                                    onClick={() => handleAssignClick(emp, 'common')}
+                                    className="text-[10px] font-bold bg-slate-800/60 hover:bg-brand-primary/15 text-slate-400 hover:text-brand-primary px-2 py-1 rounded-lg border border-dashed border-slate-600 hover:border-brand-primary/40 transition-all flex items-center gap-1 uppercase active:scale-95"
+                                    title="Escalar para CCSP (Escala manual pela gestão - não optado originalmente)"
+                                  >
+                                    <UserPlus size={12} className="opacity-70" />
+                                    + CCSP
+                                  </button>
+                                )
                               )}
 
+                              {/* Party Buttons */}
                               {normalizedParties.length > 0 ? (
-                                activePartyButtons.map(party => {
+                                normalizedParties.map(party => {
+                                  const isChosen = hasSpecificPartyAvail(party.id);
                                   const isCoord = (party.name || '').toLowerCase().includes('coordena');
+                                  const isOffice = (party.name || '').toLowerCase().includes('escritório') || (party.name || '').toLowerCase().includes('escritorio');
+                                  const isJanitor = (party.name || '').toLowerCase().includes('zelador');
+
+                                  if (isChosen) {
+                                    return (
+                                      <button 
+                                        key={party.id}
+                                        onClick={() => handleAssignClick(emp, 'party', party)}
+                                        className={cn(
+                                          "text-[10px] font-black px-2 py-1 rounded-lg transition-all flex items-center gap-1 uppercase max-w-[130px] truncate border shadow-xs active:scale-95",
+                                          isOffice
+                                            ? "bg-blue-500/20 hover:bg-blue-500 text-blue-300 hover:text-white border-blue-500/40"
+                                            : isJanitor
+                                              ? "bg-zinc-500/20 hover:bg-zinc-500 text-zinc-300 hover:text-white border-zinc-500/40"
+                                              : isCoord
+                                                ? "bg-cyan-500/20 hover:bg-cyan-500 text-cyan-300 hover:text-slate-950 border-cyan-500/40"
+                                                : "bg-brand-party/10 hover:bg-brand-party text-brand-party hover:text-white border-brand-party/30"
+                                        )}
+                                        title={`Escalar para ${party.name} (Optado pelo recreador)`}
+                                      >
+                                        {isOffice ? <Briefcase size={12} className="shrink-0" /> : isJanitor ? <Wrench size={12} className="shrink-0" /> : isCoord ? <ShieldCheck size={12} className="shrink-0" /> : <UserPlus size={12} className="shrink-0" />}
+                                        <span className="truncate">{party.name}</span>
+                                      </button>
+                                    );
+                                  }
+
                                   return (
                                     <button 
                                       key={party.id}
-                                      onClick={() => assignEmployee(emp, 'party', party)}
+                                      onClick={() => handleAssignClick(emp, 'party', party)}
                                       className={cn(
-                                        "text-[10px] font-black px-2 py-1 rounded-lg transition-all flex items-center gap-1 uppercase max-w-[130px] truncate border",
-                                        isCoord
-                                          ? "bg-cyan-500/20 hover:bg-cyan-500 text-cyan-300 hover:text-slate-950 border-cyan-500/40"
-                                          : "bg-brand-party/10 hover:bg-brand-party text-brand-party hover:text-white border-brand-party/30"
+                                        "text-[10px] font-bold bg-slate-800/60 px-2 py-1 rounded-lg border border-dashed border-slate-600 transition-all flex items-center gap-1 uppercase max-w-[130px] truncate active:scale-95",
+                                        isOffice
+                                          ? "hover:bg-blue-500/15 text-slate-400 hover:text-blue-300 hover:border-blue-400/50"
+                                          : isJanitor
+                                            ? "hover:bg-zinc-500/15 text-slate-400 hover:text-zinc-300 hover:border-zinc-400/50"
+                                            : isCoord
+                                              ? "hover:bg-cyan-500/15 text-slate-400 hover:text-cyan-300 hover:border-cyan-400/50"
+                                              : "hover:bg-brand-party/15 text-slate-400 hover:text-brand-party hover:border-brand-party/40"
                                       )}
-                                      title={`Escalar para ${party.name} (Optado pelo recreador)`}
+                                      title={`Escalar para ${party.name} (Escala manual pela gestão - não optado originalmente)`}
                                     >
-                                      {isCoord ? <ShieldCheck size={12} className="shrink-0" /> : <UserPlus size={12} className="shrink-0" />}
-                                      <span className="truncate">{party.name}</span>
+                                      {isOffice ? <Briefcase size={12} className="shrink-0 opacity-70" /> : isJanitor ? <Wrench size={12} className="shrink-0 opacity-70" /> : isCoord ? <ShieldCheck size={12} className="shrink-0 opacity-70" /> : <UserPlus size={12} className="shrink-0 opacity-70" />}
+                                      <span className="truncate">+ {party.name}</span>
                                     </button>
                                   );
                                 })
                               ) : (
-                                hasAnyPartyAvail && dayConfig.isParty && (
-                                  <button 
-                                    onClick={() => assignEmployee(emp, 'party', { id: 'default_party', name: 'Festa' })}
-                                    className="text-[10px] font-black bg-brand-party/10 hover:bg-brand-party text-brand-party hover:text-white px-2 py-1 rounded-lg border border-brand-party/30 transition-all flex items-center gap-1 uppercase"
-                                    title="Escalar para Festa (Optado pelo recreador)"
-                                  >
-                                    <UserPlus size={12} />
-                                    Festa
-                                  </button>
+                                dayConfig.isParty && (
+                                  hasAnyPartyAvail ? (
+                                    <button 
+                                      onClick={() => handleAssignClick(emp, 'party', { id: 'default_party', name: 'Festa' })}
+                                      className="text-[10px] font-black bg-brand-party/10 hover:bg-brand-party text-brand-party hover:text-white px-2 py-1 rounded-lg border border-brand-party/30 transition-all flex items-center gap-1 uppercase active:scale-95 shadow-xs"
+                                      title="Escalar para Festa (Optado pelo recreador)"
+                                    >
+                                      <UserPlus size={12} />
+                                      Festa
+                                    </button>
+                                  ) : (
+                                    <button 
+                                      onClick={() => handleAssignClick(emp, 'party', { id: 'default_party', name: 'Festa' })}
+                                      className="text-[10px] font-bold bg-slate-800/60 hover:bg-brand-party/15 text-slate-400 hover:text-brand-party px-2 py-1 rounded-lg border border-dashed border-slate-600 hover:border-brand-party/40 transition-all flex items-center gap-1 uppercase active:scale-95"
+                                      title="Escalar para Festa (Escala manual pela gestão - não optado originalmente)"
+                                    >
+                                      <UserPlus size={12} className="opacity-70" />
+                                      + Festa
+                                    </button>
+                                  )
                                 )
                               )}
                             </div>
@@ -1555,7 +1716,7 @@ export default function DayManagementModal({
                           <div className="flex flex-wrap items-center gap-1 shrink-0">
                             {dayConfig.isCommon !== false && (
                               <button 
-                                onClick={() => assignEmployee(emp, 'common')}
+                                onClick={() => handleAssignClick(emp, 'common')}
                                 className="text-[10px] font-black bg-brand-bg border border-brand-border hover:bg-brand-primary/10 hover:border-brand-primary hover:text-brand-primary text-gray-400 px-2 py-1 rounded-lg transition-all flex items-center gap-1 uppercase"
                               >
                                 <UserPlus size={12} />
@@ -1571,7 +1732,7 @@ export default function DayManagementModal({
                               return (
                                 <button 
                                   key={party.id}
-                                  onClick={() => assignEmployee(emp, 'party', party)}
+                                  onClick={() => handleAssignClick(emp, 'party', party)}
                                   className={cn(
                                     "text-[10px] font-black bg-brand-bg border rounded-lg px-2 py-1 transition-all flex items-center gap-1 uppercase max-w-[130px] truncate",
                                     isOffice
@@ -1613,6 +1774,65 @@ export default function DayManagementModal({
             </div>
           </motion.div>
         </motion.div>
+      )}
+
+      {/* Manual Override Confirmation Modal */}
+      {manualOverrideTarget && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-brand-card border-2 border-amber-500/50 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="p-5 sm:p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center shrink-0">
+                  <AlertTriangle size={22} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-brand-text">
+                    Escala sem disponibilidade prévia
+                  </h3>
+                  <p className="text-[11px] text-amber-400 font-bold uppercase tracking-wider">
+                    Aviso para a Administração
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-brand-text space-y-2">
+                <p className="leading-relaxed">
+                  <strong className="text-white font-bold">{manualOverrideTarget.employee.artisticName || manualOverrideTarget.employee.name}</strong> 
+                  {' '}não deu disponibilidade para <strong className="text-amber-300 font-black uppercase">{manualOverrideTarget.targetActivityName}</strong> neste dia.
+                </p>
+                <div className="text-[11px] text-brand-muted bg-brand-bg/70 p-2.5 rounded-lg border border-brand-border/60">
+                  <span className="font-bold text-gray-400">Opção que marcou no app:</span>{' '}
+                  <span className="font-semibold text-emerald-400">{manualOverrideTarget.markedSummary}</span>
+                </div>
+                <p className="text-[11px] text-brand-muted leading-relaxed">
+                  Deseja confirmar a inclusão manual combinada diretamente com o(a) colaborador(a)?
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-brand-bg/70 border-t border-brand-border flex gap-3">
+              <button
+                type="button"
+                onClick={() => setManualOverrideTarget(null)}
+                className="flex-1 py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-brand-muted hover:text-white rounded-xl text-xs font-bold transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const { employee, targetType, party } = manualOverrideTarget;
+                  assignEmployee(employee, targetType, party, true);
+                  setManualOverrideTarget(null);
+                }}
+                className="flex-1 py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5"
+              >
+                <Check size={14} />
+                Sim, Escalar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </AnimatePresence>
   );
