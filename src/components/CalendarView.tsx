@@ -483,6 +483,14 @@ export default function CalendarView({
   const [isNoAvailModalOpen, setIsNoAvailModalOpen] = React.useState(false);
   const [isNoAvailLoading, setIsNoAvailLoading] = React.useState(false);
   const [isLegendModalOpen, setIsLegendModalOpen] = React.useState(false);
+  const [manualOverrideTarget, setManualOverrideTarget] = React.useState<{
+    employee: Employee;
+    date: Date;
+    type: 'common' | 'party';
+    party?: PartyConfig;
+    targetActivityName: string;
+    markedSummary: string;
+  } | null>(null);
 
   const currentMonthKey = format(currentMonth, 'yyyy-MM');
 
@@ -608,7 +616,7 @@ export default function CalendarView({
     };
   }, [employees, selectedDayStr, searchQuery, dayConfigs]);
 
-  const toggleWorkDayType = (employee: Employee, date: Date, type: 'common' | 'party', party?: PartyConfig) => {
+  const toggleWorkDayType = (employee: Employee, date: Date, type: 'common' | 'party', party?: PartyConfig, isManualAssignment?: boolean) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     const currentWorkDays = employee.workDays || [];
 
@@ -620,6 +628,7 @@ export default function CalendarView({
         onUpdateDays(employee.id, newDays);
         return;
       }
+      const hadCommonAvail = (employee.availabilities || []).some(a => a === dateStr || a === `${dateStr}_common`);
       const defaultShift = isSunday(parseISO(dateStr)) ? 'Brinquedoteca (9h - 18h)' : 'Brinquedoteca 1 (9h - 18h)';
       const newDays: WorkDay[] = [...currentWorkDays, { 
         id: `${dateStr}_common_${Date.now()}`,
@@ -630,7 +639,8 @@ export default function CalendarView({
         dailyRateAtTime: employee.dailyRate,
         partyRateAtTime: employee.partyRate,
         extraHourRateAtTime: employee.extraHourRate,
-        levelAtTime: employee.level
+        levelAtTime: employee.level,
+        isManualAssignment: isManualAssignment !== undefined ? isManualAssignment : !hadCommonAvail
       }];
       onUpdateDays(employee.id, newDays);
     } else if (type === 'party') {
@@ -648,6 +658,9 @@ export default function CalendarView({
         onUpdateDays(employee.id, newDays);
         return;
       }
+
+      const isPartyGeneral = (employee.availabilities || []).includes(`${dateStr}_party`);
+      const hadPartyAvail = isPartyGeneral || (employee.availabilities || []).includes(`${dateStr}_party_${selectedParty.id}`);
 
       const isOffice = (selectedParty.name || '').toLowerCase().includes('escritório') || (selectedParty.name || '').toLowerCase().includes('escritorio');
       const isJanitor = (selectedParty.name || '').toLowerCase().includes('zelador');
@@ -703,6 +716,7 @@ export default function CalendarView({
         partyRateAtTime: employee.partyRate,
         extraHourRateAtTime: (employee.extraHourRate && employee.extraHourRate > 0) ? employee.extraHourRate : 30,
         levelAtTime: employee.level,
+        isManualAssignment: isManualAssignment !== undefined ? isManualAssignment : !hadPartyAvail,
         ...((isOffice || isJanitor) && {
           isReducedHours,
           customHoursText,
@@ -711,6 +725,82 @@ export default function CalendarView({
       }];
       onUpdateDays(employee.id, newDays);
     }
+  };
+
+  const handleToggleWorkDayClick = (employee: Employee, date: Date, type: 'common' | 'party', party?: PartyConfig) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const currentWorkDays = employee.workDays || [];
+
+    // If toggling off, do not prompt
+    if (type === 'common') {
+      const existingCommon = currentWorkDays.find(d => d.date === dateStr && d.type === 'common' && !d.isCancelled);
+      if (existingCommon) {
+        toggleWorkDayType(employee, date, 'common');
+        return;
+      }
+    } else if (type === 'party') {
+      const selectedParty = party || (getDayConfig(dateStr).parties?.[0] || { id: 'default_party', name: 'Festa' });
+      const isThisParty = (d: WorkDay) => 
+        d.date === dateStr && 
+        d.type === 'party' && 
+        !d.isCancelled &&
+        (d.partyId === selectedParty.id || (!d.partyId && selectedParty.id === 'default_party') || d.partyName === selectedParty.name);
+      const existingParty = currentWorkDays.find(isThisParty);
+      if (existingParty) {
+        toggleWorkDayType(employee, date, 'party', party);
+        return;
+      }
+    }
+
+    // Check availability
+    let hasAvail = false;
+    let targetActivityName = '';
+
+    if (type === 'common') {
+      targetActivityName = 'CCSP';
+      hasAvail = (employee.availabilities?.includes(dateStr) || employee.availabilities?.includes(`${dateStr}_common`));
+    } else if (type === 'party') {
+      const selectedParty = party || (getDayConfig(dateStr).parties?.[0] || { id: 'default_party', name: 'Festa' });
+      targetActivityName = selectedParty.name || 'Festa';
+      const isDispPartyGeneral = employee.availabilities?.includes(`${dateStr}_party`);
+      hasAvail = isDispPartyGeneral || !!employee.availabilities?.includes(`${dateStr}_party_${selectedParty.id}`);
+    }
+
+    if (hasAvail) {
+      toggleWorkDayType(employee, date, type, party, false);
+      return;
+    }
+
+    // Not marked: gather marked details and show confirmation modal
+    const config = getDayConfig(dateStr);
+    const dayAvails = (employee.availabilities || []).filter(a => a === dateStr || a.startsWith(`${dateStr}_`));
+    const markedLabels: string[] = [];
+    if (dayAvails.some(a => a === dateStr || a === `${dateStr}_common`)) {
+      markedLabels.push('CCSP');
+    }
+    const partyAvails = dayAvails.filter(a => a.startsWith(`${dateStr}_party`));
+    partyAvails.forEach(a => {
+      if (a === `${dateStr}_party`) {
+        markedLabels.push(config.parties?.[0]?.name || 'Festa');
+      } else {
+        const pId = a.replace(`${dateStr}_party_`, '');
+        const p = config.parties?.find(partyItem => partyItem.id === pId);
+        markedLabels.push(p ? p.name : 'Festa');
+      }
+    });
+
+    const markedSummary = markedLabels.length > 0 
+      ? markedLabels.join(', ')
+      : 'Nenhuma disponibilidade informada para este dia';
+
+    setManualOverrideTarget({
+      employee,
+      date,
+      type,
+      party,
+      targetActivityName,
+      markedSummary
+    });
   };
 
   const updateShift = (employee: Employee, date: Date, shiftStr: string) => {
@@ -2195,11 +2285,25 @@ export default function CalendarView({
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                     {employeesWorking.map(emp => {
-                      const dayData = emp.workDays.find(d => d.date === selectedDayStr);
-                      const hasCommon = emp.workDays.some(d => d.date === selectedDayStr && d.type === 'common' && !d.isCancelled);
-                      const hasParty = emp.workDays.some(d => d.date === selectedDayStr && d.type === 'party' && !d.isCancelled);
+                      const dayWorkDays = emp.workDays.filter(d => d.date === selectedDayStr && !d.isCancelled);
+                      const dayData = dayWorkDays[0];
+                      const hasCommon = dayWorkDays.some(d => d.type === 'common');
+                      const hasParty = dayWorkDays.some(d => d.type === 'party');
                       const isExpanded = expandedEmployeeId === emp.id;
                       const config = getDayConfig(selectedDayStr);
+
+                      const hasAnyManualAssignment = dayWorkDays.some(d => {
+                        if (d.isManualAssignment) return true;
+                        if (d.type === 'common') {
+                          const hadCommonAvail = (emp.availabilities || []).some(a => a === selectedDayStr || a === `${selectedDayStr}_common`);
+                          return !hadCommonAvail;
+                        } else if (d.type === 'party') {
+                          const isPartyGeneral = (emp.availabilities || []).includes(`${selectedDayStr}_party`);
+                          const hadPartyAvail = isPartyGeneral || (emp.availabilities || []).includes(`${selectedDayStr}_party_${d.partyId}`);
+                          return !hadPartyAvail;
+                        }
+                        return false;
+                      });
                       
                       return (
                         <motion.div 
@@ -2221,9 +2325,18 @@ export default function CalendarView({
                                 )}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <p className="text-xs font-bold text-brand-text truncate group-hover:text-brand-primary transition-colors">{emp.artisticName || emp.name}</p>
                                   <span className="text-[10px] text-brand-primary font-black uppercase shrink-0">{emp.level}</span>
+                                  {hasAnyManualAssignment && (
+                                    <span 
+                                      className="text-[9px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs"
+                                      title="Escala manual realizada pela gestão (colaborador(a) não havia sinalizado disponibilidade para esta atividade)"
+                                    >
+                                      <AlertTriangle size={10} className="text-amber-400 shrink-0" />
+                                      <span>Escala Manual</span>
+                                    </span>
+                                  )}
                                 </div>
                                 
                                 <div className="flex flex-wrap items-center gap-1 mt-1">
@@ -2233,7 +2346,7 @@ export default function CalendarView({
                                       whileTap={{ scale: 0.95 }}
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        toggleWorkDayType(emp, selectedDay!, 'common');
+                                        handleToggleWorkDayClick(emp, selectedDay!, 'common');
                                       }}
                                       className={cn(
                                         "text-[9px] font-black px-2 py-0.5 rounded transition-all uppercase flex items-center gap-1",
@@ -2253,8 +2366,10 @@ export default function CalendarView({
                                         : [];
 
                                     return dayParties.map((party) => {
-                                      const isAssignedToThisParty = dayData?.type === 'party' && (
-                                        dayData.partyId === party.id || (!dayData.partyId && party.id === 'default_party') || dayData.partyName === party.name
+                                      const isAssignedToThisParty = dayWorkDays.some(d => 
+                                        d.type === 'party' && (
+                                          d.partyId === party.id || (!d.partyId && party.id === 'default_party') || d.partyName === party.name
+                                        )
                                       );
                                       const isCoord = (party.name || '').toLowerCase().includes('coordena');
 
@@ -2265,7 +2380,7 @@ export default function CalendarView({
                                           whileTap={{ scale: 0.95 }}
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            toggleWorkDayType(emp, selectedDay!, 'party', party);
+                                            handleToggleWorkDayClick(emp, selectedDay!, 'party', party);
                                           }}
                                           className={cn(
                                             "text-[9px] font-black px-2 py-0.5 rounded transition-all uppercase flex items-center gap-1 max-w-[140px] truncate border",
@@ -2392,12 +2507,12 @@ export default function CalendarView({
                         const config = getDayConfig(selectedDayStr);
                         const isDispCommon = config.isCommon !== false && 
                           (emp.availabilities?.includes(selectedDayStr) || emp.availabilities?.includes(`${selectedDayStr}_common`));
-                        const isDispParty = !!config.isParty && 
-                          (emp.availabilities?.includes(`${selectedDayStr}_party`) || emp.availabilities?.some(a => a.startsWith(`${selectedDayStr}_party`)));
+                        const isDispPartyGeneral = !!emp.availabilities?.includes(`${selectedDayStr}_party`);
+                        const hasSpecificPartyAvail = (partyId: string) => {
+                          return isDispPartyGeneral || !!emp.availabilities?.includes(`${selectedDayStr}_party_${partyId}`);
+                        };
+                        const hasAnyPartyAvail = isDispPartyGeneral || !!emp.availabilities?.some(a => a.startsWith(`${selectedDayStr}_party`));
                         const isExtraAvail = isExtraordinaryAvailability(emp, selectedDayStr, config);
-
-                        const showCcspBtn = isDispCommon;
-                        const showPartyBtn = isDispParty;
 
                         return (
                           <motion.div 
@@ -2442,18 +2557,34 @@ export default function CalendarView({
                             </div>
                             
                             <div className="flex flex-wrap justify-end items-center gap-1.5 shrink-0 max-w-[180px] sm:max-w-[240px] md:max-w-none">
-                              {showCcspBtn && (
-                                <motion.button 
-                                  whileHover={{ scale: 1.05 }}
-                                  whileTap={{ scale: 0.95 }}
-                                  onClick={() => toggleWorkDayType(emp, selectedDay!, 'common')}
-                                  className="text-[10px] font-black bg-brand-primary/10 hover:bg-brand-primary text-brand-primary hover:text-brand-bg px-2.5 py-1 rounded-lg border border-brand-primary/30 hover:border-transparent transition-colors flex items-center gap-1 uppercase"
-                                  title="Escalar para CCSP (Optado pelo recreador)"
-                                >
-                                  <UserPlus size={12} />
-                                  CCSP
-                                </motion.button>
+                              {/* CCSP Button */}
+                              {config.isCommon !== false && (
+                                isDispCommon ? (
+                                  <motion.button 
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => handleToggleWorkDayClick(emp, selectedDay!, 'common')}
+                                    className="text-[10px] font-black bg-brand-primary/10 hover:bg-brand-primary text-brand-primary hover:text-brand-bg px-2.5 py-1 rounded-lg border border-brand-primary/30 hover:border-transparent transition-colors flex items-center gap-1 uppercase shadow-xs active:scale-95"
+                                    title="Escalar para CCSP (Optado pelo recreador)"
+                                  >
+                                    <UserPlus size={12} />
+                                    CCSP
+                                  </motion.button>
+                                ) : (
+                                  <motion.button 
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => handleToggleWorkDayClick(emp, selectedDay!, 'common')}
+                                    className="text-[10px] font-bold bg-slate-800/60 hover:bg-brand-primary/15 text-slate-400 hover:text-brand-primary px-2.5 py-1 rounded-lg border border-dashed border-slate-600 hover:border-brand-primary/40 transition-colors flex items-center gap-1 uppercase active:scale-95"
+                                    title="Escalar para CCSP (Escala manual pela gestão - não optado originalmente)"
+                                  >
+                                    <UserPlus size={12} className="opacity-70" />
+                                    + CCSP
+                                  </motion.button>
+                                )
                               )}
+
+                              {/* Party Buttons */}
                               {(() => {
                                 const dayParties: PartyConfig[] = (config?.parties && config.parties.length > 0)
                                   ? config.parties
@@ -2463,44 +2594,84 @@ export default function CalendarView({
 
                                 return dayParties.length > 0 ? (
                                   dayParties.map((party) => {
+                                    const isChosen = hasSpecificPartyAvail(party.id);
                                     const isCoord = (party.name || '').toLowerCase().includes('coordena');
                                     const isOffice = (party.name || '').toLowerCase().includes('escritório') || (party.name || '').toLowerCase().includes('escritorio');
                                     const isJanitor = (party.name || '').toLowerCase().includes('zelador');
+
+                                    if (isChosen) {
+                                      return (
+                                        <motion.button 
+                                          key={party.id}
+                                          whileHover={{ scale: 1.05 }}
+                                          whileTap={{ scale: 0.95 }}
+                                          onClick={() => handleToggleWorkDayClick(emp, selectedDay!, 'party', party)}
+                                          className={cn(
+                                            "text-[10px] font-black px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 uppercase max-w-[130px] truncate border shadow-xs active:scale-95",
+                                            isOffice
+                                              ? "bg-blue-500/10 hover:bg-blue-500 text-blue-300 hover:text-white border-blue-500/30 hover:border-blue-400"
+                                              : isJanitor
+                                                ? "bg-zinc-500/10 hover:bg-zinc-500 text-zinc-300 hover:text-white border-zinc-500/30 hover:border-zinc-400"
+                                                : isCoord
+                                                  ? "bg-cyan-500/10 hover:bg-cyan-500 text-cyan-300 hover:text-slate-950 border-cyan-500/30 hover:border-cyan-400"
+                                                  : "bg-brand-party/10 hover:bg-brand-party text-brand-party dark:text-brand-party hover:text-white border-brand-party/30 hover:border-brand-party"
+                                          )}
+                                          title={`Escalar para ${party.name}${party.time ? ` (${party.time})` : ''} (Optado pelo recreador)`}
+                                        >
+                                          {isOffice ? <Briefcase size={12} className="shrink-0" /> : isJanitor ? <Wrench size={12} className="shrink-0" /> : isCoord ? <ShieldCheck size={12} className="shrink-0 text-cyan-300" /> : <UserPlus size={12} className="shrink-0" />}
+                                          <span className="truncate">{party.name}</span>
+                                        </motion.button>
+                                      );
+                                    }
+
                                     return (
                                       <motion.button 
                                         key={party.id}
                                         whileHover={{ scale: 1.05 }}
                                         whileTap={{ scale: 0.95 }}
-                                        onClick={() => toggleWorkDayType(emp, selectedDay!, 'party', party)}
+                                        onClick={() => handleToggleWorkDayClick(emp, selectedDay!, 'party', party)}
                                         className={cn(
-                                          "text-[10px] font-black px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 uppercase max-w-[130px] truncate border",
+                                          "text-[10px] font-bold bg-slate-800/60 px-2.5 py-1 rounded-lg border border-dashed border-slate-600 transition-colors flex items-center gap-1 uppercase max-w-[130px] truncate active:scale-95",
                                           isOffice
-                                            ? "bg-blue-500/10 hover:bg-blue-500 text-blue-300 hover:text-white border-blue-500/30 hover:border-blue-400"
+                                            ? "hover:bg-blue-500/15 text-slate-400 hover:text-blue-300 hover:border-blue-400/50"
                                             : isJanitor
-                                              ? "bg-zinc-500/10 hover:bg-zinc-500 text-zinc-300 hover:text-white border-zinc-500/30 hover:border-zinc-400"
+                                              ? "hover:bg-zinc-500/15 text-slate-400 hover:text-zinc-300 hover:border-zinc-400/50"
                                               : isCoord
-                                                ? "bg-cyan-500/10 hover:bg-cyan-500 text-cyan-300 hover:text-slate-950 border-cyan-500/30 hover:border-cyan-400"
-                                                : "bg-brand-party/10 hover:bg-brand-party text-brand-party dark:text-brand-party hover:text-white border-brand-party/30 hover:border-brand-party"
+                                                ? "hover:bg-cyan-500/15 text-slate-400 hover:text-cyan-300 hover:border-cyan-400/50"
+                                                : "hover:bg-brand-party/15 text-slate-400 hover:text-brand-party hover:border-brand-party/40"
                                         )}
-                                        title={`Escalar para ${party.name}${party.time ? ` (${party.time})` : ''}`}
+                                        title={`Escalar para ${party.name}${party.time ? ` (${party.time})` : ''} (Escala manual pela gestão - não optado originalmente)`}
                                       >
-                                        {isOffice ? <Briefcase size={12} className="shrink-0" /> : isJanitor ? <Wrench size={12} className="shrink-0" /> : isCoord ? <ShieldCheck size={12} className="shrink-0 text-cyan-300" /> : <UserPlus size={12} className="shrink-0" />}
-                                        <span className="truncate">{party.name}</span>
+                                        {isOffice ? <Briefcase size={12} className="shrink-0 opacity-70" /> : isJanitor ? <Wrench size={12} className="shrink-0 opacity-70" /> : isCoord ? <ShieldCheck size={12} className="shrink-0 opacity-70" /> : <UserPlus size={12} className="shrink-0 opacity-70" />}
+                                        <span className="truncate">+ {party.name}</span>
                                       </motion.button>
                                     );
                                   })
                                 ) : (
-                                  showPartyBtn && (
-                                    <motion.button 
-                                      whileHover={{ scale: 1.05 }}
-                                      whileTap={{ scale: 0.95 }}
-                                      onClick={() => toggleWorkDayType(emp, selectedDay!, 'party')}
-                                      className="text-[10px] font-black bg-brand-party/10 hover:bg-brand-party text-brand-party dark:text-brand-party hover:text-white px-2.5 py-1 rounded-lg border border-brand-party/30 hover:border-transparent transition-colors flex items-center gap-1 uppercase"
-                                      title="Escalar para Festa (Optado pelo recreador)"
-                                    >
-                                      <UserPlus size={12} />
-                                      Festa
-                                    </motion.button>
+                                  config.isParty && (
+                                    hasAnyPartyAvail ? (
+                                      <motion.button 
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={() => handleToggleWorkDayClick(emp, selectedDay!, 'party')}
+                                        className="text-[10px] font-black bg-brand-party/10 hover:bg-brand-party text-brand-party dark:text-brand-party hover:text-white px-2.5 py-1 rounded-lg border border-brand-party/30 hover:border-transparent transition-colors flex items-center gap-1 uppercase active:scale-95 shadow-xs"
+                                        title="Escalar para Festa (Optado pelo recreador)"
+                                      >
+                                        <UserPlus size={12} />
+                                        Festa
+                                      </motion.button>
+                                    ) : (
+                                      <motion.button 
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={() => handleToggleWorkDayClick(emp, selectedDay!, 'party')}
+                                        className="text-[10px] font-bold bg-slate-800/60 hover:bg-brand-party/15 text-slate-400 hover:text-brand-party px-2.5 py-1 rounded-lg border border-dashed border-slate-600 hover:border-brand-party/40 transition-colors flex items-center gap-1 uppercase active:scale-95"
+                                        title="Escalar para Festa (Escala manual pela gestão - não optado originalmente)"
+                                      >
+                                        <UserPlus size={12} className="opacity-70" />
+                                        + Festa
+                                      </motion.button>
+                                    )
                                   )
                                 );
                               })()}
@@ -2555,7 +2726,7 @@ export default function CalendarView({
                                   <motion.button 
                                     whileHover={{ scale: 1.05 }}
                                     whileTap={{ scale: 0.95 }}
-                                    onClick={() => toggleWorkDayType(emp, selectedDay!, 'common')}
+                                    onClick={() => handleToggleWorkDayClick(emp, selectedDay!, 'common')}
                                     className="text-[10px] font-black bg-brand-bg border border-brand-border hover:bg-brand-primary/10 hover:border-brand-primary hover:text-brand-primary text-gray-400 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 uppercase"
                                   >
                                     <UserPlus size={12} />
@@ -2579,7 +2750,7 @@ export default function CalendarView({
                                           key={party.id}
                                           whileHover={{ scale: 1.05 }}
                                           whileTap={{ scale: 0.95 }}
-                                          onClick={() => toggleWorkDayType(emp, selectedDay!, 'party', party)}
+                                          onClick={() => handleToggleWorkDayClick(emp, selectedDay!, 'party', party)}
                                           className={cn(
                                             "text-[10px] font-black bg-brand-bg border rounded-lg px-2.5 py-1 transition-colors flex items-center gap-1 uppercase max-w-[130px] truncate",
                                             isOffice
@@ -2602,7 +2773,7 @@ export default function CalendarView({
                                       <motion.button 
                                         whileHover={{ scale: 1.05 }}
                                         whileTap={{ scale: 0.95 }}
-                                        onClick={() => toggleWorkDayType(emp, selectedDay!, 'party')}
+                                        onClick={() => handleToggleWorkDayClick(emp, selectedDay!, 'party')}
                                         className="text-[10px] font-black bg-brand-bg border border-brand-border hover:bg-brand-party/10 hover:border-brand-party hover:text-brand-party text-gray-400 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 uppercase"
                                       >
                                         <UserPlus size={12} />
@@ -3450,6 +3621,65 @@ export default function CalendarView({
         onClose={() => setIsLegendModalOpen(false)}
         isAdmin={isAdmin}
       />
+
+      {/* Manual Override Confirmation Modal */}
+      {manualOverrideTarget && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-brand-card border-2 border-amber-500/50 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="p-5 sm:p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center shrink-0">
+                  <AlertTriangle size={22} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-brand-text">
+                    Escala sem disponibilidade prévia
+                  </h3>
+                  <p className="text-[11px] text-amber-400 font-bold uppercase tracking-wider">
+                    Aviso para a Administração
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-brand-text space-y-2">
+                <p className="leading-relaxed">
+                  <strong className="text-white font-bold">{manualOverrideTarget.employee.artisticName || manualOverrideTarget.employee.name}</strong> 
+                  {' '}não deu disponibilidade para <strong className="text-amber-300 font-black uppercase">{manualOverrideTarget.targetActivityName}</strong> neste dia.
+                </p>
+                <div className="text-[11px] text-brand-muted bg-brand-bg/70 p-2.5 rounded-lg border border-brand-border/60">
+                  <span className="font-bold text-gray-400">Opção que marcou no app:</span>{' '}
+                  <span className="font-semibold text-emerald-400">{manualOverrideTarget.markedSummary}</span>
+                </div>
+                <p className="text-[11px] text-brand-muted leading-relaxed">
+                  Deseja confirmar a inclusão manual combinada diretamente com o(a) colaborador(a)?
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-brand-bg/70 border-t border-brand-border flex gap-3">
+              <button
+                type="button"
+                onClick={() => setManualOverrideTarget(null)}
+                className="flex-1 py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-brand-muted hover:text-white rounded-xl text-xs font-bold transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const { employee, date, type, party } = manualOverrideTarget;
+                  toggleWorkDayType(employee, date, type, party, true);
+                  setManualOverrideTarget(null);
+                }}
+                className="flex-1 py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5"
+              >
+                <Check size={14} />
+                Sim, Escalar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
