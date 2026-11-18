@@ -20,11 +20,13 @@ import {
   ShieldCheck,
   Undo2,
   CheckSquare,
-  Users
+  Users,
+  ListChecks
 } from 'lucide-react';
 import { Employee, WorkDay, CcspSettlementRecord } from '../types';
 import { formatCurrency, cn, getPartyPaymentDueDate, getCcspCycleAndDueDate, computeCcspBatchStatus, getWorkDayUniqueKey } from '../lib/utils';
 import { AnimatedCurrency } from './AnimatedCurrency';
+import PaymentAuditView from './PaymentAuditView';
 import { db } from '../lib/firebase';
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { 
@@ -118,6 +120,8 @@ export default function PaymentsView({
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
+  const [subTab, setSubTab] = useState<'batches' | 'audit'>('batches');
+  const [focusedEmployeeId, setFocusedEmployeeId] = useState<string | null>(null);
 
   // Bulk Payment States
   const [lastBatch, setLastBatch] = useState<PaymentBatch | null>(null);
@@ -764,8 +768,59 @@ export default function PaymentsView({
             </div>
           </div>
         </div>
+
+        {/* Sub-abas: Lotes para Pagamento vs Conferência por Pessoa */}
+        <div className="flex flex-wrap items-center justify-between gap-3 mt-4 pt-4 border-t border-brand-border/60">
+          <div className="flex items-center bg-brand-bg/90 border border-brand-border rounded-xl p-1 text-xs">
+            <button
+              type="button"
+              onClick={() => { setSubTab('batches'); setFocusedEmployeeId(null); }}
+              className={cn(
+                "px-3.5 py-2 rounded-lg font-bold transition-all flex items-center gap-1.5 whitespace-nowrap",
+                subTab === 'batches'
+                  ? "bg-brand-primary text-slate-950 shadow-sm"
+                  : "text-gray-400 hover:text-white"
+              )}
+            >
+              <DollarSign size={14} />
+              <span>Lotes para Pagamento</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSubTab('audit')}
+              className={cn(
+                "px-3.5 py-2 rounded-lg font-bold transition-all flex items-center gap-1.5 whitespace-nowrap",
+                subTab === 'audit'
+                  ? "bg-brand-primary text-slate-950 shadow-sm"
+                  : "text-gray-400 hover:text-white"
+              )}
+            >
+              <ListChecks size={14} />
+              <span>Conferência por Pessoa</span>
+            </button>
+          </div>
+
+          <p className="text-[11px] text-brand-muted">
+            {subTab === 'batches'
+              ? 'Agrupado por lote de vencimento para conferência e baixa de PIX'
+              : 'Extrato dia a dia por colaborador (CCSP, Festas, Extras e Saldo)'}
+          </p>
+        </div>
       </div>
 
+      {subTab === 'audit' ? (
+        <PaymentAuditView
+          employees={employees}
+          currentMonth={currentMonth}
+          typeFilter={typeFilter}
+          statusFilter={statusFilter}
+          groupFilter={groupFilter}
+          searchQuery={searchQuery}
+          focusedEmployeeId={focusedEmployeeId}
+          onClearFocus={() => setFocusedEmployeeId(null)}
+        />
+      ) : (
+        <>
       {/* Ações em Massa */}
       <div className="flex flex-col sm:flex-row items-center gap-3 bg-brand-card/50 border border-brand-primary/20 rounded-2xl p-4">
         <div className="flex items-center gap-2 text-brand-primary shrink-0">
@@ -1030,6 +1085,15 @@ export default function PaymentsView({
                     {/* Ações: Alternar Quitação */}
                     <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                       <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => { setFocusedEmployeeId(emp.id); setSubTab('audit'); }}
+                          className="text-[11px] font-bold text-cyan-300 hover:text-cyan-200 flex items-center gap-1 transition-colors"
+                          title="Abrir extrato dia a dia deste colaborador"
+                        >
+                          <ListChecks size={12} />
+                          <span>Detalhar Dias</span>
+                        </button>
                         {onViewStory && (
                           <button
                             onClick={() => onViewStory(emp)}
@@ -1232,16 +1296,27 @@ export default function PaymentsView({
                     </div>
 
                     {/* Ações */}
-                    <div className="flex items-center justify-between gap-2 pt-1">
-                      {onViewStory && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <div className="flex items-center gap-3">
                         <button
-                          onClick={() => onViewStory(emp)}
-                          className="text-[11px] font-bold text-gray-400 hover:text-brand-primary flex items-center gap-1 transition-colors"
+                          type="button"
+                          onClick={() => { setFocusedEmployeeId(emp.id); setSubTab('audit'); }}
+                          className="text-[11px] font-bold text-cyan-300 hover:text-cyan-200 flex items-center gap-1 transition-colors"
+                          title="Abrir extrato dia a dia deste colaborador"
                         >
-                          <User size={12} />
-                          <span>Ver História</span>
+                          <ListChecks size={12} />
+                          <span>Detalhar Dias</span>
                         </button>
-                      )}
+                        {onViewStory && (
+                          <button
+                            onClick={() => onViewStory(emp)}
+                            className="text-[11px] font-bold text-gray-400 hover:text-brand-primary flex items-center gap-1 transition-colors"
+                          >
+                            <User size={12} />
+                            <span>Ver História</span>
+                          </button>
+                        )}
+                      </div>
 
                       <button
                         onClick={() => handleTogglePartyPayment(emp, item.partyUniqueKey, item.isPaid, item.workDay)}
@@ -1263,6 +1338,8 @@ export default function PaymentsView({
             </div>
           )}
         </div>
+      )}
+        </>
       )}
       
       {/* Confirm Bulk Modal */}
