@@ -29,6 +29,12 @@
         },
         "availabilities": {
           "type": "array"
+        },
+        "paidDates": {
+          "type": "array"
+        },
+        "ccspSettlements": {
+          "type": "object"
         }
       },
       "required": ["name", "email"]

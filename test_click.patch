@@ -1,0 +1,11 @@
+--- src/components/DayManagementModal.tsx
++++ src/components/DayManagementModal.tsx
+@@ -786,6 +786,7 @@
+                         <button 
+                           type="button"
+                           onClick={(e) => {
+                             e.preventDefault();
++                            console.log("Button clicked! Current partyDeadline:", dayConfig.partyDeadline, "for date:", selectedDayStr);
+                             if (dayConfig.partyDeadline) {
+                               onUpdateDayConfig(selectedDayStr, { ...dayConfig, partyDeadline: '' });
+                             } else {

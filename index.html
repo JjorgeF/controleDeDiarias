@@ -203,6 +203,15 @@
           }
         }
 
+        // Modo de Teste: acessar com ?test_loader=1 para inspecionar e testar a tela
+        if (window.location.search.indexOf('test_loader=1') !== -1) {
+          window.__PREVENT_REACT_MOUNT__ = true;
+          showRecoveryUI(
+            'Modo de Teste: Esta é a tela que aparecerá para o usuário caso haja lentidão ou falha de cache.',
+            'Simulação: Cache legado detectado / Tempo limite atingido.'
+          );
+        }
+
         // 1. Timeout de 6 segundos caso o download ou execução do JS trave
         setTimeout(function() {
           if (!window.__REACT_MOUNTED__) {

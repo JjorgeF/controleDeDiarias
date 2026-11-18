@@ -35,9 +35,10 @@ service cloud.firestore {
       // All signed-in users can read employees to view schedules and colleagues
       allow get, list: if isSignedIn();
 
-      // Admins can update any field. Employees can update their own personal details.
+      // Admins can update any field. Active employees can update their own personal details.
       allow update: if isSignedIn() && (
         isAdmin() || (
+          (!('status' in resource.data) || resource.data.status != 'inactive') &&
           (resource.data.email.lower() == request.auth.token.email.lower() || ('userId' in resource.data && resource.data.userId == request.auth.uid)) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'availabilities', 'userId', 'workDays', 'photoUrl',
