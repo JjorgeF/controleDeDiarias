@@ -13,7 +13,7 @@ import {
   isBefore,
   isSameDay
 } from "date-fns";
-import { Employee, WorkDay } from "../types";
+import { Employee, EmployeeLevel, WorkDay } from "../types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -256,26 +256,98 @@ export function getLegacyCcspCycleAndDueDate(dateStrOrObj: string | Date): { cyc
   };
 }
 
+export interface WorkDayPayBreakdown {
+  baseRate: number;
+  overnightPay: number;
+  extraHours: number;
+  extraHourRate: number;
+  extraPay: number;
+  total: number;
+}
+
 /**
- * Calcula o valor financeiro exato de uma diária (CCSP ou Festa) considerando acordos, pernoite e horas extras.
+ * Retorna o detalhamento completo (base, pernoite, horas extras e total) de uma diária.
  */
-export function getWorkDayPayAmount(d: WorkDay, employee: Employee): number {
+export function getWorkDayPayBreakdown(d: WorkDay, employee: Employee): WorkDayPayBreakdown {
   const isParty = d.type === 'party';
-  let rate = d.isReducedHours && d.customTotalPay !== undefined && d.customTotalPay >= 0
+  const baseRate = d.isReducedHours && d.customTotalPay !== undefined && d.customTotalPay >= 0
     ? d.customTotalPay
     : isParty
       ? (d.partyRateAtTime !== undefined ? d.partyRateAtTime : employee.partyRate)
       : (d.dailyRateAtTime !== undefined ? d.dailyRateAtTime : employee.dailyRate);
 
-  if (d.isOvernight && d.overnightPay !== undefined && d.overnightPay > 0) {
-    rate += d.overnightPay;
-  }
+  const overnightPay = (d.isOvernight && d.overnightPay !== undefined && d.overnightPay > 0)
+    ? d.overnightPay
+    : 0;
 
-  const extraRate = (d.extraHourRateAtTime && d.extraHourRateAtTime > 0)
+  const extraHours = d.extraHours || 0;
+  const extraHourRate = (d.extraHourRateAtTime && d.extraHourRateAtTime > 0)
     ? d.extraHourRateAtTime
     : (employee.extraHourRate || 0);
-  const extra = (d.extraHours || 0) * extraRate;
-  return Number((rate + extra).toFixed(2));
+  const extraPay = Number((extraHours * extraHourRate).toFixed(2));
+  const total = Number((baseRate + overnightPay + extraPay).toFixed(2));
+
+  return {
+    baseRate: Number(baseRate.toFixed(2)),
+    overnightPay: Number(overnightPay.toFixed(2)),
+    extraHours,
+    extraHourRate: Number(extraHourRate.toFixed(2)),
+    extraPay,
+    total
+  };
+}
+
+/**
+ * Calcula o valor financeiro exato de uma diária (CCSP ou Festa) considerando acordos, pernoite e horas extras.
+ */
+export function getWorkDayPayAmount(d: WorkDay, employee: Employee): number {
+  return getWorkDayPayBreakdown(d, employee).total;
+}
+
+const STANDARD_DAILY_TO_LEVEL: Record<number, EmployeeLevel> = {
+  70: 'Trainee',
+  150: 'Aprendiz',
+  180: 'Recreador(a)',
+  210: 'Recreador(a) Experiente',
+  230: 'Coordenador(a)'
+};
+
+const STANDARD_PARTY_TO_LEVEL: Record<number, EmployeeLevel> = {
+  70: 'Trainee',
+  120: 'Aprendiz',
+  150: 'Recreador(a)',
+  180: 'Recreador(a) Experiente',
+  210: 'Coordenador(a)'
+};
+
+/**
+ * Resolve o nível do colaborador na data daquela diária (considerando snapshot levelAtTime,
+ * linha do tempo de promoções ou taxa padrão gravada no momento da escala).
+ */
+export function getWorkDayLevel(d: WorkDay, employee: Employee): EmployeeLevel {
+  if (d.levelAtTime) return d.levelAtTime;
+
+  if (employee.promotions && employee.promotions.length > 0 && d.date) {
+    const sortedPromos = [...employee.promotions].sort((a, b) => a.date.localeCompare(b.date));
+    const activePromos = sortedPromos.filter(p => p.date <= d.date);
+    if (activePromos.length > 0) {
+      return activePromos[activePromos.length - 1].newLevel;
+    }
+    return sortedPromos[0].previousLevel;
+  }
+
+  if (!d.isReducedHours) {
+    if (d.type === 'party' && d.partyRateAtTime !== undefined && d.partyRateAtTime !== employee.partyRate) {
+      const inferred = STANDARD_PARTY_TO_LEVEL[d.partyRateAtTime];
+      if (inferred) return inferred;
+    }
+    if (d.type === 'common' && d.dailyRateAtTime !== undefined && d.dailyRateAtTime !== employee.dailyRate) {
+      const inferred = STANDARD_DAILY_TO_LEVEL[d.dailyRateAtTime];
+      if (inferred) return inferred;
+    }
+  }
+
+  return employee.level || 'Trainee';
 }
 
 export interface CcspBatchStatus {
