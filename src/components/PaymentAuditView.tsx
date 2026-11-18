@@ -12,8 +12,7 @@ import {
   Calendar,
   ShieldCheck,
   TrendingUp,
-  ChevronsUpDown,
-  FileText
+  ChevronsUpDown
 } from 'lucide-react';
 import { format, parseISO, isSameMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -40,8 +39,6 @@ interface PaymentAuditViewProps {
   focusedEmployeeId?: string | null;
   onClearFocus?: () => void;
 }
-
-type AuditScopeMode = 'batch' | 'worked';
 
 interface AuditRowItem {
   key: string;
@@ -124,7 +121,6 @@ export default function PaymentAuditView({
   focusedEmployeeId,
   onClearFocus
 }: PaymentAuditViewProps) {
-  const [scopeMode, setScopeMode] = useState<AuditScopeMode>('batch');
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
   const [copiedEmpId, setCopiedEmpId] = useState<string | null>(null);
 
@@ -181,18 +177,14 @@ export default function PaymentAuditView({
             const forecastDate = getPartyPaymentDueDate(dateObj, isManagement);
             dueDateStr = format(forecastDate, 'yyyy-MM-dd');
             dueDateFormatted = format(forecastDate, 'dd/MM/yyyy');
-            matchesScope = scopeMode === 'batch'
-              ? isSameMonth(forecastDate, currentMonth)
-              : isSameMonth(dateObj, currentMonth);
+            matchesScope = isSameMonth(forecastDate, currentMonth);
           } else {
             const cycleInfo = getCcspCycleAndDueDate(dateObj);
             dueDateStr = cycleInfo.dueDateStr;
             dueDateFormatted = cycleInfo.dueDateFormatted;
             isMonthTurnBridge = cycleInfo.isMonthTurnBridge;
             isPulledFromNextMonth = cycleInfo.isPulledFromNextMonth;
-            matchesScope = scopeMode === 'batch'
-              ? cycleInfo.dueDateStr === currentMonthCcspKey
-              : isSameMonth(dateObj, currentMonth);
+            matchesScope = cycleInfo.dueDateStr === currentMonthCcspKey;
           }
 
           if (!matchesScope) return;
@@ -271,7 +263,7 @@ export default function PaymentAuditView({
       if (statusFilter === 'paid' && !isFullyPaid) return;
 
       let batchPartialNote: string | undefined;
-      if (scopeMode === 'batch' && typeFilter !== 'parties') {
+      if (typeFilter !== 'parties') {
         const batchStatus = computeCcspBatchStatus(emp, currentMonthCcspKey);
         if (batchStatus.isPartiallyPaid || batchStatus.hasPaidFlagWithPendingBalance) {
           const pendingDates = batchStatus.unpaidDays.map(d => {
@@ -340,7 +332,7 @@ export default function PaymentAuditView({
     });
 
     return results.sort((a, b) => a.employee.artisticName.localeCompare(b.employee.artisticName));
-  }, [employees, currentMonth, currentMonthCcspKey, scopeMode, typeFilter, statusFilter, groupFilter, searchQuery]);
+  }, [employees, currentMonth, currentMonthCcspKey, typeFilter, statusFilter, groupFilter, searchQuery]);
 
   const allExpanded = personSummaries.length > 0 && personSummaries.every(p => expandedIds[p.employee.id]);
 
@@ -361,7 +353,7 @@ export default function PaymentAuditView({
   };
 
   const handleCopyStatement = (summary: PersonAuditSummary) => {
-    const scopeTitle = scopeMode === 'batch' ? `Lote ${capitalizedMonth}` : `Trabalhado em ${capitalizedMonth}`;
+    const scopeTitle = `Lote ${capitalizedMonth}`;
     const lines = [
       `*Conferência — ${summary.employee.artisticName} (${summary.employee.name})*`,
       `Referência: ${scopeTitle}`,
@@ -415,36 +407,11 @@ export default function PaymentAuditView({
       {/* Barra de Controles da Conferência */}
       <div className="bg-brand-card border border-brand-border rounded-2xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          {/* Alternador de Critério: Lote vs Mês Trabalhado */}
-          <div className="flex items-center bg-brand-bg/80 border border-brand-border rounded-xl p-1 text-xs">
-            <button
-              type="button"
-              onClick={() => setScopeMode('batch')}
-              className={cn(
-                "px-3 py-1.5 rounded-lg font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap",
-                scopeMode === 'batch'
-                  ? "bg-brand-primary text-slate-950 shadow-sm"
-                  : "text-gray-400 hover:text-white"
-              )}
-              title="Mostra CCSP com vencimento dia 15 deste mês e festas pagas neste mês"
-            >
-              <Calendar size={13} />
-              <span>Por Lote de Pagamento ({format(currentMonth, 'MM/yyyy')})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setScopeMode('worked')}
-              className={cn(
-                "px-3 py-1.5 rounded-lg font-bold transition-colors flex items-center gap-1.5 whitespace-nowrap",
-                scopeMode === 'worked'
-                  ? "bg-brand-primary text-slate-950 shadow-sm"
-                  : "text-gray-400 hover:text-white"
-              )}
-              title="Mostra todos os dias fisicamente trabalhados dentro do mês civil selecionado"
-            >
-              <FileText size={13} />
-              <span>Por Mês Trabalhado ({format(currentMonth, 'MM/yyyy')})</span>
-            </button>
+          <div className="flex items-center gap-2 text-xs font-semibold text-gray-300">
+            <Calendar size={14} className="text-brand-primary shrink-0" />
+            <span>
+              Pagamentos previstos em <strong className="text-brand-text">{capitalizedMonth}</strong> (CCSP dia 15 e Festas do lote)
+            </span>
           </div>
 
           {focusedEmployeeId && onClearFocus && (
