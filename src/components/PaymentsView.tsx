@@ -22,8 +22,8 @@ import {
   CheckSquare,
   Users
 } from 'lucide-react';
-import { Employee, WorkDay } from '../types';
-import { formatCurrency, cn, getPartyPaymentDueDate, getCcspCycleAndDueDate } from '../lib/utils';
+import { Employee, WorkDay, CcspSettlementRecord } from '../types';
+import { formatCurrency, cn, getPartyPaymentDueDate, getCcspCycleAndDueDate, computeCcspBatchStatus, getWorkDayUniqueKey } from '../lib/utils';
 import { AnimatedCurrency } from './AnimatedCurrency';
 import { db } from '../lib/firebase';
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
@@ -47,7 +47,12 @@ interface PaymentBatch {
   id: string;
   type: 'ccsp' | 'party';
   timestamp: number;
-  items: { employeeId: string; dateStr: string }[];
+  items: {
+    employeeId: string;
+    dateStr: string;
+    hadPaidDate?: boolean;
+    previousSettlement?: CcspSettlementRecord | null;
+  }[];
 }
 
 interface PaymentsViewProps {
@@ -68,12 +73,19 @@ interface CCSPPaymentItem {
   employee: Employee;
   daysCount: number;
   totalAmount: number;
+  alreadyPaidAmount: number;
+  remainingAmount: number;
   dueDateStr: string;
   dueDateFormatted: string;
   referenceCycleText: string;
   hasRolloverDays?: boolean;
+  pulledFromNextMonthDates: string[];
+  bridgeDatesInBatch: string[];
+  unpaidDatesFormatted: string[];
   sameDayWithPartyDates: string[];
   isPaid: boolean;
+  isPartiallyPaid: boolean;
+  hasPaidFlagWithPendingBalance: boolean;
   workDays: WorkDay[];
 }
 
@@ -138,8 +150,6 @@ export default function PaymentsView({
   const monthName = format(currentMonth, 'MMMM yyyy', { locale: ptBR });
   const capitalizedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
   const currentMonthCcspKey = format(currentMonth, 'yyyy-MM-15');
-  // Chave do ciclo anterior para compatibilidade total com baixas retroativas registradas no formato anterior
-  const legacyCycleKey = format(subMonths(currentMonth, 1), 'yyyy-MM-15');
 
   // Copy PIX to clipboard
   const handleCopyPix = (pixKey: string, id: string) => {
@@ -151,17 +161,36 @@ export default function PaymentsView({
     }, 2500);
   };
 
-  // Toggle CCSP Payment
-  const handleToggleCCSPPayment = async (employee: Employee, isPaid: boolean) => {
+  // Toggle / Settle CCSP Payment (supports full payment, partial remainder settlement, and revert)
+  const handleToggleCCSPPayment = async (item: CCSPPaymentItem, forceReset = false) => {
+    const employee = item.employee;
     const itemKey = `ccsp-${employee.id}-${currentMonthCcspKey}`;
     try {
       setIsProcessing(itemKey);
       const currentPaid = employee.paidDates || [];
-      const newPaid = isPaid
-        ? currentPaid.filter(d => d !== currentMonthCcspKey && d !== legacyCycleKey)
-        : [...currentPaid.filter(d => d !== legacyCycleKey), currentMonthCcspKey];
+      const currentSettlements = { ...(employee.ccspSettlements || {}) };
 
-      await onUpdateDetails(employee.id, { paidDates: newPaid });
+      if (item.isPaid || forceReset) {
+        const newPaid = currentPaid.filter(d => d !== currentMonthCcspKey);
+        delete currentSettlements[currentMonthCcspKey];
+        await onUpdateDetails(employee.id, {
+          paidDates: newPaid,
+          ccspSettlements: currentSettlements
+        });
+      } else {
+        const newPaid = currentPaid.includes(currentMonthCcspKey)
+          ? currentPaid
+          : [...currentPaid, currentMonthCcspKey];
+        currentSettlements[currentMonthCcspKey] = {
+          paidAmount: item.totalAmount,
+          settledWorkDayKeys: item.workDays.map(d => getWorkDayUniqueKey(d.date, 'common', d.partyId)),
+          paidAt: new Date().toISOString()
+        };
+        await onUpdateDetails(employee.id, {
+          paidDates: newPaid,
+          ccspSettlements: currentSettlements
+        });
+      }
     } catch (error) {
       console.error('Erro ao alternar status do pagamento CCSP:', error);
     } finally {
@@ -211,35 +240,20 @@ export default function PaymentsView({
     const activeEmps = employees.filter(e => e.status !== 'inactive');
 
     activeEmps.forEach(emp => {
-      // 1. CCSP Diárias com vencimento neste mês (Dia 15 de currentMonth)
-      const matchingCcspDays = (emp.workDays || []).filter(wd => {
-        if (wd.isCancelled || !wd.date || wd.type !== 'common') return false;
-        try {
-          const cycleInfo = getCcspCycleAndDueDate(wd.date);
-          return cycleInfo.dueDateStr === currentMonthCcspKey;
-        } catch {
-          return false;
-        }
-      });
+      // 1. CCSP Diárias com vencimento neste mês (Dia 15 de currentMonth) + conciliação de saldo restante
+      const batchStatus = computeCcspBatchStatus(emp, currentMonthCcspKey);
+      const matchingCcspDays = batchStatus.matchingDays;
 
       if (matchingCcspDays.length > 0) {
-        const totalAmount = matchingCcspDays.reduce((acc, d) => {
-          let rate = d.isReducedHours && d.customTotalPay !== undefined && d.customTotalPay >= 0
-            ? d.customTotalPay
-            : (d.dailyRateAtTime !== undefined ? d.dailyRateAtTime : emp.dailyRate);
-          if (d.isOvernight && d.overnightPay !== undefined && d.overnightPay > 0) {
-            rate += d.overnightPay;
-          }
-          const extraRate = (d.extraHourRateAtTime && d.extraHourRateAtTime > 0) ? d.extraHourRateAtTime : (emp.extraHourRate || 0);
-          const extra = (d.extraHours || 0) * extraRate;
-          return acc + rate + extra;
-        }, 0);
-
-        // Reconhece a quitação tanto pela chave de vencimento atual quanto pela chave legada da competência
-        const isPaid = (emp.paidDates || []).includes(currentMonthCcspKey) || (emp.paidDates || []).includes(legacyCycleKey);
-
         const firstCycleInfo = getCcspCycleAndDueDate(matchingCcspDays[0].date);
-        const hasRolloverDays = matchingCcspDays.some(d => getCcspCycleAndDueDate(d.date).isRollover);
+        const hasRolloverDays = batchStatus.pulledFromNextMonthDates.length > 0 || batchStatus.bridgeDatesInBatch.length > 0;
+        const unpaidDatesFormatted = batchStatus.unpaidDays.map(d => {
+          try {
+            return format(parseISO(d.date), 'dd/MM');
+          } catch {
+            return d.date;
+          }
+        });
 
         // Identifica diárias do CCSP realizadas em dias onde o recreador também fez festa (dupla escala)
         const sameDayWithPartyDates = matchingCcspDays.filter(cd => 
@@ -257,13 +271,20 @@ export default function PaymentsView({
           type: 'ccsp',
           employee: emp,
           daysCount: matchingCcspDays.length,
-          totalAmount,
+          totalAmount: batchStatus.totalAmount,
+          alreadyPaidAmount: batchStatus.alreadyPaidAmount,
+          remainingAmount: batchStatus.remainingAmount,
           dueDateStr: currentMonthCcspKey,
           dueDateFormatted: `15/${format(currentMonth, 'MM/yyyy')}`,
           referenceCycleText: `Competência: ${firstCycleInfo.cycleMonthName}`,
           hasRolloverDays,
+          pulledFromNextMonthDates: batchStatus.pulledFromNextMonthDates,
+          bridgeDatesInBatch: batchStatus.bridgeDatesInBatch,
+          unpaidDatesFormatted,
           sameDayWithPartyDates,
-          isPaid,
+          isPaid: batchStatus.isFullyPaid,
+          isPartiallyPaid: batchStatus.isPartiallyPaid,
+          hasPaidFlagWithPendingBalance: batchStatus.hasPaidFlagWithPendingBalance,
           workDays: matchingCcspDays
         });
       }
@@ -333,7 +354,7 @@ export default function PaymentsView({
       ccspItems: ccspList.sort((a, b) => a.employee.artisticName.localeCompare(b.employee.artisticName)),
       partyItems: partyList.sort((a, b) => a.dueDateStr.localeCompare(b.dueDateStr))
     };
-  }, [employees, currentMonth, currentMonthCcspKey, legacyCycleKey]);
+  }, [employees, currentMonth, currentMonthCcspKey]);
 
   // Compute Financial Statistics based on selected groupFilter
   const stats = useMemo(() => {
@@ -351,10 +372,10 @@ export default function PaymentsView({
     const allTotalAmount = activeCcsp.reduce((acc, c) => acc + c.totalAmount, 0) +
                            activeParties.reduce((acc, p) => acc + p.amount, 0);
 
-    const paidTotalAmount = activeCcsp.filter(c => c.isPaid).reduce((acc, c) => acc + c.totalAmount, 0) +
+    const paidTotalAmount = activeCcsp.reduce((acc, c) => acc + (c.isPaid ? c.totalAmount : Math.min(c.totalAmount, c.alreadyPaidAmount)), 0) +
                             activeParties.filter(p => p.isPaid).reduce((acc, p) => acc + p.amount, 0);
 
-    const pendingTotalAmount = allTotalAmount - paidTotalAmount;
+    const pendingTotalAmount = Math.max(0, Number((allTotalAmount - paidTotalAmount).toFixed(2)));
 
     const totalCount = activeCcsp.length + activeParties.length;
     const paidCount = activeCcsp.filter(c => c.isPaid).length + activeParties.filter(p => p.isPaid).length;
@@ -413,35 +434,67 @@ export default function PaymentsView({
     try {
       setIsBulkProcessing(true);
       const batchId = Date.now().toString();
-      const itemsToUpdate = bulkType === 'ccsp' 
-        ? filteredCcspItems.filter(i => !i.isPaid)
-        : filteredPartyItems.filter(i => !i.isPaid);
+      const ccspToUpdate = bulkType === 'ccsp' ? filteredCcspItems.filter(i => !i.isPaid) : [];
+      const partiesToUpdate = bulkType === 'party' ? filteredPartyItems.filter(i => !i.isPaid) : [];
 
-      if (itemsToUpdate.length === 0) return;
+      if (bulkType === 'ccsp' && ccspToUpdate.length === 0) return;
+      if (bulkType === 'party' && partiesToUpdate.length === 0) return;
+
+      const batchItems: PaymentBatch['items'] = bulkType === 'ccsp'
+        ? ccspToUpdate.map(i => ({
+            employeeId: i.employee.id,
+            dateStr: i.dueDateStr,
+            hadPaidDate: (i.employee.paidDates || []).includes(i.dueDateStr),
+            previousSettlement: i.employee.ccspSettlements?.[i.dueDateStr] || null
+          }))
+        : partiesToUpdate.map(i => ({
+            employeeId: i.employee.id,
+            dateStr: i.dueDateStr
+          }));
 
       const batchObj: PaymentBatch = {
         id: batchId,
         type: bulkType,
         timestamp: Date.now(),
-        items: itemsToUpdate.map(i => ({ employeeId: i.employee.id, dateStr: i.dueDateStr }))
+        items: batchItems
       };
 
-      // Create a map to group updates by employee
-      const employeeUpdates = new Map<string, string[]>();
-      
-      itemsToUpdate.forEach(item => {
-        const emp = employees.find(e => e.id === item.employee.id);
-        if (!emp) return;
-        const paidDates = employeeUpdates.get(emp.id) || [...(emp.paidDates || [])];
-        if (!paidDates.includes(item.dueDateStr)) {
-          paidDates.push(item.dueDateStr);
-        }
-        employeeUpdates.set(emp.id, paidDates);
-      });
+      const employeeUpdates = new Map<string, { paidDates: string[]; ccspSettlements?: Record<string, CcspSettlementRecord> }>();
 
-      // Execute all updates sequentially (or Promise.all)
-      const updatePromises = Array.from(employeeUpdates.entries()).map(([empId, newPaidDates]) => {
-        return onUpdateDetails(empId, { paidDates: newPaidDates });
+      if (bulkType === 'ccsp') {
+        ccspToUpdate.forEach(item => {
+          const emp = employees.find(e => e.id === item.employee.id);
+          if (!emp) return;
+          const existing = employeeUpdates.get(emp.id) || {
+            paidDates: [...(emp.paidDates || [])],
+            ccspSettlements: { ...(emp.ccspSettlements || {}) }
+          };
+          if (!existing.paidDates.includes(item.dueDateStr)) {
+            existing.paidDates.push(item.dueDateStr);
+          }
+          existing.ccspSettlements![item.dueDateStr] = {
+            paidAmount: item.totalAmount,
+            settledWorkDayKeys: item.workDays.map(d => getWorkDayUniqueKey(d.date, 'common', d.partyId)),
+            paidAt: new Date().toISOString()
+          };
+          employeeUpdates.set(emp.id, existing);
+        });
+      } else {
+        partiesToUpdate.forEach(item => {
+          const emp = employees.find(e => e.id === item.employee.id);
+          if (!emp) return;
+          const existing = employeeUpdates.get(emp.id) || {
+            paidDates: [...(emp.paidDates || [])]
+          };
+          if (!existing.paidDates.includes(item.dueDateStr)) {
+            existing.paidDates.push(item.dueDateStr);
+          }
+          employeeUpdates.set(emp.id, existing);
+        });
+      }
+
+      const updatePromises = Array.from(employeeUpdates.entries()).map(([empId, fields]) => {
+        return onUpdateDetails(empId, fields);
       });
 
       await Promise.all(updatePromises);
@@ -459,24 +512,35 @@ export default function PaymentsView({
     if (!db || !lastBatch) return;
     try {
       setIsBulkProcessing(true);
-      
-      const employeeUpdates = new Map<string, string[]>();
+
+      const employeeUpdates = new Map<string, { paidDates: string[]; ccspSettlements?: Record<string, CcspSettlementRecord> }>();
 
       lastBatch.items.forEach(item => {
         const emp = employees.find(e => e.id === item.employeeId);
         if (!emp) return;
-        
-        let paidDates = employeeUpdates.get(emp.id);
-        if (!paidDates) {
-          paidDates = [...(emp.paidDates || [])];
+
+        const existing = employeeUpdates.get(emp.id) || {
+          paidDates: [...(emp.paidDates || [])],
+          ...(lastBatch.type === 'ccsp' ? { ccspSettlements: { ...(emp.ccspSettlements || {}) } } : {})
+        };
+
+        if (!item.hadPaidDate) {
+          existing.paidDates = existing.paidDates.filter(d => d !== item.dateStr);
         }
-        
-        paidDates = paidDates.filter(d => d !== item.dateStr);
-        employeeUpdates.set(emp.id, paidDates);
+
+        if (lastBatch.type === 'ccsp' && existing.ccspSettlements) {
+          if (item.previousSettlement) {
+            existing.ccspSettlements[item.dateStr] = item.previousSettlement;
+          } else {
+            delete existing.ccspSettlements[item.dateStr];
+          }
+        }
+
+        employeeUpdates.set(emp.id, existing);
       });
 
-      const updatePromises = Array.from(employeeUpdates.entries()).map(([empId, newPaidDates]) => {
-        return onUpdateDetails(empId, { paidDates: newPaidDates });
+      const updatePromises = Array.from(employeeUpdates.entries()).map(([empId, fields]) => {
+        return onUpdateDetails(empId, fields);
       });
 
       await Promise.all(updatePromises);
@@ -757,7 +821,7 @@ export default function PaymentsView({
                 </span>
               </div>
               <p className="text-[11px] text-brand-muted mt-0.5">
-                Produção referente a {format(subMonths(currentMonth, 1), 'MMMM yyyy', { locale: ptBR })} (com virada de mês em fim de semana/feriado)
+                Produção referente a {format(subMonths(currentMonth, 1), 'MMMM yyyy', { locale: ptBR })} — inclui bloco de feriado/emenda na virada do mês, quando houver
               </p>
             </div>
           </div>
@@ -773,6 +837,14 @@ export default function PaymentsView({
               {filteredCcspItems.map(item => {
                 const emp = item.employee;
                 const isItemProcessing = isProcessing === `ccsp-${emp.id}-${currentMonthCcspKey}`;
+                const hasPendingDelta = item.isPartiallyPaid || item.hasPaidFlagWithPendingBalance;
+                const workDatesShort = item.workDays.map(d => {
+                  try {
+                    return format(parseISO(d.date), 'dd/MM');
+                  } catch {
+                    return d.date;
+                  }
+                });
 
                 return (
                   <div 
@@ -781,7 +853,9 @@ export default function PaymentsView({
                       "rounded-2xl border p-4 transition-all duration-200 shadow-lg flex flex-col justify-between gap-3 relative overflow-hidden",
                       item.isPaid 
                         ? "bg-emerald-950/15 border-emerald-500/30 hover:border-emerald-500/50" 
-                        : "bg-brand-card border-brand-border hover:border-brand-primary/30"
+                        : hasPendingDelta
+                          ? "bg-amber-950/15 border-amber-500/40 hover:border-amber-500/60"
+                          : "bg-brand-card border-brand-border hover:border-brand-primary/30"
                     )}
                   >
                     {/* Header do Card */}
@@ -818,49 +892,99 @@ export default function PaymentsView({
 
                       {/* Status Badge */}
                       <span className={cn(
-                        "text-[10px] font-black uppercase px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1",
+                        "text-[10px] font-black uppercase px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1 whitespace-nowrap",
                         item.isPaid 
                           ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" 
-                          : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                          : hasPendingDelta
+                            ? "bg-amber-500/25 text-amber-200 border border-amber-400/50"
+                            : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
                       )}>
-                        {item.isPaid ? <CheckCircle2 size={11} /> : <Clock size={11} />}
-                        {item.isPaid ? 'Quitado' : 'Pendente'}
+                        {item.isPaid ? <CheckCircle2 size={11} /> : hasPendingDelta ? <AlertCircle size={11} /> : <Clock size={11} />}
+                        {item.isPaid ? 'Quitado' : hasPendingDelta ? 'Pago Parcial' : 'Pendente'}
                       </span>
                     </div>
 
+                    {/* Alerta de Saldo Restante após mudança de virada / inclusão */}
+                    {hasPendingDelta && (
+                      <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-2.5 flex items-start gap-2 text-[11px] text-amber-200">
+                        <AlertCircle size={15} className="shrink-0 text-amber-400 mt-0.5" />
+                        <div className="space-y-0.5 leading-snug">
+                          <p className="font-bold text-amber-300">
+                            Saldo restante a pagar: <span className="tabular-nums">{formatCurrency(item.remainingAmount)}</span>
+                          </p>
+                          <p className="text-[10px] text-amber-200/85">
+                            {item.alreadyPaidAmount > 0
+                              ? `Já quitado anteriormente: ${formatCurrency(item.alreadyPaidAmount)}. `
+                              : 'Lote havia sido marcado como pago antes do recálculo. '}
+                            {item.unpaidDatesFormatted.length > 0
+                              ? `Diárias em aberto neste lote: ${item.unpaidDatesFormatted.join(', ')}.`
+                              : 'Há diferença pendente de quitação neste lote.'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Dados de Diárias e Valores */}
-                    <div className="bg-brand-bg/60 rounded-xl p-3 border border-brand-border/60 flex items-center justify-between">
-                      <div>
+                    <div className="bg-brand-bg/60 rounded-xl p-3 border border-brand-border/60 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
                         <span className="text-[11px] text-brand-muted font-semibold block">
                           Diárias Trabalhadas (CCSP)
                         </span>
-                        <span className="text-xs font-bold text-brand-text">
+                        <span className="text-xs font-bold text-brand-text tabular-nums">
                           {item.daysCount} {item.daysCount === 1 ? 'dia' : 'dias'} × {formatCurrency(emp.dailyRate)}
+                        </span>
+                        <span className="text-[10px] text-gray-400 block mt-0.5 tabular-nums">
+                          Datas: {workDatesShort.join(', ')}
                         </span>
                         <span className="text-[10px] text-amber-300 font-semibold block mt-0.5">
                           {item.referenceCycleText}
                         </span>
-                        {item.hasRolloverDays && (
+                        {item.pulledFromNextMonthDates.length > 0 ? (
                           <span className="text-[9px] text-cyan-300 font-bold block mt-0.5">
-                            Inclui diárias da virada de mês anterior
+                            Inclui feriado/emenda da virada ({item.pulledFromNextMonthDates.join(', ')})
+                          </span>
+                        ) : item.bridgeDatesInBatch.length > 0 && (
+                          <span className="text-[9px] text-cyan-300 font-bold block mt-0.5">
+                            Inclui bloco de feriado da virada ({item.bridgeDatesInBatch.join(', ')})
                           </span>
                         )}
                         {item.sameDayWithPartyDates && item.sameDayWithPartyDates.length > 0 && (
                           <span className="text-[9px] text-purple-300 font-bold block mt-0.5">
-                            ✨ Dupla Escala: Inclui diária em dia com evento ({item.sameDayWithPartyDates.join(', ')})
+                            Dupla Escala: Inclui diária em dia com evento ({item.sameDayWithPartyDates.join(', ')})
                           </span>
                         )}
                       </div>
-                      <div className="text-right">
-                        <span className="text-[10px] text-brand-muted uppercase font-bold block">
-                          Valor a Pagar
-                        </span>
-                        <span className={cn(
-                          "text-base sm:text-lg font-black",
-                          item.isPaid ? "text-emerald-400" : "text-brand-primary"
-                        )}>
-                          {formatCurrency(item.totalAmount)}
-                        </span>
+                      <div className="text-right shrink-0">
+                        {hasPendingDelta ? (
+                          <div className="space-y-0.5 tabular-nums">
+                            <span className="text-[10px] text-brand-muted font-semibold block">
+                              Total: {formatCurrency(item.totalAmount)}
+                            </span>
+                            {item.alreadyPaidAmount > 0 && (
+                              <span className="text-[10px] text-emerald-400 font-bold block">
+                                Pago: {formatCurrency(item.alreadyPaidAmount)}
+                              </span>
+                            )}
+                            <span className="text-[10px] text-amber-300 uppercase font-bold block pt-0.5">
+                              Restante
+                            </span>
+                            <span className="text-base sm:text-lg font-black text-amber-400 block leading-none">
+                              {formatCurrency(item.remainingAmount)}
+                            </span>
+                          </div>
+                        ) : (
+                          <>
+                            <span className="text-[10px] text-brand-muted uppercase font-bold block">
+                              Valor a Pagar
+                            </span>
+                            <span className={cn(
+                              "text-base sm:text-lg font-black tabular-nums",
+                              item.isPaid ? "text-emerald-400" : "text-brand-primary"
+                            )}>
+                              {formatCurrency(item.totalAmount)}
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
 
@@ -904,29 +1028,47 @@ export default function PaymentsView({
                     </div>
 
                     {/* Ações: Alternar Quitação */}
-                    <div className="flex items-center justify-between gap-2 pt-1">
-                      {onViewStory && (
-                        <button
-                          onClick={() => onViewStory(emp)}
-                          className="text-[11px] font-bold text-gray-400 hover:text-brand-primary flex items-center gap-1 transition-colors"
-                        >
-                          <User size={12} />
-                          <span>Ver História</span>
-                        </button>
-                      )}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <div className="flex items-center gap-3">
+                        {onViewStory && (
+                          <button
+                            onClick={() => onViewStory(emp)}
+                            className="text-[11px] font-bold text-gray-400 hover:text-brand-primary flex items-center gap-1 transition-colors"
+                          >
+                            <User size={12} />
+                            <span>Ver História</span>
+                          </button>
+                        )}
+                        {hasPendingDelta && (
+                          <button
+                            onClick={() => handleToggleCCSPPayment(item, true)}
+                            disabled={isItemProcessing}
+                            className="text-[11px] font-bold text-gray-400 hover:text-amber-300 transition-colors disabled:opacity-50"
+                            title="Reverter quitação anterior deste lote"
+                          >
+                            Desmarcar anterior
+                          </button>
+                        )}
+                      </div>
 
                       <button
-                        onClick={() => handleToggleCCSPPayment(emp, item.isPaid)}
+                        onClick={() => handleToggleCCSPPayment(item)}
                         disabled={isItemProcessing}
                         className={cn(
-                          "ml-auto px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-md active:scale-95 disabled:opacity-50",
+                          "ml-auto px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-md active:scale-95 disabled:opacity-50 whitespace-nowrap",
                           item.isPaid
                             ? "bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/30"
                             : "bg-amber-500 hover:bg-amber-400 text-slate-950 font-black shadow-amber-500/20"
                         )}
                       >
                         {item.isPaid ? <CheckCircle2 size={14} /> : <Check size={14} />}
-                        <span>{item.isPaid ? 'MARCADO COMO PAGO' : 'CONFIRMAR PAGAMENTO'}</span>
+                        <span>
+                          {item.isPaid
+                            ? 'MARCADO COMO PAGO'
+                            : hasPendingDelta
+                              ? `QUITAR RESTANTE (${formatCurrency(item.remainingAmount)})`
+                              : 'CONFIRMAR PAGAMENTO'}
+                        </span>
                       </button>
                     </div>
                   </div>

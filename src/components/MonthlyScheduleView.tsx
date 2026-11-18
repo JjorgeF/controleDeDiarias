@@ -737,7 +737,7 @@ export default function MonthlyScheduleView({
                               <div className={cn(
                                 "flex items-center justify-between text-[10px] font-extrabold px-2.5 py-1 rounded-lg border transition-all shadow-sm",
                                 group.isParty
-                                  ? "bg-brand-party/80 text-brand-party border-brand-party/60 ring-1 ring-brand-party/20"
+                                  ? "bg-brand-party text-white border-brand-party/80 ring-1 ring-brand-party/30 shadow-md"
                                   : isCoordination
                                     ? "bg-cyan-950/80 text-cyan-200 border-cyan-500/60 ring-1 ring-cyan-500/20"
                                     : "bg-brand-primary/10 text-brand-primary border-brand-primary/20"
@@ -758,12 +758,12 @@ export default function MonthlyScheduleView({
                               </div>
 
                               <div className="space-y-1">
-                                {group.items.map(({ employee, workDay }) => {
+                                {group.items.map(({ employee, workDay }, idx) => {
                                   const isThisHighlighted = effectiveHighlightEmployee && employee.id === effectiveHighlightEmployee.id;
 
                                   return (
                                     <div 
-                                      key={`${employee.id}_${workDay.date}_${workDay.type}_${workDay.partyId || workDay.id || ''}`}
+                                      key={`${employee.id}_${workDay.date}_${workDay.type}_${workDay.partyId || workDay.id || ''}_${idx}`}
                                       className={cn(
                                         "flex items-center justify-between gap-2 p-1.5 rounded-xl transition-all border text-xs",
                                         isThisHighlighted
@@ -946,7 +946,7 @@ export default function MonthlyScheduleView({
 
                     {/* List of Employees */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-3">
-                      {dayItems.map(({ employee, workDay }) => {
+                      {dayItems.map(({ employee, workDay }, idx) => {
                         const isThisHighlighted = effectiveHighlightEmployee && employee.id === effectiveHighlightEmployee.id;
 
                         const isParty = workDay.type === 'party';
@@ -968,7 +968,7 @@ export default function MonthlyScheduleView({
 
                         return (
                           <div 
-                            key={`${employee.id}_${workDay.date}_${workDay.type}_${workDay.partyId || workDay.id || ''}`}
+                            key={`${employee.id}_${workDay.date}_${workDay.type}_${workDay.partyId || workDay.id || ''}_${idx}`}
                             className={cn(
                               "flex items-center justify-between p-2.5 rounded-xl border text-xs",
                               isThisHighlighted
@@ -1096,12 +1096,12 @@ export default function MonthlyScheduleView({
                     Nenhum recreador escalado para este dia.
                   </div>
                 ) : (
-                  modalItems.map(({ employee, workDay }) => {
+                  modalItems.map(({ employee, workDay }, idx) => {
                     const isHighlighted = effectiveHighlightEmployee && employee.id === effectiveHighlightEmployee.id;
 
                     return (
                       <div 
-                        key={`${employee.id}_${workDay.date}_${workDay.type}_${workDay.partyId || workDay.id || ''}`}
+                        key={`${employee.id}_${workDay.date}_${workDay.type}_${workDay.partyId || workDay.id || ''}_${idx}`}
                         className={cn(
                           "flex items-center justify-between p-3 rounded-xl border transition-all text-xs",
                           isHighlighted

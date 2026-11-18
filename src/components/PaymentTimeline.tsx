@@ -25,7 +25,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { Employee, WorkDay } from '../types';
-import { getPartyPaymentDueDate } from '../lib/utils';
+import { getPartyPaymentDueDate, computeCcspBatchStatus, formatCurrency } from '../lib/utils';
 
 interface PaymentTimelineProps {
   employee: Employee;
@@ -134,7 +134,24 @@ export default function PaymentTimeline({ employee, currentDate = new Date() }: 
       }
       // Check if standard monthly payment milestone date (Dia 15 de cada mês)
       else if (dayNum === 15) {
-        if (isExplicitlyPaid) {
+        const ccspStatus = computeCcspBatchStatus(employee, dateStr);
+        if (ccspStatus.totalAmount > 0) {
+          if (ccspStatus.isFullyPaid) {
+            itemType = 'paid';
+            title = 'Pagamento Efetuado';
+            subtitle = isManagement
+              ? `Diárias & Festas (${formatCurrency(ccspStatus.totalAmount)})`
+              : `CCSP (${formatCurrency(ccspStatus.totalAmount)})`;
+          } else if (ccspStatus.isPartiallyPaid || ccspStatus.hasPaidFlagWithPendingBalance) {
+            itemType = 'payment_forecast';
+            title = 'Saldo Restante';
+            subtitle = `Falta ${formatCurrency(ccspStatus.remainingAmount)}`;
+          } else {
+            itemType = 'payment_forecast';
+            title = 'Previsão Pagamento';
+            subtitle = `Dia 15 (${formatCurrency(ccspStatus.totalAmount)})`;
+          }
+        } else if (isExplicitlyPaid) {
           itemType = 'paid';
           title = 'Pagamento Efetuado';
           subtitle = isManagement ? 'Diárias & Festas (Gestão)' : 'Diárias CCSP Mês';
@@ -438,9 +455,9 @@ export default function PaymentTimeline({ employee, currentDate = new Date() }: 
                 <div className="bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20 text-[11px] text-amber-300 space-y-1">
                   <p className="font-bold">📌 Regra de Pagamento CCSP & Virada de Mês:</p>
                   <ul className="list-disc list-inside text-[10px] space-y-1 text-amber-200/90 leading-normal">
-                    <li>O pagamento das diárias CCSP é retroativo, realizado no <strong>dia 15 do mês seguinte</strong>.</li>
-                    <li><strong>Virada em Fim de Semana:</strong> Se o mês virar de sábado para domingo, as diárias desse fim de semana entram no ciclo do mês que entrou e são pagas no dia 15 do outro mês subsequente.</li>
-                    <li><strong>Feriadão Prolongado:</strong> Se a virada de mês ocorrer colada em feriado prolongado, todo o bloco do feriadão é computado no ciclo do mês que entrou.</li>
+                    <li>O pagamento das diárias CCSP é realizado no <strong>dia 15 do mês seguinte</strong> ao fechamento.</li>
+                    <li><strong>Virada com Feriado Prolongado / Emenda:</strong> Quando um feriado nacional (incluindo dias de emenda em terças ou quintas-feiras) se conecta ao fim de semana cruzando a virada do mês, todo o bloco conectado entra no lote do <strong>dia 15 do mês que se inicia</strong> (ex.: 31/10, 01/11 e 02/11 Finados vencem juntos em 15/11).</li>
+                    <li><strong>Virada Comum (sem feriado):</strong> Finais de semana comuns na virada do mês seguem a separação normal de fechamento mensal.</li>
                   </ul>
                 </div>
               </div>
