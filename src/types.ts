@@ -130,6 +130,13 @@ export interface Employee {
   emergencyContactPhone?: string;
   paymentGroup?: 'general' | 'management'; // 'general': Festas na 2ª e CCSP dia 15 | 'management': Festas e CCSP dia 15
   paidDates?: string[]; // Array of YYYY-MM-DD or milestone date strings marked as paid by admin
+  ccspSettlements?: Record<string, CcspSettlementRecord>; // Keyed by dueDateStr e.g. "2026-11-15"
+}
+
+export interface CcspSettlementRecord {
+  paidAmount: number;
+  settledWorkDayKeys: string[];
+  paidAt: string;
 }
 
 export type ViewMode = 'grid' | 'list' | 'calendar' | 'parties' | 'dashboard' | 'master_schedule' | 'payments' | 'kpis';

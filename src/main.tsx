@@ -81,13 +81,15 @@ if ('serviceWorker' in navigator) {
   }
 }
 
-(window as any).__REACT_MOUNTED__ = true;
+if (!(window as any).__PREVENT_REACT_MOUNT__) {
+  (window as any).__REACT_MOUNTED__ = true;
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </StrictMode>,
-);
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </StrictMode>,
+  );
+}
 
