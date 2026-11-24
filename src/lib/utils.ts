@@ -265,13 +265,17 @@ export interface WorkDayPayBreakdown {
   total: number;
 }
 
+export function hasCustomPayValue(d: Pick<WorkDay, 'isReducedHours' | 'isCustomPay' | 'customTotalPay'>): boolean {
+  return Boolean((d.isReducedHours || d.isCustomPay) && d.customTotalPay !== undefined && d.customTotalPay >= 0);
+}
+
 /**
  * Retorna o detalhamento completo (base, pernoite, horas extras e total) de uma diária.
  */
 export function getWorkDayPayBreakdown(d: WorkDay, employee: Employee): WorkDayPayBreakdown {
   const isParty = d.type === 'party';
-  const baseRate = d.isReducedHours && d.customTotalPay !== undefined && d.customTotalPay >= 0
-    ? d.customTotalPay
+  const baseRate = hasCustomPayValue(d)
+    ? d.customTotalPay!
     : isParty
       ? (d.partyRateAtTime !== undefined ? d.partyRateAtTime : employee.partyRate)
       : (d.dailyRateAtTime !== undefined ? d.dailyRateAtTime : employee.dailyRate);
@@ -336,7 +340,7 @@ export function getWorkDayLevel(d: WorkDay, employee: Employee): EmployeeLevel {
     return sortedPromos[0].previousLevel;
   }
 
-  if (!d.isReducedHours) {
+  if (!d.isReducedHours && !d.isCustomPay) {
     if (d.type === 'party' && d.partyRateAtTime !== undefined && d.partyRateAtTime !== employee.partyRate) {
       const inferred = STANDARD_PARTY_TO_LEVEL[d.partyRateAtTime];
       if (inferred) return inferred;
@@ -364,6 +368,40 @@ export interface CcspBatchStatus {
   bridgeDatesInBatch: string[];
 }
 
+export interface EffectiveCcspDueDateInfo extends CcspCycleInfo {
+  batchKey: string; // "yyyy-MM-15" do lote financeiro mensal em que a diária entra
+  isCustomDueDate: boolean;
+}
+
+/**
+ * Resolve o vencimento efetivo de uma diária CCSP considerando sobrescrita manual (customPaymentDueDate).
+ * Caso customPaymentDueDate seja definida, a diária entra no lote mensal correspondente (yyyy-MM-15).
+ */
+export function getCcspWorkDayEffectiveDueDate(wd: Pick<WorkDay, 'date' | 'customPaymentDueDate'>): EffectiveCcspDueDateInfo {
+  const base = getCcspCycleAndDueDate(wd.date);
+  if (wd.customPaymentDueDate && /^\d{4}-\d{2}-\d{2}$/.test(wd.customPaymentDueDate)) {
+    const parsed = parseISO(`${wd.customPaymentDueDate}T12:00:00`);
+    if (!isNaN(parsed.getTime())) {
+      return {
+        ...base,
+        dueDate: parsed,
+        dueDateStr: wd.customPaymentDueDate,
+        batchKey: `${wd.customPaymentDueDate.slice(0, 7)}-15`,
+        dueDateFormatted: format(parsed, 'dd/MM/yyyy'),
+        isCustomDueDate: true,
+        isMonthTurnBridge: false,
+        isPulledFromNextMonth: false,
+        isRollover: false
+      };
+    }
+  }
+  return {
+    ...base,
+    batchKey: base.dueDateStr,
+    isCustomDueDate: false
+  };
+}
+
 /**
  * Calcula e concilia o status de pagamento de um lote CCSP (ex: "2026-11-15"),
  * detectando automaticamente lotes já quitados que receberam novas diárias ou dias da virada.
@@ -373,7 +411,7 @@ export function computeCcspBatchStatus(employee: Employee, dueDateStr: string): 
     .filter(wd => {
       if (wd.isCancelled || !wd.date || wd.type !== 'common') return false;
       try {
-        return getCcspCycleAndDueDate(wd.date).dueDateStr === dueDateStr;
+        return getCcspWorkDayEffectiveDueDate(wd).batchKey === dueDateStr;
       } catch {
         return false;
       }
@@ -404,7 +442,7 @@ export function computeCcspBatchStatus(employee: Employee, dueDateStr: string): 
   const bridgeDatesInBatch: string[] = [];
 
   matchingDays.forEach(d => {
-    const info = getCcspCycleAndDueDate(d.date);
+    const info = getCcspWorkDayEffectiveDueDate(d);
     const shortDate = format(info.workDate, 'dd/MM');
     if (info.isPulledFromNextMonth && !pulledFromNextMonthDates.includes(shortDate)) {
       pulledFromNextMonthDates.push(shortDate);
@@ -516,8 +554,7 @@ export function isPartyWorkDayPaid(pd: WorkDay, employee: Employee): boolean {
   const sameDayPartyCount = allPartyDays.filter(p => p.date === pd.date).length;
   if (sameDayPartyCount <= 1) {
     try {
-      const isManagement = employee.paymentGroup === 'management';
-      const dueDateStr = format(getPartyPaymentDueDate(pd.date, isManagement), 'yyyy-MM-dd');
+      const dueDateStr = format(getPartyPaymentDueDateForWorkDay(pd, employee), 'yyyy-MM-dd');
       if (paidDates.includes(dueDateStr) || paidDates.includes(pd.date)) {
         return true;
       }
@@ -534,8 +571,8 @@ export function isPartyWorkDayPaid(pd: WorkDay, employee: Employee): boolean {
  */
 export function isCcspWorkDayPaid(wd: WorkDay, employee: Employee): boolean {
   try {
-    const { dueDateStr } = getCcspCycleAndDueDate(wd.date);
-    const batchStatus = computeCcspBatchStatus(employee, dueDateStr);
+    const { batchKey } = getCcspWorkDayEffectiveDueDate(wd);
+    const batchStatus = computeCcspBatchStatus(employee, batchKey);
     if (batchStatus.isFullyPaid) return true;
     if (batchStatus.alreadyPaidAmount <= 0 && !batchStatus.hasPaidFlagWithPendingBalance) {
       return false;
@@ -578,6 +615,45 @@ export function getPartyPaymentDueDate(partyDateStrOrObj: string | Date, isManag
 
   const nextMon = nextMonday(dateObj);
   return getNextBusinessDay(nextMon);
+}
+
+/**
+ * Verifica se o registro de trabalho corresponde ao turno especial Réveillon Virada (31/12 20h às 04h),
+ * que por padrão entra no fechamento de dezembro e vence no dia 15 de janeiro.
+ */
+export function isReveillonViradaWorkDay(
+  pd?: Pick<WorkDay, 'date' | 'partyId' | 'partyName'> | null
+): boolean {
+  if (!pd) return false;
+  const name = (pd.partyName || '').toLowerCase();
+  const id = (pd.partyId || '').toLowerCase();
+  return id.startsWith('p_rev_') || name.includes('virada');
+}
+
+/**
+ * Resolve o vencimento efetivo de um turno extra / festa considerando sobrescrita manual (customPaymentDueDate)
+ * e o padrão do turno Réveillon Virada (fechamento de dezembro -> dia 15 do mês seguinte).
+ */
+export function getPartyPaymentDueDateForWorkDay(
+  pd: Pick<WorkDay, 'date' | 'customPaymentDueDate' | 'partyId' | 'partyName'>,
+  employeeOrIsMgmt: Employee | boolean = false
+): Date {
+  if (pd.customPaymentDueDate && /^\d{4}-\d{2}-\d{2}$/.test(pd.customPaymentDueDate)) {
+    const parsed = parseISO(`${pd.customPaymentDueDate}T12:00:00`);
+    if (!isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+  if (isReveillonViradaWorkDay(pd) && pd.date) {
+    const dateObj = parseISO(pd.date.includes('T') ? pd.date : `${pd.date}T12:00:00`);
+    if (!isNaN(dateObj.getTime())) {
+      return setDate(addMonths(startOfMonth(dateObj), 1), 15);
+    }
+  }
+  const isManagement = typeof employeeOrIsMgmt === 'boolean'
+    ? employeeOrIsMgmt
+    : employeeOrIsMgmt.paymentGroup === 'management';
+  return getPartyPaymentDueDate(pd.date, isManagement);
 }
 
 /**
