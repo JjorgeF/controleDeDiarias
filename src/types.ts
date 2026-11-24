@@ -34,10 +34,16 @@ export interface PartyDetails {
   updatedAt?: string;
 }
 
+export type SpecialPayMode = 'default_party' | 'default_daily' | 'fixed' | 'bonus';
+
 export interface PartyConfig {
   id: string;
   name: string;
   time?: string;
+  isSpecialShift?: boolean;
+  customPayMode?: SpecialPayMode;
+  customPayValue?: number;
+  customPaymentDueDate?: string; // YYYY-MM-DD
 }
 
 export interface DayConfig {
@@ -78,8 +84,10 @@ export interface WorkDay {
   isPaid?: boolean;
   paidAt?: string;
   isReducedHours?: boolean; // When employee works reduced / custom agreed hours
-  customHoursText?: string; // e.g. "01h30m" or "1h30" or "4h"
+  isCustomPay?: boolean; // When admin sets a custom agreed payment value (without reduced hours)
+  customHoursText?: string; // e.g. "01h30m" or "1h30" or "4h" or label
   customTotalPay?: number; // Total agreed payment e.g. 45.00
+  customPaymentDueDate?: string; // YYYY-MM-DD override for payment due date / batch
   isOvernight?: boolean; // When employee works an overnight shift
   overnightHoursText?: string; // e.g. "22h às 08h"
   overnightPay?: number; // Additional overnight pay added to standard rate
