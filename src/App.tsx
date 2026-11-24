@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { 
   collection, 
@@ -221,6 +221,102 @@ export default function App() {
     checkCustomLogo();
   }, []);
 
+  const accessLogInFlightRef = useRef<Set<string>>(new Set());
+
+  const recordDailyAccessLog = useCallback(async (targetUser: User | null, userIsAdmin: boolean) => {
+    if (!targetUser || !targetUser.email || !db) return;
+    const emailRaw = targetUser.email.trim();
+    const emailLower = emailRaw.toLowerCase();
+    const todayKey = format(new Date(), 'yyyy-MM-dd');
+    const storageKey = `logged_${emailLower}_${todayKey}`;
+
+    const alreadyLoggedToday = (() => {
+      try {
+        if (localStorage.getItem(storageKey)) return true;
+      } catch {
+        // Ignore storage restrictions
+      }
+      try {
+        if (sessionStorage.getItem(storageKey)) return true;
+      } catch {
+        // Ignore storage restrictions
+      }
+      return false;
+    })();
+
+    if (alreadyLoggedToday || accessLogInFlightRef.current.has(storageKey)) {
+      return;
+    }
+
+    accessLogInFlightRef.current.add(storageKey);
+
+    const markLogged = () => {
+      try {
+        localStorage.setItem(storageKey, 'true');
+      } catch {
+        // Ignore storage restrictions
+      }
+      try {
+        sessionStorage.setItem(storageKey, 'true');
+      } catch {
+        // Ignore storage restrictions
+      }
+    };
+
+    try {
+      const nowIso = new Date().toISOString();
+      const logData = {
+        type: 'access_log',
+        email: emailRaw,
+        name: targetUser.displayName || emailRaw.split('@')[0],
+        timestamp: nowIso
+      };
+
+      // Tentativa 1: Escreve na coleção 'cancellations' (que permite isSignedIn)
+      try {
+        const logDocId = `access_log_${emailRaw.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        const logRef = doc(db, 'cancellations', logDocId);
+        await setDoc(logRef, logData);
+        markLogged();
+      } catch (err: any) {
+        console.warn("Falha ao salvar log em 'cancellations', tentando fallback:", err);
+
+        if (userIsAdmin) {
+          const settingsLogRef = doc(db, 'settings', 'access_logs');
+          const logId = `log_${emailRaw.replace(/[^a-zA-Z0-9]/g, '_')}`;
+          await setDoc(settingsLogRef, {
+            [logId]: {
+              email: emailRaw,
+              name: targetUser.displayName || emailRaw.split('@')[0],
+              timestamp: nowIso
+            }
+          }, { merge: true });
+          markLogged();
+        } else {
+          const qEmp = query(collection(db, 'employees'), where('email', '==', emailLower));
+          const querySnapshot = await getDocs(qEmp);
+          if (!querySnapshot.empty) {
+            const empDoc = querySnapshot.docs[0];
+            const empData = empDoc.data() as Employee;
+            if (empData.status !== 'inactive') {
+              const currentAvails = empData.availabilities || [];
+              const loginToken = `login_${nowIso}`;
+              const cleanAvails = currentAvails.filter(av => !av.startsWith('login_'));
+              await updateDoc(doc(db, 'employees', empDoc.id), {
+                availabilities: [...cleanAvails, loginToken]
+              });
+            }
+            markLogged();
+          }
+        }
+      }
+    } catch (logErr) {
+      console.error("Erro geral ao salvar log de acesso:", logErr);
+    } finally {
+      accessLogInFlightRef.current.delete(storageKey);
+    }
+  }, [db]);
+
   useEffect(() => {
     if (!auth) {
       setAdminCheckLoading(false);
@@ -235,68 +331,12 @@ export default function App() {
         try {
           // Verifica se o documento com o email do usuário existe na coleção usuarios_admin
           const adminDoc = await getDoc(doc(db, 'usuarios_admin', user.email));
-          setIsAdmin(adminDoc.exists());
+          const userIsAdmin = adminDoc.exists();
+          setIsAdmin(userIsAdmin);
 
-          // Registra o log de acesso se ainda não tiver registrado nesta sessão do navegador
-          const sessionLoggedKey = `logged_${user.email}_${new Date().toISOString().split('T')[0]}`;
-          if (!sessionStorage.getItem(sessionLoggedKey)) {
-            try {
-              const logData = {
-                type: 'access_log',
-                email: user.email,
-                name: user.displayName || user.email.split('@')[0],
-                timestamp: new Date().toISOString()
-              };
+          // Registra o log de acesso (1x por dia)
+          await recordDailyAccessLog(user, userIsAdmin);
 
-              // Tentativa 1: Escreve na coleção 'cancellations' (que permite isSignedIn)
-              try {
-                const logDocId = `access_log_${user.email.replace(/[^a-zA-Z0-9]/g, '_')}`;
-                const logRef = doc(db, 'cancellations', logDocId);
-                await setDoc(logRef, logData);
-                console.log("Log de acesso salvo na coleção 'cancellations' com sucesso.");
-                sessionStorage.setItem(sessionLoggedKey, 'true');
-              } catch (err: any) {
-                console.warn("Falha ao salvar log em 'cancellations', tentando fallback:", err);
-
-                // Fallback:
-                if (adminDoc.exists()) {
-                  // Se for admin, grava em settings/access_logs
-                  const settingsLogRef = doc(db, 'settings', 'access_logs');
-                  const logId = `log_${user.email.replace(/[^a-zA-Z0-9]/g, '_')}`;
-                  await setDoc(settingsLogRef, {
-                    [logId]: {
-                      email: user.email,
-                      name: user.displayName || user.email.split('@')[0],
-                      timestamp: new Date().toISOString()
-                    }
-                  }, { merge: true });
-                  console.log("Log de acesso do admin salvo em settings/access_logs.");
-                  sessionStorage.setItem(sessionLoggedKey, 'true');
-                } else {
-                  // Se for funcionário, grava em seu próprio registro na lista de availabilities
-                  const qEmp = query(collection(db, 'employees'), where('email', '==', user.email.trim().toLowerCase()));
-                  const querySnapshot = await getDocs(qEmp);
-                  if (!querySnapshot.empty) {
-                    const empDoc = querySnapshot.docs[0];
-                    const empData = empDoc.data() as Employee;
-                    const currentAvails = empData.availabilities || [];
-                    const loginToken = `login_${new Date().toISOString()}`;
-                    
-                    // Mantém apenas o ÚLTIMO log de login no array de availabilities para não poluir
-                    const cleanAvails = currentAvails.filter(av => !av.startsWith('login_'));
-                    
-                    await updateDoc(doc(db, 'employees', empDoc.id), {
-                      availabilities: [...cleanAvails, loginToken]
-                    });
-                    console.log("Log de acesso do funcionário salvo em availabilities:", loginToken);
-                    sessionStorage.setItem(sessionLoggedKey, 'true');
-                  }
-                }
-              }
-            } catch (logErr) {
-              console.error("Erro geral ao salvar log de acesso:", logErr);
-            }
-          }
           // Sync push subscription for PWA background notifications if permission was granted
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             const myEmailLower = (user.email || '').trim().toLowerCase();
@@ -319,7 +359,25 @@ export default function App() {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [recordDailyAccessLog]);
+
+  // Atualiza o log diário quando o usuário reabre uma aba/PWA que ficou aberta em segundo plano
+  useEffect(() => {
+    if (!user || adminCheckLoading) return;
+
+    const handleResume = () => {
+      if (document.visibilityState === 'visible') {
+        recordDailyAccessLog(user, isAdmin);
+      }
+    };
+
+    window.addEventListener('focus', handleResume);
+    document.addEventListener('visibilitychange', handleResume);
+    return () => {
+      window.removeEventListener('focus', handleResume);
+      document.removeEventListener('visibilitychange', handleResume);
+    };
+  }, [user, isAdmin, adminCheckLoading, recordDailyAccessLog]);
 
   useEffect(() => {
     if (!user || !db || adminCheckLoading) {
@@ -827,6 +885,9 @@ export default function App() {
     try {
       const empRef = doc(db, 'employees', employeeId);
       await updateDoc(empRef, sanitizedFields);
+      if (!isAdmin) {
+        recordDailyAccessLog(user, false);
+      }
     } catch (error: any) {
       console.error("Erro ao atualizar dados do funcionário:", error);
       
@@ -1125,7 +1186,7 @@ export default function App() {
       
       const earnings = monthDays.reduce((acc, day) => {
         let dayBase = 0;
-        if (day.isReducedHours && day.customTotalPay !== undefined && day.customTotalPay >= 0) {
+        if ((day.isReducedHours || day.isCustomPay) && day.customTotalPay !== undefined && day.customTotalPay >= 0) {
           dayBase = day.customTotalPay;
         } else if (day.type === 'common') {
           dayBase = day.dailyRateAtTime !== undefined ? day.dailyRateAtTime : emp.dailyRate;
@@ -1158,6 +1219,11 @@ export default function App() {
             let typeLabel = workDay.type === 'common' ? 'CCSP' : (workDay.partyName ? `Festa (${workDay.partyName})` : 'Festa');
             if (workDay.isReducedHours) {
               typeLabel += ` [Reduzido: ${workDay.customHoursText || 'Acordo'} - R$${workDay.customTotalPay || 0}]`;
+            } else if (workDay.isCustomPay) {
+              typeLabel += ` [Valor Combinado: ${workDay.customHoursText || 'Acordo'} - R$${workDay.customTotalPay || 0}]`;
+            }
+            if (workDay.customPaymentDueDate) {
+              typeLabel += ` [Venc. Ajustado: ${workDay.customPaymentDueDate}]`;
             }
             if (workDay.isOvernight) {
               typeLabel += ` [Pernoite: ${workDay.overnightHoursText || 'Acordo'} +R$${workDay.overnightPay || 0}]`;
@@ -1239,6 +1305,9 @@ export default function App() {
 
       const empRef = doc(db, 'employees', employeeId);
       await updateDoc(empRef, { availabilities: finalAvailabilities });
+      if (!isAdmin) {
+        recordDailyAccessLog(user, false);
+      }
     } catch (error: any) {
       console.error("Error updating availabilities:", error);
       alert("Erro ao salvar suas disponibilidades: " + (error.message || "Verifique sua conexão e permissões do banco de dados."));
