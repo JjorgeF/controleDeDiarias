@@ -24,7 +24,7 @@ import {
   ListChecks
 } from 'lucide-react';
 import { Employee, WorkDay, CcspSettlementRecord } from '../types';
-import { formatCurrency, cn, getPartyPaymentDueDate, getCcspCycleAndDueDate, computeCcspBatchStatus, getWorkDayUniqueKey } from '../lib/utils';
+import { formatCurrency, cn, getPartyPaymentDueDateForWorkDay, getCcspWorkDayEffectiveDueDate, computeCcspBatchStatus, getWorkDayUniqueKey, isReveillonViradaWorkDay } from '../lib/utils';
 import { AnimatedCurrency } from './AnimatedCurrency';
 import PaymentAuditView from './PaymentAuditView';
 import { db } from '../lib/firebase';
@@ -88,6 +88,7 @@ interface CCSPPaymentItem {
   isPaid: boolean;
   isPartiallyPaid: boolean;
   hasPaidFlagWithPendingBalance: boolean;
+  hasCustomPayOrDueDate?: boolean;
   workDays: WorkDay[];
 }
 
@@ -249,8 +250,9 @@ export default function PaymentsView({
       const matchingCcspDays = batchStatus.matchingDays;
 
       if (matchingCcspDays.length > 0) {
-        const firstCycleInfo = getCcspCycleAndDueDate(matchingCcspDays[0].date);
+        const firstCycleInfo = getCcspWorkDayEffectiveDueDate(matchingCcspDays[0]);
         const hasRolloverDays = batchStatus.pulledFromNextMonthDates.length > 0 || batchStatus.bridgeDatesInBatch.length > 0;
+        const hasCustomPayOrDueDate = matchingCcspDays.some(d => Boolean(d.isCustomPay || d.isReducedHours || d.customPaymentDueDate));
         const unpaidDatesFormatted = batchStatus.unpaidDays.map(d => {
           try {
             return format(parseISO(d.date), 'dd/MM');
@@ -282,6 +284,7 @@ export default function PaymentsView({
           dueDateFormatted: `15/${format(currentMonth, 'MM/yyyy')}`,
           referenceCycleText: `Competência: ${firstCycleInfo.cycleMonthName}`,
           hasRolloverDays,
+          hasCustomPayOrDueDate,
           pulledFromNextMonthDates: batchStatus.pulledFromNextMonthDates,
           bridgeDatesInBatch: batchStatus.bridgeDatesInBatch,
           unpaidDatesFormatted,
@@ -293,13 +296,12 @@ export default function PaymentsView({
         });
       }
 
-      // 2. Festas e Eventos com vencimento neste mês (Segunda-feira seguinte para equipe / Dia 15 para gestão)
+      // 2. Festas e Eventos com vencimento neste mês (Segunda-feira seguinte para equipe / Dia 15 para gestão / ou customPaymentDueDate)
       const allPartyDays = (emp.workDays || []).filter(wd => !wd.isCancelled && wd.date && wd.type === 'party');
       allPartyDays.forEach((pd, idx) => {
         try {
           const partyDateObj = parseISO(pd.date.includes('T') ? pd.date : `${pd.date}T12:00:00`);
-          const isManagement = emp.paymentGroup === 'management';
-          const forecastDate = getPartyPaymentDueDate(partyDateObj, isManagement);
+          const forecastDate = getPartyPaymentDueDateForWorkDay(pd, emp);
 
           // Em Regime de Caixa (Vencimento), a festa aparece no mês em que vence!
           if (!isSameMonth(forecastDate, currentMonth)) {
@@ -315,7 +317,7 @@ export default function PaymentsView({
                          ((emp.paidDates || []).includes(dueDateStr) && allPartyDays.filter(p => p.date === pd.date).length === 1) ||
                          ((emp.paidDates || []).includes(pd.date) && allPartyDays.filter(p => p.date === pd.date).length === 1);
 
-          let rate = pd.isReducedHours && pd.customTotalPay !== undefined && pd.customTotalPay >= 0
+          let rate = (pd.isReducedHours || pd.isCustomPay) && pd.customTotalPay !== undefined && pd.customTotalPay >= 0
             ? pd.customTotalPay
             : (pd.partyRateAtTime !== undefined ? pd.partyRateAtTime : emp.partyRate);
           if (pd.isOvernight && pd.overnightPay !== undefined && pd.overnightPay > 0) {
@@ -334,7 +336,7 @@ export default function PaymentsView({
           );
 
           partyList.push({
-            id: `party-${emp.id}-${pd.partyId || idx}-${pd.date}`,
+            id: `party-${emp.id}-${pd.partyId || 'party'}-${pd.date}-${idx}`,
             type: 'party',
             employee: emp,
             partyName: pd.partyName || 'Evento / Festa',
@@ -1008,6 +1010,11 @@ export default function PaymentsView({
                             Dupla Escala: Inclui diária em dia com evento ({item.sameDayWithPartyDates.join(', ')})
                           </span>
                         )}
+                        {item.hasCustomPayOrDueDate && (
+                          <span className="text-[9px] text-emerald-300 font-bold block mt-0.5">
+                            Inclui ajuste de valor ou vencimento personalizado (veja em Detalhar Dias)
+                          </span>
+                        )}
                       </div>
                       <div className="text-right shrink-0">
                         {hasPendingDelta ? (
@@ -1247,18 +1254,25 @@ export default function PaymentsView({
                       <div className="flex items-center justify-between text-xs pt-1 border-t border-brand-border/40">
                         <span className="text-gray-400 font-semibold flex items-center gap-1">
                           <Clock size={12} className="text-brand-primary" />
-                          Previsão Pgto {emp.paymentGroup === 'management' ? '(Dia 15)' : '(Segunda)'}:
+                          Previsão Pgto {item.workDay.customPaymentDueDate ? '(Ajustado)' : (emp.paymentGroup === 'management' || isReveillonViradaWorkDay(item.workDay)) ? '(Dia 15)' : '(Segunda)'}:
                         </span>
                         <strong className={cn(
-                          "font-bold",
+                          "font-bold tabular-nums",
                           item.isPaid ? "text-emerald-400" : isDueDatePast ? "text-amber-400" : "text-brand-text"
                         )}>
                           {item.dueDateFormatted}
                         </strong>
                       </div>
                       <div className="flex items-center justify-between text-xs pt-1 border-t border-brand-border/40">
-                        <span className="text-gray-400 font-semibold">Valor do Cachê:</span>
-                        <strong className="text-base font-black text-brand-primary">
+                        <span className="text-gray-400 font-semibold flex items-center gap-1.5">
+                          <span>Valor do Cachê:</span>
+                          {item.workDay.isCustomPay && !item.workDay.isReducedHours && (
+                            <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                              Combinado
+                            </span>
+                          )}
+                        </span>
+                        <strong className="text-base font-black text-brand-primary tabular-nums">
                           {formatCurrency(item.amount)}
                         </strong>
                       </div>

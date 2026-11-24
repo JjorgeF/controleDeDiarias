@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { parseISO, isSunday } from 'date-fns';
-import { Clock, ChevronDown, Check, Sun, CalendarDays, ShieldCheck } from 'lucide-react';
+import { Clock, ChevronDown, Check, Sun, CalendarDays, ShieldCheck, Sparkles } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -24,6 +24,12 @@ export const SUNDAY_SHIFTS: ShiftOption[] = [
   { label: 'Brinquedoteca', time: '9h às 18h', value: 'Brinquedoteca (9h - 18h)', category: 'Domingo' },
   { label: '5 a 10 anos', time: '10h às 18h', value: '5 a 10 anos (10h - 18h)', category: 'Domingo' },
   { label: '+11 anos', time: '10h às 18h', value: '+11 anos (10h - 18h)', category: 'Domingo' },
+];
+
+export const REVEILLON_SHIFTS: ShiftOption[] = [
+  { label: 'Réveillon Dia', time: '9h às 18h', value: 'Réveillon Dia (9h - 18h)', category: 'Turnos Réveillon' },
+  { label: 'Réveillon Virada', time: '20h às 4h', value: 'Réveillon Virada (20h - 4h)', category: 'Turnos Réveillon' },
+  { label: 'Ano Novo', time: '10h às 18h', value: 'Ano Novo (10h - 18h)', category: 'Turnos Réveillon' },
 ];
 
 export const LEGACY_SHIFTS: ShiftOption[] = [
@@ -97,7 +103,9 @@ export default function ShiftSelector({ currentShift = 'Definir Horário', dateS
     setIsOpen(!isOpen);
   };
 
-  const allOptions = [...SUNDAY_SHIFTS, ...STANDARD_SHIFTS, ...LEGACY_SHIFTS];
+  const isReveillonDate = Boolean(dateStr && (dateStr.endsWith('-12-31') || dateStr.endsWith('-01-01')));
+
+  const allOptions = [...SUNDAY_SHIFTS, ...STANDARD_SHIFTS, ...REVEILLON_SHIFTS, ...LEGACY_SHIFTS];
   const selectedOption = isCoordination
     ? { label: 'Coordenação', time: getCoordinationTime(currentShift) || 'Horário opcional', value: currentShift }
     : allOptions.find(opt => opt.value === currentShift);
@@ -169,6 +177,42 @@ export default function ShiftSelector({ currentShift = 'Definir Horário', dateS
               dropUp ? "bottom-full mb-1.5" : "top-full mt-1.5"
             )}
           >
+            {/* Turnos Réveillon (highlighted first when 31/12 or 01/01) */}
+            {isReveillonDate && (
+              <div className="p-1.5 bg-amber-500/5">
+                <div className="px-2 py-1 text-[9px] font-extrabold uppercase tracking-wider text-amber-300 flex items-center gap-1 bg-amber-500/15 border border-amber-500/25 rounded-md mb-1.5">
+                  <Sparkles className="w-2.5 h-2.5 text-amber-300" />
+                  Turnos Réveillon (Recomendado)
+                </div>
+                <div className="space-y-1">
+                  {REVEILLON_SHIFTS.map((opt) => {
+                    const isSelected = currentShift === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => handleSelect(opt.value)}
+                        className={cn(
+                          "w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] flex items-center justify-between transition-all",
+                          isSelected
+                            ? "bg-amber-400 text-slate-950 font-bold shadow-md ring-1 ring-amber-300"
+                            : "text-brand-text hover:bg-amber-500/15 hover:text-amber-200"
+                        )}
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-semibold">{opt.label}</span>
+                          <span className={cn("text-[10px]", isSelected ? "text-slate-900/90 font-medium" : "text-brand-muted")}>
+                            {opt.time}
+                          </span>
+                        </div>
+                        {isSelected && <Check className="w-3.5 h-3.5 text-slate-950 shrink-0 ml-1" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Primary group */}
             <div className="p-1.5">
               <div className="px-2 py-1 text-[9px] font-extrabold uppercase tracking-wider text-brand-primary flex items-center gap-1 bg-brand-primary/15 border border-brand-primary/20 backdrop-blur-md rounded-md mb-1.5">
@@ -326,6 +370,42 @@ export default function ShiftSelector({ currentShift = 'Definir Horário', dateS
                 })}
               </div>
             </div>
+
+            {/* Turnos Réveillon when not 31/12 or 01/01 */}
+            {!isReveillonDate && (
+              <div className="p-1.5">
+                <div className="px-2 py-1 text-[9px] font-extrabold uppercase tracking-wider text-amber-300 flex items-center gap-1 bg-amber-500/15 border border-amber-500/20 rounded-md mb-1.5">
+                  <Sparkles className="w-2.5 h-2.5 text-amber-300" />
+                  Turnos Réveillon / Fim de Ano
+                </div>
+                <div className="space-y-1">
+                  {REVEILLON_SHIFTS.map((opt) => {
+                    const isSelected = currentShift === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => handleSelect(opt.value)}
+                        className={cn(
+                          "w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] flex items-center justify-between transition-all",
+                          isSelected
+                            ? "bg-amber-400 text-slate-950 font-bold shadow-md ring-1 ring-amber-300"
+                            : "text-brand-text hover:bg-amber-500/15 hover:text-amber-200"
+                        )}
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-semibold">{opt.label}</span>
+                          <span className={cn("text-[10px]", isSelected ? "text-slate-900/90 font-medium" : "text-brand-muted")}>
+                            {opt.time}
+                          </span>
+                        </div>
+                        {isSelected && <Check className="w-3.5 h-3.5 text-slate-950 shrink-0 ml-1" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Legacy group if selected */}
             {showLegacy && (

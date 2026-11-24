@@ -155,10 +155,10 @@ export function KpisView({ employees, monthConfigs, promotions = [], currentMont
           levelCounts[level] = (levelCounts[level] || 0) + 1;
         }
 
-        let dailyRate = wd.isReducedHours && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
+        let dailyRate = (wd.isReducedHours || wd.isCustomPay) && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
           ? wd.customTotalPay
           : (wd.dailyRateAtTime !== undefined ? wd.dailyRateAtTime : (effectiveEmp.dailyRate || 0));
-        let partyRate = wd.isReducedHours && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
+        let partyRate = (wd.isReducedHours || wd.isCustomPay) && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
           ? wd.customTotalPay
           : (wd.partyRateAtTime !== undefined ? wd.partyRateAtTime : (effectiveEmp.partyRate || 0));
         if (wd.isOvernight && wd.overnightPay !== undefined && wd.overnightPay > 0) {
@@ -261,10 +261,10 @@ export function KpisView({ employees, monthConfigs, promotions = [], currentMont
       (effectiveEmp.workDays || []).forEach(wd => {
         if (!wd.date.startsWith(prevKey)) return;
 
-        let dailyRate = wd.isReducedHours && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
+        let dailyRate = (wd.isReducedHours || wd.isCustomPay) && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
           ? wd.customTotalPay
           : (wd.dailyRateAtTime !== undefined ? wd.dailyRateAtTime : (effectiveEmp.dailyRate || 0));
-        let partyRate = wd.isReducedHours && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
+        let partyRate = (wd.isReducedHours || wd.isCustomPay) && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
           ? wd.customTotalPay
           : (wd.partyRateAtTime !== undefined ? wd.partyRateAtTime : (effectiveEmp.partyRate || 0));
         if (wd.isOvernight && wd.overnightPay !== undefined && wd.overnightPay > 0) {
@@ -362,10 +362,10 @@ export function KpisView({ employees, monthConfigs, promotions = [], currentMont
         (effectiveEmp.workDays || []).forEach(wd => {
           if (!wd.date.startsWith(mKey)) return;
 
-          let dailyRate = wd.isReducedHours && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
+          let dailyRate = (wd.isReducedHours || wd.isCustomPay) && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
             ? wd.customTotalPay
             : (wd.dailyRateAtTime !== undefined ? wd.dailyRateAtTime : (effectiveEmp.dailyRate || 0));
-          let partyRate = wd.isReducedHours && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
+          let partyRate = (wd.isReducedHours || wd.isCustomPay) && wd.customTotalPay !== undefined && wd.customTotalPay >= 0
             ? wd.customTotalPay
             : (wd.partyRateAtTime !== undefined ? wd.partyRateAtTime : (effectiveEmp.partyRate || 0));
           if (wd.isOvernight && wd.overnightPay !== undefined && wd.overnightPay > 0) {

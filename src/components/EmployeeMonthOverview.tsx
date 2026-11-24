@@ -4,7 +4,7 @@ import {
   parseISO 
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { 
+import {
   Calendar, 
   CheckCircle2, 
   Clock, 
@@ -17,14 +17,15 @@ import {
   Sparkles,
   TrendingUp,
   Building2,
-  PartyPopper
+  PartyPopper,
+  DollarSign
 } from 'lucide-react';
 import { Employee, WorkDay, DayConfig } from '../types';
 import {
   cn,
   formatCurrency,
-  getCcspCycleAndDueDate,
-  getPartyPaymentDueDate,
+  getCcspWorkDayEffectiveDueDate,
+  getPartyPaymentDueDateForWorkDay,
   getWorkDayPayAmount,
   isCcspWorkDayPaid,
   isPartyWorkDayPaid
@@ -61,7 +62,6 @@ export const EmployeeMonthOverview: React.FC<EmployeeMonthOverviewProps> = ({
 
   // Enriquece as escalas confirmadas com valor individual, status de pagamento e previsão
   const scheduledItemsWithMeta = useMemo(() => {
-    const isManagement = myEmployee.paymentGroup === 'management';
     return scheduledDaysThisMonth.map(d => {
       const isParty = d.type === 'party';
       const dayTotal = getWorkDayPayAmount(d, myEmployee);
@@ -71,11 +71,12 @@ export const EmployeeMonthOverview: React.FC<EmployeeMonthOverviewProps> = ({
 
       let dueDateShort = '';
       let isMonthTurnBridge = false;
+      let isCustomDueDate = Boolean(d.customPaymentDueDate);
       try {
         if (isParty) {
-          dueDateShort = format(getPartyPaymentDueDate(d.date, isManagement), 'dd/MM');
+          dueDateShort = format(getPartyPaymentDueDateForWorkDay(d, myEmployee), 'dd/MM');
         } else {
-          const cycleInfo = getCcspCycleAndDueDate(d.date);
+          const cycleInfo = getCcspWorkDayEffectiveDueDate(d);
           dueDateShort = cycleInfo.dueDateFormatted.slice(0, 5);
           isMonthTurnBridge = cycleInfo.isMonthTurnBridge;
         }
@@ -89,7 +90,8 @@ export const EmployeeMonthOverview: React.FC<EmployeeMonthOverviewProps> = ({
         dayTotal,
         isPaid,
         dueDateShort,
-        isMonthTurnBridge
+        isMonthTurnBridge,
+        isCustomDueDate
       };
     });
   }, [scheduledDaysThisMonth, myEmployee]);
@@ -439,6 +441,13 @@ export const EmployeeMonthOverview: React.FC<EmployeeMonthOverviewProps> = ({
                     const isCoordination = isParty && (partyName || '').toLowerCase().includes('coordena');
                     const isOfficeMode = isParty && ((partyName || '').toLowerCase().includes('escritório') || (partyName || '').toLowerCase().includes('escritorio'));
                     const isJanitorMode = isParty && (partyName || '').toLowerCase().includes('zelador');
+                    const isSpecialShift = isParty && (
+                      (partyName || '').toLowerCase().includes('réveillon') ||
+                      (partyName || '').toLowerCase().includes('reveillon') ||
+                      (partyName || '').toLowerCase().includes('virada') ||
+                      (partyName || '').toLowerCase().includes('ano novo') ||
+                      (partyName || '').toLowerCase().includes('turno')
+                    );
 
                     return (
                       <div 
@@ -454,11 +463,13 @@ export const EmployeeMonthOverview: React.FC<EmployeeMonthOverviewProps> = ({
                                 ? "bg-amber-500/10 border-amber-500/30 hover:border-amber-500/50 hover:bg-amber-500/15"
                                 : d.isOvernight
                                   ? "bg-indigo-500/10 border-indigo-500/30 hover:border-indigo-500/50 hover:bg-indigo-500/15"
-                                  : isCoordination
-                                    ? "bg-cyan-500/5 border-cyan-500/20 hover:border-cyan-500/45 hover:bg-cyan-500/10"
-                                    : isParty 
-                                      ? "bg-brand-party/5 border-brand-party/20 hover:border-brand-party/45 hover:bg-brand-party/10" 
-                                      : "bg-brand-primary/5 border-brand-primary/20 hover:border-brand-primary/45 hover:bg-brand-primary/10"
+                                  : isSpecialShift
+                                    ? "bg-amber-500/10 border-amber-400/35 hover:border-amber-400/60 hover:bg-amber-500/15"
+                                    : isCoordination
+                                      ? "bg-cyan-500/5 border-cyan-500/20 hover:border-cyan-500/45 hover:bg-cyan-500/10"
+                                      : isParty 
+                                        ? "bg-brand-party/5 border-brand-party/20 hover:border-brand-party/45 hover:bg-brand-party/10" 
+                                        : "bg-brand-primary/5 border-brand-primary/20 hover:border-brand-primary/45 hover:bg-brand-primary/10"
                         )}
                       >
                         <div className="flex items-center gap-3 animate-in fade-in duration-200 min-w-0">
@@ -472,11 +483,13 @@ export const EmployeeMonthOverview: React.FC<EmployeeMonthOverviewProps> = ({
                                   ? "bg-amber-500 text-slate-950 group-hover:bg-amber-400"
                                   : d.isOvernight
                                     ? "bg-indigo-500 text-white group-hover:bg-indigo-400"
-                                    : isCoordination
-                                      ? "bg-cyan-500 text-slate-950 group-hover:bg-cyan-400"
-                                      : isParty 
-                                        ? "bg-brand-party text-white group-hover:bg-brand-party" 
-                                        : "bg-brand-primary text-slate-900 group-hover:bg-brand-primary-hover"
+                                    : isSpecialShift
+                                      ? "bg-amber-400 text-slate-950 group-hover:bg-amber-300"
+                                      : isCoordination
+                                        ? "bg-cyan-500 text-slate-950 group-hover:bg-cyan-400"
+                                        : isParty 
+                                          ? "bg-brand-party text-white group-hover:bg-brand-party" 
+                                          : "bg-brand-primary text-slate-900 group-hover:bg-brand-primary-hover"
                           )}>
                             <span className="text-sm leading-none">{format(dateObj, 'dd')}</span>
                             <span className="text-[8px] uppercase tracking-wider leading-none mt-0.5 font-bold">
@@ -506,6 +519,10 @@ export const EmployeeMonthOverview: React.FC<EmployeeMonthOverviewProps> = ({
                                 <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/40 shadow-sm">
                                   <Clock size={10} className="text-amber-300" /> Horário Reduzido ({d.customHoursText || 'Acordo'})
                                 </span>
+                              ) : isSpecialShift ? (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-200 px-2 py-0.5 rounded border border-amber-400/40">
+                                  <Sparkles size={10} className="shrink-0 text-amber-300" /> {partyName}
+                                </span>
                               ) : isCoordination ? (
                                 <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-cyan-500/10 dark:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 px-2 py-0.5 rounded border border-cyan-500/20">
                                   <ShieldCheck size={10} className="shrink-0 text-cyan-300" /> Coordenação
@@ -517,6 +534,12 @@ export const EmployeeMonthOverview: React.FC<EmployeeMonthOverviewProps> = ({
                               ) : (
                                 <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-brand-primary/10 dark:bg-brand-primary/20 text-amber-700 dark:text-brand-primary px-2 py-0.5 rounded border border-brand-primary/20">
                                   Dia CCSP 🏢
+                                </span>
+                              )}
+
+                              {d.isCustomPay && !d.isReducedHours && !isOfficeMode && !isJanitorMode && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30">
+                                  <DollarSign size={10} className="shrink-0" /> Valor Combinado
                                 </span>
                               )}
 
@@ -547,6 +570,11 @@ export const EmployeeMonthOverview: React.FC<EmployeeMonthOverviewProps> = ({
                                   · Lote {item.dueDateShort} (Feriado/Virada)
                                 </span>
                               )}
+                              {item.isCustomDueDate && item.dueDateShort && (
+                                <span className="text-[10px] font-bold text-cyan-300">
+                                  · Vencimento ajustado ({item.dueDateShort})
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -560,9 +588,11 @@ export const EmployeeMonthOverview: React.FC<EmployeeMonthOverviewProps> = ({
                                 ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
                                 : d.isOvernight
                                   ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-300"
-                                  : isParty
-                                    ? "bg-brand-party/10 dark:bg-brand-party/20 border-brand-party/30 text-brand-party dark:text-brand-party"
-                                    : "bg-brand-primary/10 border-brand-primary/20 text-amber-700 dark:text-brand-primary"
+                                  : isSpecialShift
+                                    ? "bg-amber-500/15 border-amber-400/40 text-amber-200"
+                                    : isParty
+                                      ? "bg-brand-party/10 dark:bg-brand-party/20 border-brand-party/30 text-brand-party dark:text-brand-party"
+                                      : "bg-brand-primary/10 border-brand-primary/20 text-amber-700 dark:text-brand-primary"
                             )}>
                               {d.isReducedHours 
                                 ? `Reduzido: ${d.customHoursText || 'Acordado'}` 

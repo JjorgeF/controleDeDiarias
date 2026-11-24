@@ -54,11 +54,12 @@ import {
   Briefcase,
   Wrench,
   Moon,
-  HelpCircle
+  HelpCircle,
+  DollarSign
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Employee, WorkDay, DayType, CancellationLog, DayConfig, PartyConfig } from '../types';
-import { cn, formatCurrency, getWorkDayUniqueKey } from '../lib/utils';
+import { cn, formatCurrency, getWorkDayUniqueKey, isReveillonViradaWorkDay } from '../lib/utils';
 import DayManagementModal from './DayManagementModal';
 import DayWorkModeEditor from './DayWorkModeEditor';
 import ShiftSelector from './ShiftSelector';
@@ -629,7 +630,13 @@ export default function CalendarView({
         return;
       }
       const hadCommonAvail = (employee.availabilities || []).some(a => a === dateStr || a === `${dateStr}_common`);
-      const defaultShift = isSunday(parseISO(dateStr)) ? 'Brinquedoteca (9h - 18h)' : 'Brinquedoteca 1 (9h - 18h)';
+      const defaultShift = dateStr.endsWith('-12-31')
+        ? 'Réveillon Dia (9h - 18h)'
+        : dateStr.endsWith('-01-01')
+          ? 'Ano Novo (10h - 18h)'
+          : isSunday(parseISO(dateStr))
+            ? 'Brinquedoteca (9h - 18h)'
+            : 'Brinquedoteca 1 (9h - 18h)';
       const newDays: WorkDay[] = [...currentWorkDays, { 
         id: `${dateStr}_common_${Date.now()}`,
         date: dateStr, 
@@ -667,7 +674,11 @@ export default function CalendarView({
       
       let customTotalPay: number | undefined = undefined;
       let isReducedHours = false;
+      let isCustomPay = false;
       let customHoursText = '';
+      const dueDateOverride = selectedParty.customPaymentDueDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedParty.customPaymentDueDate)
+        ? selectedParty.customPaymentDueDate
+        : undefined;
 
       if (isOffice) {
         const timeStr = selectedParty.time || getDayConfig(dateStr).partyTime || '';
@@ -702,6 +713,19 @@ export default function CalendarView({
         isReducedHours = true;
         customHoursText = 'Zeladoria';
         customTotalPay = employee.janitorRate || 0;
+      } else if (selectedParty.customPayMode === 'default_daily') {
+        isCustomPay = true;
+        customHoursText = `${selectedParty.name || 'Turno'} (Diária CCSP)`;
+        customTotalPay = employee.dailyRate || 0;
+      } else if (selectedParty.customPayMode === 'fixed') {
+        isCustomPay = true;
+        customHoursText = selectedParty.name || 'Valor Combinado';
+        customTotalPay = Math.max(0, Number(selectedParty.customPayValue || 0));
+      } else if (selectedParty.customPayMode === 'bonus') {
+        const bonusVal = Math.max(0, Number(selectedParty.customPayValue || 0));
+        isCustomPay = true;
+        customHoursText = bonusVal > 0 ? `${selectedParty.name || 'Turno'} (+${formatCurrency(bonusVal)})` : (selectedParty.name || 'Diária + Adicional');
+        customTotalPay = (employee.dailyRate || 0) + bonusVal;
       }
 
       const newDays: WorkDay[] = [...currentWorkDays, { 
@@ -721,6 +745,14 @@ export default function CalendarView({
           isReducedHours,
           customHoursText,
           customTotalPay
+        }),
+        ...(isCustomPay && {
+          isCustomPay,
+          customHoursText,
+          customTotalPay
+        }),
+        ...(dueDateOverride && {
+          customPaymentDueDate: dueDateOverride
         })
       }];
       onUpdateDays(employee.id, newDays);
@@ -1263,7 +1295,7 @@ export default function CalendarView({
     return scheduledDaysThisMonth.reduce((acc, d) => {
       const isParty = d.type === 'party';
       let dayBase = 0;
-      if (d.isReducedHours && d.customTotalPay !== undefined && d.customTotalPay >= 0) {
+      if ((d.isReducedHours || d.isCustomPay) && d.customTotalPay !== undefined && d.customTotalPay >= 0) {
         dayBase = d.customTotalPay;
       } else if (isParty) {
         dayBase = d.partyRateAtTime !== undefined ? d.partyRateAtTime : myEmployee.partyRate;
@@ -1603,8 +1635,8 @@ export default function CalendarView({
                                       🏢 CCSP
                                     </span>
                                   )}
-                                  {partiesScope.map(p => (
-                                    <span key={p.id} className="text-[9px] font-black bg-brand-party/20 text-brand-party border border-brand-party/30 px-1.5 py-0.5 rounded flex items-center gap-1 truncate max-w-[120px]" title={p.name}>
+                                  {partiesScope.map((p, pIdx) => (
+                                    <span key={`${p.id || 'p'}_${pIdx}`} className="text-[9px] font-black bg-brand-party/20 text-brand-party border border-brand-party/30 px-1.5 py-0.5 rounded flex items-center gap-1 truncate max-w-[120px]" title={p.name}>
                                       🎉 {p.name}
                                     </span>
                                   ))}
@@ -2365,17 +2397,18 @@ export default function CalendarView({
                                         ? [{ id: 'default_party', name: 'Festa', time: config.partyTime || '' }]
                                         : [];
 
-                                    return dayParties.map((party) => {
+                                    return dayParties.map((party, pIdx) => {
                                       const isAssignedToThisParty = dayWorkDays.some(d => 
                                         d.type === 'party' && (
                                           d.partyId === party.id || (!d.partyId && party.id === 'default_party') || d.partyName === party.name
                                         )
                                       );
                                       const isCoord = (party.name || '').toLowerCase().includes('coordena');
+                                      const isSpecial = Boolean(party.isSpecialShift) || ['virada', 'réveillon', 'reveillon', 'ano novo', 'turno'].some(kw => (party.name || '').toLowerCase().includes(kw));
 
                                       return (
                                         <motion.button
-                                          key={party.id}
+                                          key={`${party.id || 'party'}_${pIdx}`}
                                           whileHover={{ scale: 1.05 }}
                                           whileTap={{ scale: 0.95 }}
                                           onClick={(e) => {
@@ -2387,14 +2420,18 @@ export default function CalendarView({
                                             isAssignedToThisParty 
                                               ? isCoord
                                                 ? "bg-cyan-500 text-slate-950 font-bold border-cyan-400 shadow-sm ring-1 ring-cyan-300"
-                                                : "bg-brand-party text-white border-brand-party shadow-sm ring-1 ring-brand-party" 
+                                                : isSpecial
+                                                  ? "bg-amber-500 text-slate-950 font-bold border-amber-400 shadow-sm ring-1 ring-amber-300"
+                                                  : "bg-brand-party text-white border-brand-party shadow-sm ring-1 ring-brand-party" 
                                               : isCoord
                                                 ? "bg-brand-bg text-cyan-300 border border-cyan-500/40 hover:border-cyan-400"
-                                                : "bg-brand-bg text-gray-400 border border-brand-border hover:border-brand-party/40"
+                                                : isSpecial
+                                                  ? "bg-brand-bg text-amber-300 border border-amber-500/40 hover:border-amber-400"
+                                                  : "bg-brand-bg text-gray-400 border border-brand-border hover:border-brand-party/40"
                                           )}
                                           title={`Escalar para ${party.name}${party.time ? ` (${party.time})` : ''}`}
                                         >
-                                          {isCoord ? <ShieldCheck size={10} className="shrink-0 text-cyan-300" /> : <span className="text-[10px]">🎉</span>}
+                                          {isCoord ? <ShieldCheck size={10} className="shrink-0 text-cyan-300" /> : isSpecial ? <Sparkles size={10} className={cn("shrink-0", isAssignedToThisParty ? "text-slate-950" : "text-amber-300")} /> : <span className="text-[10px]">🎉</span>}
                                           <span className="truncate">{party.name}</span>
                                         </motion.button>
                                       );
@@ -2422,17 +2459,33 @@ export default function CalendarView({
                                         </span>
                                       )}
                                     </div>
+                                  ) : dayData?.isCustomPay ? (
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/40 shadow-sm">
+                                        <DollarSign size={10} className="text-emerald-300" /> Valor Combinado: {formatCurrency(dayData.customTotalPay || 0)}
+                                      </span>
+                                      {!!dayData.extraHours && (
+                                        <span className="text-[9px] font-black text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                          +{dayData.extraHours}h extra
+                                        </span>
+                                      )}
+                                    </div>
                                   ) : !!dayData?.extraHours ? (
                                     <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
                                       +{dayData.extraHours}h extra ({formatCurrency(dayData.extraHours * ((dayData.extraHourRateAtTime && dayData.extraHourRateAtTime > 0) ? dayData.extraHourRateAtTime : (emp.extraHourRate || 0)))})
                                     </span>
                                   ) : null}
+                                  {dayData?.customPaymentDueDate && /^\d{4}-\d{2}-\d{2}$/.test(dayData.customPaymentDueDate) && (
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-cyan-500/15 text-cyan-300 px-2 py-0.5 rounded border border-cyan-500/35 shadow-sm">
+                                      <Calendar size={10} className="text-cyan-300" /> Venc. {format(parseISO(dayData.customPaymentDueDate), 'dd/MM')}
+                                    </span>
+                                  )}
                                 </div>
 
                                 {hasCommon && (
                                   <div className="mt-1.5 pt-1.5 border-t border-brand-primary/10" onClick={(e) => e.stopPropagation()}>
                                     <ShiftSelector
-                                      currentShift={dayData?.shift || (selectedDay && isSunday(selectedDay) ? 'Brinquedoteca (9h - 18h)' : 'Brinquedoteca 1 (9h - 18h)')}
+                                      currentShift={dayData?.shift || (selectedDayStr.endsWith('-12-31') ? 'Réveillon Dia (9h - 18h)' : selectedDayStr.endsWith('-01-01') ? 'Ano Novo (10h - 18h)' : (selectedDay && isSunday(selectedDay) ? 'Brinquedoteca (9h - 18h)' : 'Brinquedoteca 1 (9h - 18h)'))}
                                       dateStr={selectedDayStr}
                                       onChange={(newShift) => updateShift(emp, selectedDay!, newShift)}
                                     />
@@ -2454,11 +2507,13 @@ export default function CalendarView({
                                          ? "text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20"
                                          : dayData?.isReducedHours
                                            ? "text-amber-400 bg-amber-500/10 hover:bg-amber-500/20"
-                                           : "text-brand-muted hover:text-brand-primary hover:bg-brand-primary/10"
+                                           : (dayData?.isCustomPay || dayData?.customPaymentDueDate)
+                                             ? "text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
+                                             : "text-brand-muted hover:text-brand-primary hover:bg-brand-primary/10"
                                    )}
-                                   title={dayData?.isOvernight ? "Configurar Pernoite" : dayData?.isReducedHours ? "Configurar Horário Reduzido" : "Horas Extras e Configurações"}
+                                   title={dayData?.isOvernight ? "Configurar Pernoite" : dayData?.isReducedHours ? "Configurar Horário Reduzido" : "Horas Extras, Valor e Vencimento"}
                                  >
-                                   {dayData?.isOvernight ? <Moon size={16} /> : <Clock size={16} />}
+                                   {dayData?.isOvernight ? <Moon size={16} /> : dayData?.isCustomPay ? <DollarSign size={16} /> : <Clock size={16} />}
                                 </motion.button>
                               )}
                               <motion.button 
@@ -2593,7 +2648,7 @@ export default function CalendarView({
                                     : [];
 
                                 return dayParties.length > 0 ? (
-                                  dayParties.map((party) => {
+                                  dayParties.map((party, pIdx) => {
                                     const isChosen = hasSpecificPartyAvail(party.id);
                                     const isCoord = (party.name || '').toLowerCase().includes('coordena');
                                     const isOffice = (party.name || '').toLowerCase().includes('escritório') || (party.name || '').toLowerCase().includes('escritorio');
@@ -2602,7 +2657,7 @@ export default function CalendarView({
                                     if (isChosen) {
                                       return (
                                         <motion.button 
-                                          key={party.id}
+                                          key={`${party.id || 'party'}_${pIdx}`}
                                           whileHover={{ scale: 1.05 }}
                                           whileTap={{ scale: 0.95 }}
                                           onClick={() => handleToggleWorkDayClick(emp, selectedDay!, 'party', party)}
@@ -2626,7 +2681,7 @@ export default function CalendarView({
 
                                     return (
                                       <motion.button 
-                                        key={party.id}
+                                        key={`${party.id || 'party'}_${pIdx}`}
                                         whileHover={{ scale: 1.05 }}
                                         whileTap={{ scale: 0.95 }}
                                         onClick={() => handleToggleWorkDayClick(emp, selectedDay!, 'party', party)}
@@ -2741,13 +2796,13 @@ export default function CalendarView({
                                       : [];
 
                                   return dayParties.length > 0 ? (
-                                    dayParties.map((party) => {
+                                    dayParties.map((party, pIdx) => {
                                       const isCoord = (party.name || '').toLowerCase().includes('coordena');
                                       const isOffice = (party.name || '').toLowerCase().includes('escritório') || (party.name || '').toLowerCase().includes('escritorio');
                                       const isJanitor = (party.name || '').toLowerCase().includes('zelador');
                                       return (
                                         <motion.button 
-                                          key={party.id}
+                                          key={`${party.id || 'party'}_${pIdx}`}
                                           whileHover={{ scale: 1.05 }}
                                           whileTap={{ scale: 0.95 }}
                                           onClick={() => handleToggleWorkDayClick(emp, selectedDay!, 'party', party)}
@@ -3143,7 +3198,13 @@ export default function CalendarView({
                           </span>
                         )}
                       </div>
-                      <span className="text-xs text-brand-muted mt-0.5">Trabalho padrão do dia a dia</span>
+                      <span className="text-xs text-brand-muted mt-0.5">
+                        {dateStr.endsWith('-12-31')
+                          ? 'Turno Réveillon Dia: 9h às 18h'
+                          : dateStr.endsWith('-01-01')
+                            ? 'Turno Ano Novo: 10h às 18h'
+                            : 'Trabalho padrão do dia a dia'}
+                      </span>
                     </div>
                     <div className="relative flex items-center justify-center ml-3 shrink-0">
                       <input 
@@ -3238,7 +3299,7 @@ export default function CalendarView({
 
                 return (
                   <>
-                    {parties.map((party) => {
+                    {parties.map((party, pIdx) => {
                       const partyKey = `${dateStr}_party_${party.id}`;
                       const hasSpecificPartyKey = currentAvailabilities.includes(partyKey);
                       
@@ -3249,10 +3310,11 @@ export default function CalendarView({
                       const isCoord = (party.name || '').toLowerCase().includes('coordena');
                       const isOffice = (party.name || '').toLowerCase().includes('escritório') || (party.name || '').toLowerCase().includes('escritorio');
                       const isJanitor = (party.name || '').toLowerCase().includes('zelador');
+                      const isSpecial = Boolean(party.isSpecialShift) || ['virada', 'réveillon', 'reveillon', 'ano novo', 'turno'].some(kw => (party.name || '').toLowerCase().includes(kw));
 
                       return (
                         <motion.label 
-                          key={party.id} 
+                          key={`${party.id || 'party'}_${pIdx}`} 
                           whileHover={{ scale: isExcludedByScope && !isPartyChecked ? 1 : 1.01 }}
                           whileTap={{ scale: isExcludedByScope && !isPartyChecked ? 1 : 0.96 }}
                           transition={{ type: "spring", stiffness: 400, damping: 25 }}
@@ -3268,7 +3330,9 @@ export default function CalendarView({
                                   ? "bg-blue-500/15 border-blue-500/60 text-blue-300 ring-2 ring-blue-500/30"
                                   : isJanitor
                                     ? "bg-zinc-500/15 border-zinc-500/60 text-zinc-300 ring-2 ring-zinc-500/30"
-                                    : "bg-brand-party/15 border-brand-party/60 text-brand-party dark:text-brand-party ring-2 ring-brand-party/30" 
+                                    : isSpecial
+                                      ? "bg-amber-500/15 border-amber-500/60 text-amber-200 ring-2 ring-amber-500/30"
+                                      : "bg-brand-party/15 border-brand-party/60 text-brand-party dark:text-brand-party ring-2 ring-brand-party/30" 
                               : (!isExcludedByScope && "bg-brand-bg/40 border-brand-border text-brand-muted hover:border-brand-primary/30 hover:bg-brand-bg/70")
                           )}
                         >
@@ -3280,11 +3344,13 @@ export default function CalendarView({
                                 <Briefcase size={16} className="text-blue-400 shrink-0" />
                               ) : isJanitor ? (
                                 <Wrench size={16} className="text-zinc-400 shrink-0" />
+                              ) : isSpecial ? (
+                                <Sparkles size={16} className="text-amber-300 shrink-0" />
                               ) : (
                                 <span>🎉</span>
                               )}
                               <span className={cn(
-                                isCoord ? "text-cyan-200" : isOffice ? "text-blue-200" : isJanitor ? "text-zinc-200" : ""
+                                isCoord ? "text-cyan-200" : isOffice ? "text-blue-200" : isJanitor ? "text-zinc-200" : isSpecial ? "text-amber-200" : ""
                               )}>
                                 {party.name && party.name !== 'Festa' ? party.name : 'Festa'}
                               </span>
@@ -3311,17 +3377,41 @@ export default function CalendarView({
                                       ? "text-blue-300 bg-blue-500/15 border-blue-500/30"
                                       : isJanitor
                                         ? "text-zinc-300 bg-zinc-500/15 border-zinc-500/30"
-                                        : "text-brand-party dark:text-brand-party bg-brand-party/15 border-brand-party/30"
+                                        : isSpecial
+                                          ? "text-amber-200 bg-amber-500/15 border-amber-500/30"
+                                          : "text-brand-party dark:text-brand-party bg-brand-party/15 border-brand-party/30"
                                 )}>
-                                  <Clock size={13} className={isCoord ? "text-cyan-400 shrink-0" : isOffice ? "text-blue-400 shrink-0" : isJanitor ? "text-zinc-400 shrink-0" : "text-brand-party shrink-0"} />
+                                  <Clock size={13} className={isCoord ? "text-cyan-400 shrink-0" : isOffice ? "text-blue-400 shrink-0" : isJanitor ? "text-zinc-400 shrink-0" : isSpecial ? "text-amber-300 shrink-0" : "text-brand-party shrink-0"} />
                                   <span>Horário: {party.time || config.partyTime}</span>
                                 </div>
+                                {(party.customPayMode && party.customPayMode !== 'default_party') || (party.customPaymentDueDate && /^\d{4}-\d{2}-\d{2}$/.test(party.customPaymentDueDate)) || isReveillonViradaWorkDay({ date: dateStr, partyId: party.id, partyName: party.name }) ? (
+                                  <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                                    {party.customPayMode && party.customPayMode !== 'default_party' && (
+                                      <span className="text-[10px] font-bold text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded">
+                                        {party.customPayMode === 'default_daily'
+                                          ? 'Pgto: Diária CCSP'
+                                          : party.customPayMode === 'fixed'
+                                            ? `Pgto: Fixo ${formatCurrency(party.customPayValue || 0)}`
+                                            : `Pgto: Diária + ${formatCurrency(party.customPayValue || 0)}`}
+                                      </span>
+                                    )}
+                                    {(party.customPaymentDueDate && /^\d{4}-\d{2}-\d{2}$/.test(party.customPaymentDueDate)) ? (
+                                      <span className="text-[10px] font-bold text-cyan-300 bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 rounded">
+                                        Prev. Pgto: {format(parseISO(party.customPaymentDueDate), 'dd/MM')}
+                                      </span>
+                                    ) : isReveillonViradaWorkDay({ date: dateStr, partyId: party.id, partyName: party.name }) ? (
+                                      <span className="text-[10px] font-bold text-cyan-300 bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 rounded">
+                                        Prev. Pgto: {format(addMonths(startOfMonth(parseISO(`${dateStr}T12:00:00`)), 1), '15/MM')}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                ) : null}
                                 <span className="text-[10px] font-mono text-brand-muted/80 italic">{partyDeadlineDisplay}</span>
                               </div>
                             ) : (
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-xs text-brand-muted">
-                                  {isCoord ? 'Plantão de Coordenação' : isOffice ? 'Trabalho no Escritório' : isJanitor ? 'Serviços de Zeladoria' : 'Trabalhar em eventos e festas extras'}
+                                  {isCoord ? 'Plantão de Coordenação' : isOffice ? 'Trabalho no Escritório' : isJanitor ? 'Serviços de Zeladoria' : isSpecial ? 'Turno especial com escala própria' : 'Trabalhar em eventos e festas extras'}
                                 </span>
                                 <span className="text-[10px] font-mono text-brand-muted/80 italic">{partyDeadlineDisplay}</span>
                               </div>
@@ -3474,7 +3564,7 @@ export default function CalendarView({
                         Você possui múltiplas atividades neste dia. Escolha qual deseja cancelar mantendo a outra ativa:
                       </p>
                       <div className="space-y-2 mt-2">
-                        {activeWorkDays.map(wd => {
+                        {activeWorkDays.map((wd, wdIdx) => {
                           const key = getWorkDayUniqueKey(wd.date, wd.type, wd.partyId);
                           const isSelected = currentSelectedKey === key;
                           const isParty = wd.type === 'party';
@@ -3485,7 +3575,7 @@ export default function CalendarView({
 
                           return (
                             <button
-                              key={key}
+                              key={`${key}_${wdIdx}`}
                               type="button"
                               onClick={() => setCancelTargetWorkDayKey(key)}
                               className={cn(

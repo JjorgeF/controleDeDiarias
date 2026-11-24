@@ -134,7 +134,8 @@ export default function ManageDaysModal({ isOpen, onClose, employee, onUpdateDay
       const curr = newDays[existingDayIndex];
       const updated: WorkDay = { 
         ...curr, 
-        isReducedHours: enabled
+        isReducedHours: enabled,
+        ...(enabled ? { isCustomPay: false } : {})
       };
       if (enabled) {
         updated.customHoursText = curr.customHoursText || '01h30m';
@@ -239,9 +240,10 @@ export default function ManageDaysModal({ isOpen, onClose, employee, onUpdateDay
                       "aspect-square flex items-center justify-center rounded-lg text-sm font-medium transition-all relative",
                       !isCurrentMonth && "opacity-20",
                       (!dayData || dayData.isCancelled) && isCurrentMonth && "hover:bg-white/5",
-                      dayData?.type === 'common' && !dayData.isCancelled && !dayData.isReducedHours && "bg-brand-primary text-brand-bg",
-                      dayData?.type === 'party' && !dayData.isCancelled && !dayData.isReducedHours && "bg-brand-party text-white",
+                      dayData?.type === 'common' && !dayData.isCancelled && !dayData.isReducedHours && !dayData.isCustomPay && "bg-brand-primary text-brand-bg",
+                      dayData?.type === 'party' && !dayData.isCancelled && !dayData.isReducedHours && !dayData.isCustomPay && "bg-brand-party text-white",
                       dayData?.isReducedHours && !dayData.isCancelled && "bg-amber-500 text-slate-950 font-bold",
+                      dayData?.isCustomPay && !dayData.isReducedHours && !dayData.isCancelled && "bg-emerald-500 text-slate-950 font-bold",
                       isSelected && "ring-2 ring-white ring-offset-2 ring-offset-brand-card"
                     )}
                   >
@@ -249,6 +251,10 @@ export default function ManageDaysModal({ isOpen, onClose, employee, onUpdateDay
                     {dayData?.isReducedHours && !dayData.isCancelled ? (
                       <span className="absolute -top-1 -left-1 w-4 h-4 bg-amber-400 text-slate-950 text-[8px] font-black flex items-center justify-center rounded-full border border-brand-card shadow">
                         ⏱
+                      </span>
+                    ) : dayData?.isCustomPay && !dayData.isCancelled ? (
+                      <span className="absolute -top-1 -left-1 w-4 h-4 bg-emerald-400 text-slate-950 text-[8px] font-black flex items-center justify-center rounded-full border border-brand-card shadow">
+                        $
                       </span>
                     ) : null}
                     {dayData?.extraHours && !dayData.isCancelled ? (
@@ -273,11 +279,13 @@ export default function ManageDaysModal({ isOpen, onClose, employee, onUpdateDay
                     "text-[10px] font-black px-2 py-0.5 rounded",
                     selectedDayData.isReducedHours
                       ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                      : selectedDayData.type === 'party'
-                        ? "bg-brand-party/20 text-brand-party"
-                        : "bg-brand-primary/20 text-brand-primary"
+                      : selectedDayData.isCustomPay
+                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                        : selectedDayData.type === 'party'
+                          ? "bg-brand-party/20 text-brand-party"
+                          : "bg-brand-primary/20 text-brand-primary"
                   )}>
-                    {selectedDayData.isReducedHours ? 'Horário Reduzido' : selectedDayData.type === 'party' ? 'Festa' : 'Dia CCSP'}
+                    {selectedDayData.isReducedHours ? 'Horário Reduzido' : selectedDayData.isCustomPay ? 'Valor Combinado' : selectedDayData.type === 'party' ? 'Festa' : 'Dia CCSP'}
                   </span>
                 </div>
 

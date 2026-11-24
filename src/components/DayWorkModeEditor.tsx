@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Moon, Check, RotateCcw, AlertCircle, ShieldAlert } from 'lucide-react';
+import { Clock, Moon, Check, RotateCcw, AlertCircle, ShieldAlert, DollarSign, Calendar } from 'lucide-react';
 import { Employee, WorkDay } from '../types';
-import { cn, formatCurrency } from '../lib/utils';
+import { cn, formatCurrency, getCcspWorkDayEffectiveDueDate, getPartyPaymentDueDateForWorkDay } from '../lib/utils';
+import { format, parseISO, addMonths, setDate, startOfMonth } from 'date-fns';
 import { removeUndefinedFields } from '../lib/firebase';
 
 interface DayWorkModeEditorProps {
@@ -45,12 +46,20 @@ export default function DayWorkModeEditor({
   }) || activeDaysOnDate[0];
 
   // Compute saved values from the database
-  const savedMode: 'normal' | 'reduced' | 'overnight' = 
-    dayData?.isOvernight ? 'overnight' : 
-    dayData?.isReducedHours ? 'reduced' : 'normal';
+  const savedMode: 'normal' | 'reduced' | 'custom_pay' | 'overnight' =
+    dayData?.isOvernight ? 'overnight' :
+    dayData?.isReducedHours ? 'reduced' :
+    dayData?.isCustomPay ? 'custom_pay' : 'normal';
 
-  const savedCustomHours = dayData?.customHoursText || '01h30m';
-  const savedCustomPay = dayData?.customTotalPay !== undefined ? dayData.customTotalPay : 45.0;
+  const isParty = dayData?.type === 'party';
+  const defaultStandardRate = isParty
+    ? (dayData?.partyRateAtTime !== undefined ? dayData.partyRateAtTime : employee.partyRate)
+    : (dayData?.dailyRateAtTime !== undefined ? dayData.dailyRateAtTime : employee.dailyRate);
+
+  const savedCustomHours = dayData?.customHoursText || (savedMode === 'custom_pay' ? 'Valor Combinado' : '01h30m');
+  const savedCustomPay = dayData?.customTotalPay !== undefined
+    ? dayData.customTotalPay
+    : (savedMode === 'custom_pay' ? defaultStandardRate : 45.0);
   const savedOvernightHours = dayData?.overnightHoursText || '22h às 08h';
   const savedOvernightPay = dayData?.overnightPay !== undefined ? dayData.overnightPay : 150.0;
   const savedExtraHours = dayData?.extraHours || 0;
@@ -58,18 +67,46 @@ export default function DayWorkModeEditor({
   const savedExtraHourRate = (dayData?.extraHourRateAtTime && dayData.extraHourRateAtTime > 0)
     ? dayData.extraHourRateAtTime
     : defaultExtraRate;
+  const savedCustomDueDate = dayData?.customPaymentDueDate || '';
 
   // Local draft state for editing before committing to Firestore
-  const [selectedMode, setSelectedMode] = useState<'normal' | 'reduced' | 'overnight'>(savedMode);
+  const [selectedMode, setSelectedMode] = useState<'normal' | 'reduced' | 'custom_pay' | 'overnight'>(savedMode);
   const [customHoursText, setCustomHoursText] = useState<string>(savedCustomHours);
   const [customTotalPay, setCustomTotalPay] = useState<number | string>(savedCustomPay);
   const [overnightHoursText, setOvernightHoursText] = useState<string>(savedOvernightHours);
   const [overnightPay, setOvernightPay] = useState<number | string>(savedOvernightPay);
   const [extraHours, setExtraHours] = useState<number | string>(savedExtraHours);
   const [extraHourRateInput, setExtraHourRateInput] = useState<number | string>(savedExtraHourRate);
+  const [useCustomDueDate, setUseCustomDueDate] = useState<boolean>(Boolean(savedCustomDueDate));
+  const [customDueDateInput, setCustomDueDateInput] = useState<string>(savedCustomDueDate);
 
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  const autoDueDateStr = React.useMemo(() => {
+    try {
+      if (dayData?.type === 'party') {
+        return format(
+          getPartyPaymentDueDateForWorkDay(
+            { date: selectedDayStr, partyId: dayData?.partyId, partyName: dayData?.partyName },
+            employee
+          ),
+          'yyyy-MM-dd'
+        );
+      }
+      return getCcspWorkDayEffectiveDueDate({ date: selectedDayStr }).dueDateStr;
+    } catch {
+      return selectedDayStr;
+    }
+  }, [dayData?.type, dayData?.partyId, dayData?.partyName, employee, selectedDayStr]);
+
+  const autoDueDateFormatted = React.useMemo(() => {
+    try {
+      return format(parseISO(`${autoDueDateStr}T12:00:00`), 'dd/MM/yyyy');
+    } catch {
+      return autoDueDateStr;
+    }
+  }, [autoDueDateStr]);
 
   // Synchronize draft state if employee, target assignment, or date changes externally
   useEffect(() => {
@@ -79,6 +116,8 @@ export default function DayWorkModeEditor({
     setOvernightHoursText(savedOvernightHours);
     setOvernightPay(savedOvernightPay);
     setExtraHours(savedExtraHours);
+    setUseCustomDueDate(Boolean(savedCustomDueDate));
+    setCustomDueDateInput(savedCustomDueDate);
     const activeExtraRate = (dayData?.extraHourRateAtTime && dayData.extraHourRateAtTime > 0)
       ? dayData.extraHourRateAtTime
       : ((employee.extraHourRate && employee.extraHourRate > 0) ? employee.extraHourRate : 30);
@@ -89,9 +128,11 @@ export default function DayWorkModeEditor({
     selectedDayStr, 
     selectedAssignmentKey,
     dayData?.isOvernight, 
-    dayData?.isReducedHours, 
+    dayData?.isReducedHours,
+    dayData?.isCustomPay,
     dayData?.customHoursText, 
     dayData?.customTotalPay, 
+    dayData?.customPaymentDueDate,
     dayData?.overnightHoursText, 
     dayData?.overnightPay, 
     dayData?.extraHours, 
@@ -104,17 +145,18 @@ export default function DayWorkModeEditor({
 
   // Determine if there are uncommitted changes
   const hasModeChanged = selectedMode !== savedMode;
+  const effectiveDraftDueDate = useCustomDueDate ? customDueDateInput.trim() : '';
+  const hasDueDateChanged = effectiveDraftDueDate !== savedCustomDueDate;
   const isDirty = 
     hasModeChanged ||
+    hasDueDateChanged ||
     (selectedMode === 'reduced' && (customHoursText !== savedCustomHours || Number(customTotalPay) !== savedCustomPay)) ||
+    (selectedMode === 'custom_pay' && (customHoursText !== savedCustomHours || Number(customTotalPay) !== savedCustomPay || Number(extraHours) !== savedExtraHours || (numericExtraHours > 0 && numericExtraHourRate !== savedExtraHourRate))) ||
     (selectedMode === 'overnight' && (overnightHoursText !== savedOvernightHours || Number(overnightPay) !== savedOvernightPay || Number(extraHours) !== savedExtraHours || (numericExtraHours > 0 && numericExtraHourRate !== savedExtraHourRate))) ||
     (selectedMode === 'normal' && (Number(extraHours) !== savedExtraHours || (numericExtraHours > 0 && numericExtraHourRate !== savedExtraHourRate)));
 
   // Financial calculations
-  const isParty = dayData?.type === 'party';
-  const baseRate = isParty 
-    ? (dayData?.partyRateAtTime !== undefined ? dayData.partyRateAtTime : employee.partyRate)
-    : (dayData?.dailyRateAtTime !== undefined ? dayData.dailyRateAtTime : employee.dailyRate);
+  const baseRate = defaultStandardRate;
 
   const extraHourRate = numericExtraHourRate;
   const extraVal = numericExtraHours * extraHourRate;
@@ -137,10 +179,15 @@ export default function DayWorkModeEditor({
       return;
     }
 
-    if (selectedMode === 'reduced') {
+    if (selectedMode === 'reduced' || selectedMode === 'custom_pay') {
       const pay = Number(customTotalPay);
       if (isNaN(pay) || pay < 0) {
-        setStatusMessage({ type: 'error', text: 'Informe um valor válido em R$ para o horário reduzido.' });
+        setStatusMessage({
+          type: 'error',
+          text: selectedMode === 'reduced'
+            ? 'Informe um valor válido em R$ para o horário reduzido.'
+            : 'Informe um valor válido em R$ para o valor combinado.'
+        });
         return;
       }
     }
@@ -151,6 +198,11 @@ export default function DayWorkModeEditor({
         setStatusMessage({ type: 'error', text: 'Informe um valor válido em R$ para o adicional da pernoite.' });
         return;
       }
+    }
+
+    if (useCustomDueDate && !/^\d{4}-\d{2}-\d{2}$/.test(customDueDateInput.trim())) {
+      setStatusMessage({ type: 'error', text: 'Selecione uma data válida para o vencimento ajustado.' });
+      return;
     }
 
     setIsSaving(true);
@@ -174,6 +226,7 @@ export default function DayWorkModeEditor({
 
           if (selectedMode === 'normal') {
             updated.isReducedHours = false;
+            updated.isCustomPay = false;
             updated.isOvernight = false;
             delete updated.customHoursText;
             delete updated.customTotalPay;
@@ -181,18 +234,34 @@ export default function DayWorkModeEditor({
             delete updated.overnightPay;
           } else if (selectedMode === 'reduced') {
             updated.isReducedHours = true;
+            updated.isCustomPay = false;
             updated.isOvernight = false;
             updated.customHoursText = (customHoursText || '').trim() || 'Horário Reduzido';
+            updated.customTotalPay = numericCustomTotalPay;
+            delete updated.overnightHoursText;
+            delete updated.overnightPay;
+          } else if (selectedMode === 'custom_pay') {
+            updated.isCustomPay = true;
+            updated.isReducedHours = false;
+            updated.isOvernight = false;
+            updated.customHoursText = (customHoursText || '').trim() || 'Valor Combinado';
             updated.customTotalPay = numericCustomTotalPay;
             delete updated.overnightHoursText;
             delete updated.overnightPay;
           } else if (selectedMode === 'overnight') {
             updated.isOvernight = true;
             updated.isReducedHours = false;
+            updated.isCustomPay = false;
             updated.overnightHoursText = (overnightHoursText || '').trim() || '22h às 08h';
             updated.overnightPay = numericOvernightPay;
             delete updated.customHoursText;
             delete updated.customTotalPay;
+          }
+
+          if (useCustomDueDate && customDueDateInput.trim()) {
+            updated.customPaymentDueDate = customDueDateInput.trim();
+          } else {
+            delete updated.customPaymentDueDate;
           }
 
           if (numericExtraHours > 0) {
@@ -237,6 +306,8 @@ export default function DayWorkModeEditor({
     setOvernightPay(savedOvernightPay);
     setExtraHours(savedExtraHours);
     setExtraHourRateInput(savedExtraHourRate);
+    setUseCustomDueDate(Boolean(savedCustomDueDate));
+    setCustomDueDateInput(savedCustomDueDate);
     setStatusMessage({ type: 'info', text: 'Alterações descartadas.' });
 
     setTimeout(() => {
@@ -265,14 +336,14 @@ export default function DayWorkModeEditor({
             </span>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {activeDaysOnDate.map(wd => {
+            {activeDaysOnDate.map((wd, wdIdx) => {
               const key = wd.type === 'common' ? 'common' : (wd.partyId || wd.partyName || 'party');
               const isSelected = selectedAssignmentKey === key;
               const isCommon = wd.type === 'common';
               const label = isCommon ? 'CCSP (Diária)' : (wd.partyName || 'Festa');
               return (
                 <button
-                  key={key}
+                  key={`${key}_${wdIdx}`}
                   type="button"
                   onClick={() => setSelectedAssignmentKey(key)}
                   className={cn(
@@ -294,6 +365,10 @@ export default function DayWorkModeEditor({
                     <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-black">
                       Reduzido
                     </span>
+                  ) : wd.isCustomPay ? (
+                    <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1 py-0.2 rounded font-black">
+                      Ajustado
+                    </span>
                   ) : null}
                 </button>
               );
@@ -303,7 +378,7 @@ export default function DayWorkModeEditor({
       )}
 
       {/* Mode selection tabs */}
-      <div className="grid grid-cols-3 gap-1.5 p-1 bg-brand-bg/80 rounded-xl border border-brand-border text-xs font-semibold">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-brand-bg/80 rounded-xl border border-brand-border text-xs font-semibold">
         <button
           type="button"
           onClick={() => setSelectedMode('normal')}
@@ -316,6 +391,26 @@ export default function DayWorkModeEditor({
         >
           <Clock size={13} />
           <span>Horas Extras</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (selectedMode !== 'custom_pay') {
+              if (dayData?.customTotalPay === undefined) setCustomTotalPay(defaultStandardRate);
+              if (!dayData?.customHoursText || dayData?.customHoursText === '01h30m') setCustomHoursText('Valor Combinado');
+            }
+            setSelectedMode('custom_pay');
+          }}
+          className={cn(
+            "py-1.5 px-2 rounded-lg text-center transition-all flex items-center justify-center gap-1.5",
+            selectedMode === 'custom_pay'
+              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold shadow-sm"
+              : "text-brand-muted hover:text-brand-text hover:bg-brand-card/50"
+          )}
+        >
+          <DollarSign size={13} />
+          <span>Valor Combinado</span>
         </button>
 
         <button
@@ -503,6 +598,106 @@ export default function DayWorkModeEditor({
         </div>
       )}
 
+      {/* Option 1B: Valor Combinado / Ajuste R$ */}
+      {selectedMode === 'custom_pay' && (
+        <div className="space-y-2.5 bg-brand-bg/60 p-3 rounded-lg border border-emerald-500/25">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div>
+              <label className="block text-[10px] font-bold text-gray-300 uppercase mb-1">
+                Valor Combinado (R$)
+              </label>
+              <div className="relative">
+                <span className="absolute left-2.5 top-1 text-xs text-gray-400 font-bold">R$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={customTotalPay}
+                  onChange={(e) => setCustomTotalPay(e.target.value)}
+                  placeholder={String(defaultStandardRate)}
+                  disabled={!canEdit || isSaving}
+                  className="w-full bg-brand-card border border-emerald-500/40 rounded-md py-1 pl-8 pr-2.5 text-xs font-bold text-emerald-400 focus:outline-none focus:border-emerald-400 disabled:opacity-60 tabular-nums"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-gray-300 uppercase mb-1">
+                Motivo / Descrição (Opcional)
+              </label>
+              <input
+                type="text"
+                value={customHoursText}
+                onChange={(e) => setCustomHoursText(e.target.value)}
+                placeholder="Ex: Réveillon / Bônus Combinado"
+                disabled={!canEdit || isSaving}
+                className="w-full bg-brand-card border border-emerald-500/40 rounded-md py-1 px-2.5 text-xs font-medium text-white focus:outline-none focus:border-emerald-400 disabled:opacity-60"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+            <span className="text-brand-muted font-bold mr-1">Atalhos sobre padrão ({formatCurrency(defaultStandardRate)}):</span>
+            {[0, 50, 100, 150].map(bonus => (
+              <button
+                key={bonus}
+                type="button"
+                disabled={!canEdit || isSaving}
+                onClick={() => {
+                  setCustomTotalPay(defaultStandardRate + bonus);
+                  if (bonus > 0 && (!customHoursText || customHoursText === 'Valor Combinado')) {
+                    setCustomHoursText(`Padrão + ${formatCurrency(bonus)}`);
+                  }
+                }}
+                className="px-2 py-0.5 rounded bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-bold transition-colors tabular-nums disabled:opacity-50"
+              >
+                {bonus === 0 ? `Padrão (${formatCurrency(defaultStandardRate)})` : `+R$ ${bonus}`}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-brand-border/40">
+            <div className="flex items-center gap-1.5">
+              <label className="text-[10px] font-black text-brand-muted uppercase">Horas Extras:</label>
+              <input
+                type="number"
+                min="0"
+                step="0.5"
+                value={extraHours || ''}
+                onChange={(e) => setExtraHours(e.target.value)}
+                placeholder="0"
+                disabled={!canEdit || isSaving}
+                className="w-20 bg-brand-bg border border-emerald-500/30 rounded-lg py-1 px-2.5 text-xs focus:outline-none focus:border-emerald-400 text-brand-text disabled:opacity-60"
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <label className="text-[10px] font-black text-brand-muted uppercase">Valor/h:</label>
+              <div className="relative w-24">
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-emerald-400">R$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={extraHourRateInput || ''}
+                  onChange={(e) => setExtraHourRateInput(e.target.value)}
+                  placeholder={String(defaultExtraRate)}
+                  disabled={!canEdit || isSaving}
+                  className="w-full bg-brand-bg border border-emerald-500/30 rounded-lg py-1 pl-6 pr-2 text-xs font-bold text-brand-text focus:outline-none focus:border-emerald-400 disabled:opacity-60"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="text-[10px] text-emerald-300 font-medium bg-emerald-500/10 p-2 rounded border border-emerald-500/20 tabular-nums">
+            Base combinada: <strong>{formatCurrency(numericCustomTotalPay)}</strong>
+            {numericExtraHours > 0 && <> + Extras ({numericExtraHours}h): <strong>{formatCurrency(extraVal)}</strong></>}
+            {' '} = <strong>Total: {formatCurrency(numericCustomTotalPay + extraVal)}</strong>
+            <span className="text-emerald-200/70"> (substitui o padrão de {formatCurrency(defaultStandardRate)})</span>.
+          </div>
+        </div>
+      )}
+
       {/* Option 1: Horas Extras Padrão */}
       {selectedMode === 'normal' && (
         <div className="space-y-2 bg-brand-bg/40 p-2.5 rounded-lg border border-brand-border">
@@ -550,6 +745,99 @@ export default function DayWorkModeEditor({
           </div>
         </div>
       )}
+
+      {/* Vencimento / Lote de Pagamento Ajustável */}
+      <div className="bg-brand-bg/50 p-2.5 rounded-lg border border-brand-border/80 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-[11px] font-bold text-brand-text">
+            <Calendar size={13} className="text-cyan-400 shrink-0" />
+            <span>Vencimento do Pagamento:</span>
+            <span className="text-[10px] font-mono text-cyan-300 bg-cyan-500/10 border border-cyan-500/25 px-1.5 py-0.5 rounded tabular-nums">
+              {useCustomDueDate && customDueDateInput
+                ? `${format(parseISO(`${customDueDateInput}T12:00:00`), 'dd/MM/yyyy')} (Ajustado)`
+                : `${autoDueDateFormatted} (Automático)`}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              disabled={!canEdit || isSaving}
+              onClick={() => {
+                setUseCustomDueDate(false);
+                setCustomDueDateInput('');
+              }}
+              className={cn(
+                "px-2 py-1 rounded text-[10px] font-bold border transition-all",
+                !useCustomDueDate
+                  ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
+                  : "bg-brand-card text-brand-muted border-brand-border hover:text-white"
+              )}
+            >
+              Automático
+            </button>
+            <button
+              type="button"
+              disabled={!canEdit || isSaving}
+              onClick={() => {
+                setUseCustomDueDate(true);
+                if (!customDueDateInput) {
+                  setCustomDueDateInput(autoDueDateStr);
+                }
+              }}
+              className={cn(
+                "px-2 py-1 rounded text-[10px] font-bold border transition-all",
+                useCustomDueDate
+                  ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
+                  : "bg-brand-card text-brand-muted border-brand-border hover:text-white"
+              )}
+            >
+              Ajustar Data
+            </button>
+          </div>
+        </div>
+
+        {useCustomDueDate && (
+          <div className="flex flex-wrap items-center gap-2 pt-1.5 border-t border-brand-border/50">
+            <input
+              type="date"
+              value={customDueDateInput}
+              onChange={(e) => setCustomDueDateInput(e.target.value)}
+              disabled={!canEdit || isSaving}
+              className="bg-brand-card border border-cyan-500/40 rounded-md px-2.5 py-1 text-xs font-mono font-bold text-cyan-200 focus:outline-none focus:border-cyan-400"
+            />
+            {(() => {
+              try {
+                const workDateObj = parseISO(`${selectedDayStr}T12:00:00`);
+                const sameMonth15 = format(setDate(startOfMonth(workDateObj), 15), 'yyyy-MM-dd');
+                const nextMonth15 = format(setDate(addMonths(startOfMonth(workDateObj), 1), 15), 'yyyy-MM-dd');
+                return (
+                  <div className="flex flex-wrap items-center gap-1 text-[10px]">
+                    <button
+                      type="button"
+                      disabled={!canEdit || isSaving}
+                      onClick={() => setCustomDueDateInput(sameMonth15)}
+                      className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-brand-border text-gray-300 font-semibold tabular-nums"
+                    >
+                      Lote {format(parseISO(`${sameMonth15}T12:00:00`), 'dd/MM')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canEdit || isSaving}
+                      onClick={() => setCustomDueDateInput(nextMonth15)}
+                      className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-brand-border text-gray-300 font-semibold tabular-nums"
+                    >
+                      Lote {format(parseISO(`${nextMonth15}T12:00:00`), 'dd/MM')}
+                    </button>
+                  </div>
+                );
+              } catch {
+                return null;
+              }
+            })()}
+          </div>
+        )}
+      </div>
 
       {/* Status or validation message */}
       {statusMessage && (

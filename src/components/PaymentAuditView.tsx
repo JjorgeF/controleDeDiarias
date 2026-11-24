@@ -20,8 +20,8 @@ import { Employee, EmployeeLevel, WorkDay } from '../types';
 import {
   cn,
   formatCurrency,
-  getCcspCycleAndDueDate,
-  getPartyPaymentDueDate,
+  getCcspWorkDayEffectiveDueDate,
+  getPartyPaymentDueDateForWorkDay,
   getWorkDayPayBreakdown,
   getWorkDayLevel,
   isCcspWorkDayPaid,
@@ -174,17 +174,17 @@ export default function PaymentAuditView({
           let matchesScope = false;
 
           if (isParty) {
-            const forecastDate = getPartyPaymentDueDate(dateObj, isManagement);
+            const forecastDate = getPartyPaymentDueDateForWorkDay(wd, emp);
             dueDateStr = format(forecastDate, 'yyyy-MM-dd');
             dueDateFormatted = format(forecastDate, 'dd/MM/yyyy');
             matchesScope = isSameMonth(forecastDate, currentMonth);
           } else {
-            const cycleInfo = getCcspCycleAndDueDate(dateObj);
+            const cycleInfo = getCcspWorkDayEffectiveDueDate(wd);
             dueDateStr = cycleInfo.dueDateStr;
             dueDateFormatted = cycleInfo.dueDateFormatted;
             isMonthTurnBridge = cycleInfo.isMonthTurnBridge;
             isPulledFromNextMonth = cycleInfo.isPulledFromNextMonth;
-            matchesScope = cycleInfo.dueDateStr === currentMonthCcspKey;
+            matchesScope = cycleInfo.batchKey === currentMonthCcspKey;
           }
 
           if (!matchesScope) return;
@@ -201,6 +201,9 @@ export default function PaymentAuditView({
           let modalityLabel = wd.shift || (isParty ? 'Horário padrão' : 'CCSP Padrão');
           if (wd.isReducedHours) {
             modalityLabel = `Reduzido (${wd.customHoursText || 'Acordo'})`;
+          } else if (wd.isCustomPay) {
+            const shiftPart = wd.shift ? `${wd.shift} · ` : '';
+            modalityLabel = `${shiftPart}${wd.customHoursText || 'Valor Combinado'}`;
           } else if (wd.isOvernight) {
             modalityLabel = `Pernoite (${wd.overnightHoursText || '22h às 08h'})`;
           }

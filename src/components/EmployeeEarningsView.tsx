@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { Employee } from '../types';
 import PaymentTimeline from './PaymentTimeline';
-import { formatCurrency, getPartyPaymentDueDate, getCcspCycleAndDueDate, computeCcspBatchStatus, getWorkDayPayAmount } from '../lib/utils';
+import { formatCurrency, getPartyPaymentDueDateForWorkDay, getCcspWorkDayEffectiveDueDate, computeCcspBatchStatus, getWorkDayPayAmount } from '../lib/utils';
 import { AnimatedCurrency } from './AnimatedCurrency';
 import { format, isSameMonth, parseISO, addMonths, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -58,8 +58,7 @@ export default function EmployeeEarningsView({
 
     allPartyDays.forEach((pd, idx) => {
       try {
-        const partyDateObj = parseISO(pd.date.includes('T') ? pd.date : `${pd.date}T12:00:00`);
-        const forecastDate = getPartyPaymentDueDate(partyDateObj, isManagement);
+        const forecastDate = getPartyPaymentDueDateForWorkDay(pd, employee);
 
         if (!isSameMonth(forecastDate, currentMonth)) {
           return;
@@ -116,7 +115,7 @@ export default function EmployeeEarningsView({
     }
   });
   const ccspCompetenceLabel = monthCcspDays.length > 0
-    ? getCcspCycleAndDueDate(monthCcspDays[0].date).cycleMonthName
+    ? getCcspWorkDayEffectiveDueDate(monthCcspDays[0]).cycleMonthName
     : format(subMonths(currentMonth, 1), 'MMMM yyyy', { locale: ptBR });
 
   return (

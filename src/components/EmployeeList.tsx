@@ -249,7 +249,7 @@ export default function EmployeeList({
 
                   const totalEarnings = monthWorkDays.reduce((acc, day) => {
                     let dayBase = 0;
-                    if (day.isReducedHours && day.customTotalPay !== undefined && day.customTotalPay >= 0) {
+                    if ((day.isReducedHours || day.isCustomPay) && day.customTotalPay !== undefined && day.customTotalPay >= 0) {
                       dayBase = day.customTotalPay;
                     } else if (day.type === 'common') {
                       dayBase = day.dailyRateAtTime !== undefined ? day.dailyRateAtTime : emp.dailyRate;

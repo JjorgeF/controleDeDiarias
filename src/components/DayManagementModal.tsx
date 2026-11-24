@@ -1,9 +1,9 @@
 import React from 'react';
-import { X, Search, UserPlus, UserMinus, Clock, Copy, ClipboardPaste, Users, Plus, Trash2, PartyPopper, ChevronDown, ChevronUp, Zap, Lock, ShieldCheck, Target, Check, Wrench, Briefcase, Moon, AlertTriangle } from 'lucide-react';
-import { Employee, WorkDay, DayType, DayConfig, PartyConfig } from '../types';
-import { format, isSunday, parseISO } from 'date-fns';
+import { X, Search, UserPlus, UserMinus, Clock, Copy, ClipboardPaste, Users, Plus, Trash2, PartyPopper, ChevronDown, ChevronUp, Zap, Lock, ShieldCheck, Target, Check, Wrench, Briefcase, Moon, AlertTriangle, Sparkles, DollarSign, Calendar } from 'lucide-react';
+import { Employee, WorkDay, DayType, DayConfig, PartyConfig, SpecialPayMode } from '../types';
+import { format, isSunday, parseISO, addMonths, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { cn, formatCurrency, checkShiftsOverlap } from '../lib/utils';
+import { cn, formatCurrency, checkShiftsOverlap, isReveillonViradaWorkDay } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import ShiftSelector from './ShiftSelector';
 import DayWorkModeEditor from './DayWorkModeEditor';
@@ -40,6 +40,7 @@ export default function DayManagementModal({
   const [searchQuery, setSearchQuery] = React.useState('');
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [expandedEmployeeId, setExpandedEmployeeId] = React.useState<string | null>(null);
+  const [expandedPartyPayId, setExpandedPartyPayId] = React.useState<string | null>(null);
   const [isEventsExpanded, setIsEventsExpanded] = React.useState(true);
   const [isApoioMenuOpen, setIsApoioMenuOpen] = React.useState(false);
   const [manualOverrideTarget, setManualOverrideTarget] = React.useState<{
@@ -51,6 +52,8 @@ export default function DayManagementModal({
   } | null>(null);
 
   const selectedDayStr = selectedDay ? format(selectedDay, 'yyyy-MM-dd') : '';
+  const isNewYearsEve = selectedDayStr.endsWith('-12-31');
+  const isNewYearsDay = selectedDayStr.endsWith('-01-01');
 
   // Normalize parties list
   const normalizedParties: PartyConfig[] = React.useMemo(() => {
@@ -160,14 +163,222 @@ export default function DayManagementModal({
     setIsApoioMenuOpen(false);
   };
 
-  const handleUpdateParty = (partyId: string, field: 'name' | 'time', value: string) => {
-    const updatedParties = normalizedParties.map(p => 
-      p.id === partyId ? { ...p, [field]: value } : p
+  const isSlotCoord = (p: PartyConfig) => (p.name || '').toLowerCase().includes('coordena');
+  const isSlotOffice = (p: PartyConfig) => (p.name || '').toLowerCase().includes('escritório') || (p.name || '').toLowerCase().includes('escritorio');
+  const isSlotJanitor = (p: PartyConfig) => (p.name || '').toLowerCase().includes('zelador');
+  const isSlotSpecial = (p: PartyConfig) =>
+    Boolean(p.isSpecialShift) ||
+    (p.name || '').toLowerCase().includes('réveillon') ||
+    (p.name || '').toLowerCase().includes('reveillon') ||
+    (p.name || '').toLowerCase().includes('virada') ||
+    (p.name || '').toLowerCase().includes('ano novo') ||
+    (p.name || '').toLowerCase().includes('turno');
+
+  const handleAddReveillonVirada = () => {
+    const existing = normalizedParties.find(p =>
+      (p.name || '').toLowerCase().includes('virada') ||
+      (p.name || '').toLowerCase().includes('réveillon') ||
+      (p.name || '').toLowerCase().includes('reveillon')
+    );
+    if (existing) {
+      setIsEventsExpanded(true);
+      setIsApoioMenuOpen(false);
+      setExpandedPartyPayId(existing.id);
+      return;
+    }
+    const newId = 'p_rev_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 5);
+    const newSpecial: PartyConfig = {
+      id: newId,
+      name: 'Réveillon Virada',
+      time: '20h até 04h',
+      isSpecialShift: true,
+      customPayMode: 'default_daily'
+    };
+    const updatedParties = [...normalizedParties, newSpecial];
+    onUpdateDayConfig(selectedDayStr, {
+      ...dayConfig,
+      isParty: true,
+      parties: updatedParties
+    });
+    setIsEventsExpanded(true);
+    setIsApoioMenuOpen(false);
+    setExpandedPartyPayId(newId);
+  };
+
+  const handleAddSpecialShift = () => {
+    const newId = 'p_turno_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 5);
+    const defaultName = isNewYearsDay ? 'Turno Ano Novo' : 'Turno Especial';
+    const defaultTime = isNewYearsDay ? '10h até 18h' : '20h até 04h';
+    const newSpecial: PartyConfig = {
+      id: newId,
+      name: defaultName,
+      time: defaultTime,
+      isSpecialShift: true,
+      customPayMode: 'default_daily'
+    };
+    const updatedParties = [...normalizedParties, newSpecial];
+    onUpdateDayConfig(selectedDayStr, {
+      ...dayConfig,
+      isParty: true,
+      parties: updatedParties
+    });
+    setIsEventsExpanded(true);
+    setIsApoioMenuOpen(false);
+    setExpandedPartyPayId(newId);
+  };
+
+  const handleApplyReveillonPreset = () => {
+    if (isNewYearsEve) {
+      const hasVirada = normalizedParties.some(p =>
+        (p.name || '').toLowerCase().includes('virada') ||
+        (p.name || '').toLowerCase().includes('réveillon') ||
+        (p.name || '').toLowerCase().includes('reveillon')
+      );
+      let updatedParties = normalizedParties;
+      let createdId: string | null = null;
+      if (!hasVirada) {
+        createdId = 'p_rev_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 5);
+        updatedParties = [
+          ...normalizedParties,
+          {
+            id: createdId,
+            name: 'Réveillon Virada',
+            time: '20h até 04h',
+            isSpecialShift: true,
+            customPayMode: 'default_daily'
+          }
+        ];
+      }
+      onUpdateDayConfig(selectedDayStr, {
+        ...dayConfig,
+        isCommon: true,
+        isParty: updatedParties.length > 0,
+        parties: updatedParties
+      });
+      if (createdId) setExpandedPartyPayId(createdId);
+      setIsEventsExpanded(true);
+    } else if (isNewYearsDay) {
+      onUpdateDayConfig(selectedDayStr, {
+        ...dayConfig,
+        isCommon: true
+      });
+      // Update any existing CCSP assignments with undefined/default shift to Ano Novo (10h - 18h)
+      employees.forEach(emp => {
+        const hasPendingCcsp = (emp.workDays || []).some(
+          d => d.date === selectedDayStr && d.type === 'common' && !d.isCancelled &&
+          (!d.shift || d.shift === 'Definir Horário' || d.shift.startsWith('Brinquedoteca'))
+        );
+        if (hasPendingCcsp) {
+          const newDays = emp.workDays.map(d =>
+            d.date === selectedDayStr && d.type === 'common' && !d.isCancelled &&
+            (!d.shift || d.shift === 'Definir Horário' || d.shift.startsWith('Brinquedoteca'))
+              ? { ...d, shift: 'Ano Novo (10h - 18h)' }
+              : d
+          );
+          onUpdateDays(emp.id, newDays);
+        }
+      });
+      setIsEventsExpanded(true);
+    }
+  };
+
+  const handleUpdatePartyFields = (partyId: string, patch: Partial<PartyConfig>) => {
+    const updatedParties = normalizedParties.map(p =>
+      p.id === partyId ? { ...p, ...patch } : p
     );
     onUpdateDayConfig(selectedDayStr, {
       ...dayConfig,
       isParty: updatedParties.length > 0,
       parties: updatedParties
+    });
+  };
+
+  const handleUpdateParty = (partyId: string, field: 'name' | 'time', value: string) => {
+    handleUpdatePartyFields(partyId, { [field]: value });
+  };
+
+  const computeSlotPayFields = (party: PartyConfig, employee: Employee) => {
+    const mode = party.customPayMode || 'default_party';
+    const val = Math.max(0, Number(party.customPayValue || 0));
+    const dueDateOverride = party.customPaymentDueDate && /^\d{4}-\d{2}-\d{2}$/.test(party.customPaymentDueDate)
+      ? party.customPaymentDueDate
+      : undefined;
+
+    if (mode === 'default_daily') {
+      return {
+        isCustomPay: true,
+        isReducedHours: false,
+        customHoursText: `${party.name || 'Turno'} (Diária CCSP)`,
+        customTotalPay: employee.dailyRate || 0,
+        customPaymentDueDate: dueDateOverride
+      };
+    }
+    if (mode === 'fixed') {
+      return {
+        isCustomPay: true,
+        isReducedHours: false,
+        customHoursText: party.name || 'Valor Combinado',
+        customTotalPay: val,
+        customPaymentDueDate: dueDateOverride
+      };
+    }
+    if (mode === 'bonus') {
+      return {
+        isCustomPay: true,
+        isReducedHours: false,
+        customHoursText: val > 0 ? `${party.name || 'Turno'} (+${formatCurrency(val)})` : (party.name || 'Diária + Adicional'),
+        customTotalPay: (employee.dailyRate || 0) + val,
+        customPaymentDueDate: dueDateOverride
+      };
+    }
+    return {
+      isCustomPay: false,
+      isReducedHours: false,
+      customHoursText: undefined,
+      customTotalPay: undefined,
+      customPaymentDueDate: dueDateOverride
+    };
+  };
+
+  const handleApplyPartyPayToAssigned = (party: PartyConfig) => {
+    employees.forEach(emp => {
+      const hasThisParty = (emp.workDays || []).some(
+        d => d.date === selectedDayStr && d.type === 'party' && !d.isCancelled &&
+        (d.partyId === party.id || (!d.partyId && party.id === 'default_party') || d.partyName === party.name)
+      );
+      if (!hasThisParty) return;
+
+      const payFields = computeSlotPayFields(party, emp);
+      const updatedDays = emp.workDays.map(d => {
+        const isMatch = d.date === selectedDayStr && d.type === 'party' && !d.isCancelled &&
+          (d.partyId === party.id || (!d.partyId && party.id === 'default_party') || d.partyName === party.name);
+        if (!isMatch) return d;
+
+        const next: WorkDay = {
+          ...d,
+          partyName: party.name,
+          shift: party.time || d.shift || ''
+        };
+        if (payFields.isCustomPay) {
+          next.isCustomPay = true;
+          next.isReducedHours = false;
+          next.customHoursText = payFields.customHoursText;
+          next.customTotalPay = payFields.customTotalPay;
+        } else {
+          next.isCustomPay = false;
+          if (!d.isReducedHours) {
+            delete next.customHoursText;
+            delete next.customTotalPay;
+          }
+        }
+        if (payFields.customPaymentDueDate) {
+          next.customPaymentDueDate = payFields.customPaymentDueDate;
+        } else {
+          delete next.customPaymentDueDate;
+        }
+        return next;
+      });
+      onUpdateDays(emp.id, updatedDays);
     });
   };
 
@@ -256,7 +467,13 @@ export default function DayManagementModal({
       }
 
       const hadCommonAvail = (employee.availabilities || []).some(a => a === selectedDayStr || a === `${selectedDayStr}_common`);
-      const defaultShift = (selectedDay && isSunday(selectedDay)) ? 'Brinquedoteca (9h - 18h)' : 'Brinquedoteca 1 (9h - 18h)';
+      const defaultShift = isNewYearsEve
+        ? 'Réveillon Dia (9h - 18h)'
+        : isNewYearsDay
+          ? 'Ano Novo (10h - 18h)'
+          : (selectedDay && isSunday(selectedDay))
+            ? 'Brinquedoteca (9h - 18h)'
+            : 'Brinquedoteca 1 (9h - 18h)';
       const newDays: WorkDay[] = [...currentWorkDays, {
         id: `${selectedDayStr}_common_${Date.now()}`,
         date: selectedDayStr,
@@ -288,12 +505,14 @@ export default function DayManagementModal({
       const isPartyGeneral = (employee.availabilities || []).includes(`${selectedDayStr}_party`);
       const hadPartyAvail = isPartyGeneral || (employee.availabilities || []).includes(`${selectedDayStr}_party_${party.id}`);
 
-      const isOffice = (party.name || '').toLowerCase().includes('escritório') || (party.name || '').toLowerCase().includes('escritorio');
-      const isJanitor = (party.name || '').toLowerCase().includes('zelador');
+      const isOffice = isSlotOffice(party);
+      const isJanitor = isSlotJanitor(party);
 
       let customTotalPay: number | undefined = undefined;
       let isReducedHours = false;
+      let isCustomPay = false;
       let customHoursText = '';
+      let customPaymentDueDate: string | undefined = undefined;
 
       if (isOffice) {
         const timeStr = party.time || dayConfig?.partyTime || '';
@@ -320,6 +539,16 @@ export default function DayManagementModal({
         isReducedHours = true;
         customHoursText = 'Zeladoria';
         customTotalPay = employee.janitorRate || 0;
+      } else {
+        const slotPay = computeSlotPayFields(party, employee);
+        if (slotPay.isCustomPay) {
+          isCustomPay = true;
+          customTotalPay = slotPay.customTotalPay;
+          customHoursText = slotPay.customHoursText || '';
+        }
+        if (slotPay.customPaymentDueDate) {
+          customPaymentDueDate = slotPay.customPaymentDueDate;
+        }
       }
 
       const newDays: WorkDay[] = [...currentWorkDays, {
@@ -339,6 +568,14 @@ export default function DayManagementModal({
           isReducedHours,
           customHoursText,
           customTotalPay
+        }),
+        ...(isCustomPay && {
+          isCustomPay,
+          customHoursText,
+          customTotalPay
+        }),
+        ...(customPaymentDueDate && {
+          customPaymentDueDate
         })
       }];
       onUpdateDays(employee.id, newDays);
@@ -640,28 +877,34 @@ export default function DayManagementModal({
                       CCSP
                     </span>
                   )}
-                  {normalizedParties.filter(p => !(p.name || '').toLowerCase().includes('coordena') && !(p.name || '').toLowerCase().includes('escritório') && !(p.name || '').toLowerCase().includes('escritorio') && !(p.name || '').toLowerCase().includes('zelador')).length > 0 && (
+                  {normalizedParties.filter(p => !isSlotCoord(p) && !isSlotOffice(p) && !isSlotJanitor(p) && !isSlotSpecial(p)).length > 0 && (
                     <span className="text-[10px] font-bold text-brand-party bg-brand-party/40 border border-brand-party/30 px-2 py-0.5 rounded-md flex items-center gap-1">
                       <span>🎉</span>
                       <span>
-                        {normalizedParties.filter(p => !(p.name || '').toLowerCase().includes('coordena') && !(p.name || '').toLowerCase().includes('escritório') && !(p.name || '').toLowerCase().includes('escritorio') && !(p.name || '').toLowerCase().includes('zelador')).length}{' '}
-                        {normalizedParties.filter(p => !(p.name || '').toLowerCase().includes('coordena') && !(p.name || '').toLowerCase().includes('escritório') && !(p.name || '').toLowerCase().includes('escritorio') && !(p.name || '').toLowerCase().includes('zelador')).length === 1 ? 'Festa' : 'Festas'}
+                        {normalizedParties.filter(p => !isSlotCoord(p) && !isSlotOffice(p) && !isSlotJanitor(p) && !isSlotSpecial(p)).length}{' '}
+                        {normalizedParties.filter(p => !isSlotCoord(p) && !isSlotOffice(p) && !isSlotJanitor(p) && !isSlotSpecial(p)).length === 1 ? 'Festa' : 'Festas'}
                       </span>
                     </span>
                   )}
-                  {normalizedParties.some(p => (p.name || '').toLowerCase().includes('coordena')) && (
+                  {normalizedParties.filter(p => isSlotSpecial(p)).map((sp, spIdx) => (
+                    <span key={`${sp.id || 'sp'}_${spIdx}`} className="text-[10px] font-bold text-amber-200 bg-amber-500/20 border border-amber-400/40 px-2 py-0.5 rounded-md flex items-center gap-1">
+                      <Sparkles size={11} className="text-amber-300" />
+                      <span>{sp.name}</span>
+                    </span>
+                  ))}
+                  {normalizedParties.some(p => isSlotCoord(p)) && (
                     <span className="text-[10px] font-bold text-cyan-300 bg-cyan-950/40 border border-cyan-500/30 px-2 py-0.5 rounded-md flex items-center gap-1">
                       <ShieldCheck size={11} className="text-cyan-300" />
                       <span>Coordenação</span>
                     </span>
                   )}
-                  {normalizedParties.some(p => (p.name || '').toLowerCase().includes('escritório') || (p.name || '').toLowerCase().includes('escritorio')) && (
+                  {normalizedParties.some(p => isSlotOffice(p)) && (
                     <span className="text-[10px] font-bold text-blue-300 bg-blue-950/40 border border-blue-500/30 px-2 py-0.5 rounded-md flex items-center gap-1">
                       <Briefcase size={11} className="text-blue-300" />
                       <span>Escritório</span>
                     </span>
                   )}
-                  {normalizedParties.some(p => (p.name || '').toLowerCase().includes('zelador')) && (
+                  {normalizedParties.some(p => isSlotJanitor(p)) && (
                     <span className="text-[10px] font-bold text-zinc-300 bg-zinc-950/40 border border-zinc-500/30 px-2 py-0.5 rounded-md flex items-center gap-1">
                       <Wrench size={11} className="text-zinc-300" />
                       <span>Zeladoria</span>
@@ -709,12 +952,13 @@ export default function DayManagementModal({
                       </button>
 
                       {(() => {
-                        const hasRegularParties = normalizedParties.some(p => !(p.name || '').toLowerCase().includes('coordena') && !(p.name || '').toLowerCase().includes('escritório') && !(p.name || '').toLowerCase().includes('escritorio') && !(p.name || '').toLowerCase().includes('zelador'));
-                        const hasCoordination = normalizedParties.some(p => (p.name || '').toLowerCase().includes('coordena'));
-                        const hasOffice = normalizedParties.some(p => (p.name || '').toLowerCase().includes('escritório') || (p.name || '').toLowerCase().includes('escritorio'));
-                        const hasJanitor = normalizedParties.some(p => (p.name || '').toLowerCase().includes('zelador'));
+                        const hasRegularParties = normalizedParties.some(p => !isSlotCoord(p) && !isSlotOffice(p) && !isSlotJanitor(p) && !isSlotSpecial(p));
+                        const hasCoordination = normalizedParties.some(p => isSlotCoord(p));
+                        const hasOffice = normalizedParties.some(p => isSlotOffice(p));
+                        const hasJanitor = normalizedParties.some(p => isSlotJanitor(p));
+                        const hasSpecial = normalizedParties.some(p => isSlotSpecial(p));
                         
-                        const hasAnyApoio = hasCoordination || hasOffice || hasJanitor;
+                        const hasAnyApoio = hasCoordination || hasOffice || hasJanitor || hasSpecial;
 
                         return (
                           <>
@@ -755,8 +999,32 @@ export default function DayManagementModal({
                                       animate={{ opacity: 1, y: 0, scale: 1 }}
                                       exit={{ opacity: 0, y: -5, scale: 0.95 }}
                                       transition={{ duration: 0.15 }}
-                                      className="absolute top-full right-0 md:left-0 md:right-auto mt-2 min-w-[180px] bg-slate-900 border border-brand-border p-1.5 rounded-xl shadow-2xl z-50 flex flex-col gap-1 overflow-hidden"
+                                      className="absolute top-full right-0 md:left-0 md:right-auto mt-2 min-w-[220px] bg-slate-900 border border-brand-border p-1.5 rounded-xl shadow-2xl z-50 flex flex-col gap-1 overflow-hidden"
                                     >
+                                      <button
+                                        onClick={handleAddReveillonVirada}
+                                        className={cn(
+                                          "w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors",
+                                          hasSpecial ? "bg-amber-500/15 text-amber-200" : "hover:bg-slate-800 text-amber-200"
+                                        )}
+                                      >
+                                        <Sparkles size={15} className="text-amber-300 shrink-0" />
+                                        <div className="flex flex-col leading-tight">
+                                          <span>Réveillon Virada</span>
+                                          <span className="text-[10px] text-amber-300/75 font-medium">20h às 04h (Turno Próprio)</span>
+                                        </div>
+                                      </button>
+
+                                      <button
+                                        onClick={handleAddSpecialShift}
+                                        className="w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors hover:bg-slate-800 text-slate-200"
+                                      >
+                                        <Clock size={15} className="text-purple-300 shrink-0" />
+                                        <span>Turno Especial (Personalizado)</span>
+                                      </button>
+
+                                      <div className="h-px bg-white/10 my-0.5" />
+
                                       <button
                                         onClick={handleAddCoordination}
                                         className={cn(
@@ -794,6 +1062,17 @@ export default function DayManagementModal({
                                 )}
                               </AnimatePresence>
                             </div>
+
+                            {(isNewYearsEve || isNewYearsDay) && (
+                              <button
+                                type="button"
+                                onClick={handleApplyReveillonPreset}
+                                className="px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 border bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 border-amber-400/50 shadow-sm"
+                                title={isNewYearsEve ? 'Ativa CCSP (9h-18h) e cria turno próprio Réveillon Virada (20h-04h)' : 'Configura CCSP Ano Novo (10h-18h)'}
+                              >
+                                <span>{isNewYearsEve ? 'Padrão 31/12 (9h-18h + Virada 20h-04h)' : 'Padrão 01/01 (10h-18h)'}</span>
+                              </button>
+                            )}
                           </>
                         );
                       })()}
@@ -932,11 +1211,11 @@ export default function DayManagementModal({
                               )}
 
                               {/* Lista de Festas e Apoios */}
-                              {normalizedParties.map(p => {
+                              {normalizedParties.map((p, pIdx) => {
                                 const allPartyIds = normalizedParties.map(item => item.id);
                                 const isPartyActive = (
                                   !dayConfig.extraordinaryScope || 
-                                  dayConfig.extraordinaryScope === 'all' ||
+                                  dayConfig.extraordinaryScope === 'all' || 
                                   (dayConfig.extraordinaryScope === 'parties' && (!dayConfig.extraordinaryPartyIds || dayConfig.extraordinaryPartyIds.length === 0)) ||
                                   (dayConfig.extraordinaryPartyIds && dayConfig.extraordinaryPartyIds.includes(p.id))
                                 );
@@ -947,7 +1226,7 @@ export default function DayManagementModal({
 
                                 return (
                                   <label 
-                                    key={p.id} 
+                                    key={`${p.id || 'p'}_${pIdx}`} 
                                     className={cn(
                                       "flex items-center justify-between p-2 rounded-lg border cursor-pointer transition-all",
                                       isCoord
@@ -1008,7 +1287,9 @@ export default function DayManagementModal({
                                               ? "border-blue-400 text-blue-500 focus:ring-blue-500" 
                                               : isJanitor 
                                                 ? "border-zinc-400 text-zinc-400 focus:ring-zinc-400" 
-                                                : "border-brand-party text-brand-party focus:ring-brand-party"
+                                                : isSlotSpecial(p)
+                                                  ? "border-amber-400 text-amber-500 focus:ring-amber-500"
+                                                  : "border-brand-party text-brand-party focus:ring-brand-party"
                                         )}
                                       />
                                       <div className="flex items-center gap-1.5">
@@ -1018,12 +1299,14 @@ export default function DayManagementModal({
                                           <Briefcase size={14} className="text-blue-400 shrink-0" />
                                         ) : isJanitor ? (
                                           <Wrench size={14} className="text-zinc-400 shrink-0" />
+                                        ) : isSlotSpecial(p) ? (
+                                          <Sparkles size={14} className="text-amber-300 shrink-0" />
                                         ) : (
                                           <span className="text-xs select-none">🎉</span>
                                         )}
                                         <span className={cn(
                                           "text-xs font-bold",
-                                          isCoord ? "text-cyan-300" : isOffice ? "text-blue-300" : isJanitor ? "text-zinc-300" : "text-brand-party"
+                                          isCoord ? "text-cyan-300" : isOffice ? "text-blue-300" : isJanitor ? "text-zinc-300" : isSlotSpecial(p) ? "text-amber-200" : "text-brand-party"
                                         )}>
                                           {p.name || 'Festa'}
                                         </span>
@@ -1038,7 +1321,9 @@ export default function DayManagementModal({
                                             ? "text-blue-300/90 bg-blue-500/20 border-blue-500/30" 
                                             : isJanitor 
                                               ? "text-zinc-300/90 bg-zinc-500/20 border-zinc-500/30" 
-                                              : "text-brand-party/80 bg-brand-party/20 border-brand-party/30"
+                                              : isSlotSpecial(p)
+                                                ? "text-amber-200/90 bg-amber-500/20 border-amber-500/30"
+                                                : "text-brand-party/80 bg-brand-party/20 border-brand-party/30"
                                       )}>
                                         {p.time}
                                       </span>
@@ -1052,14 +1337,25 @@ export default function DayManagementModal({
                       </div>
                     )}
 
-                    {/* Integrated Parties List */}
+                    {/* Integrated Parties & Special Shifts List */}
                     {normalizedParties.length > 0 && (
                       <div className="space-y-2 pt-1">
                         {normalizedParties.map((party, idx) => {
                           const { start, end } = parsePartyTime(party.time);
-                          const isCoord = (party.name || '').toLowerCase().includes('coordena');
-                          const isOffice = (party.name || '').toLowerCase().includes('escritório') || (party.name || '').toLowerCase().includes('escritorio');
-                          const isJanitor = (party.name || '').toLowerCase().includes('zelador');
+                          const isCoord = isSlotCoord(party);
+                          const isOffice = isSlotOffice(party);
+                          const isJanitor = isSlotJanitor(party);
+                          const isSpecial = isSlotSpecial(party);
+                          const isPayConfigOpen = expandedPartyPayId === party.id;
+                          const payMode: SpecialPayMode = party.customPayMode || 'default_party';
+                          const hasCustomSlotPay = (payMode !== 'default_party') || Boolean(party.customPaymentDueDate);
+
+                          const assignedInSlotCount = employees.filter(emp =>
+                            (emp.workDays || []).some(
+                              d => d.date === selectedDayStr && d.type === 'party' && !d.isCancelled &&
+                              (d.partyId === party.id || (!d.partyId && party.id === 'default_party') || d.partyName === party.name)
+                            )
+                          ).length;
 
                           const handleTimeUpdate = (newStart: string, newEnd: string) => {
                             let formatted = '';
@@ -1075,77 +1371,202 @@ export default function DayManagementModal({
                             handleUpdateParty(party.id, 'time', formatted);
                           };
 
+                          const payBadgeLabel = payMode === 'default_daily'
+                            ? 'Diária CCSP'
+                            : payMode === 'fixed'
+                              ? `Fixo ${formatCurrency(party.customPayValue || 0)}`
+                              : payMode === 'bonus'
+                                ? `Diária + ${formatCurrency(party.customPayValue || 0)}`
+                                : 'Taxa Festa';
+
                           return (
                             <div 
-                              key={party.id || idx} 
+                              key={`${party.id || 'party'}_${idx}`} 
                               className={cn(
-                                "flex flex-col sm:flex-row sm:items-center gap-2 rounded-xl p-2.5 animate-in fade-in border",
-                                isCoord
-                                  ? "bg-cyan-950/40 border-cyan-500/40"
-                                  : isOffice
-                                    ? "bg-blue-950/40 border-blue-500/40"
-                                    : isJanitor
-                                      ? "bg-zinc-950/40 border-zinc-500/40"
-                                      : "bg-brand-party/25 border-brand-party/30"
+                                "rounded-xl p-2.5 animate-in fade-in border space-y-2",
+                                isSpecial
+                                  ? "bg-amber-950/30 border-amber-400/45"
+                                  : isCoord
+                                    ? "bg-cyan-950/40 border-cyan-500/40"
+                                    : isOffice
+                                      ? "bg-blue-950/40 border-blue-500/40"
+                                      : isJanitor
+                                        ? "bg-zinc-950/40 border-zinc-500/40"
+                                        : "bg-brand-party/25 border-brand-party/30"
                               )}
                             >
-                              <div className="flex items-center gap-1.5 flex-1 min-w-[150px]">
-                                {isCoord ? (
-                                  <ShieldCheck size={18} className="text-cyan-300 shrink-0" />
-                                ) : isOffice ? (
-                                  <Briefcase size={18} className="text-blue-400 shrink-0" />
-                                ) : isJanitor ? (
-                                  <Wrench size={18} className="text-zinc-400 shrink-0" />
-                                ) : (
-                                  <span className="text-sm select-none">🎉</span>
-                                )}
-                                <input 
-                                  type="text"
-                                  placeholder={isCoord ? "Coordenação" : isOffice ? "Escritório" : isJanitor ? "Zeladoria" : "Nome da Festa"}
-                                  value={party.name}
-                                  onChange={(e) => handleUpdateParty(party.id, 'name', e.target.value)}
-                                  className={cn(
-                                    "w-full bg-brand-bg border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-white font-bold placeholder-gray-500 focus:outline-none",
-                                    isCoord ? "focus:border-cyan-400 text-cyan-100" : isOffice ? "focus:border-blue-400 text-blue-100" : isJanitor ? "focus:border-zinc-400 text-zinc-100" : "focus:border-brand-party text-white"
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                                <div className="flex items-center gap-1.5 flex-1 min-w-[150px]">
+                                  {isSpecial ? (
+                                    <Sparkles size={18} className="text-amber-300 shrink-0" />
+                                  ) : isCoord ? (
+                                    <ShieldCheck size={18} className="text-cyan-300 shrink-0" />
+                                  ) : isOffice ? (
+                                    <Briefcase size={18} className="text-blue-400 shrink-0" />
+                                  ) : isJanitor ? (
+                                    <Wrench size={18} className="text-zinc-400 shrink-0" />
+                                  ) : (
+                                    <span className="text-sm select-none">🎉</span>
                                   )}
-                                />
-                              </div>
-
-                              <div className="flex items-center justify-between sm:justify-start gap-2">
-                                <div className={cn(
-                                  "flex items-center gap-1 bg-brand-bg border border-brand-border rounded-lg px-2 py-1 text-xs text-white font-semibold",
-                                  isCoord ? "focus-within:border-cyan-400" : isOffice ? "focus-within:border-blue-400" : isJanitor ? "focus-within:border-zinc-400" : "focus-within:border-brand-party"
-                                )}>
-                                  <span className={cn(
-                                    "text-[10px] font-bold uppercase shrink-0 mr-0.5",
-                                    isCoord ? "text-cyan-300" : isOffice ? "text-blue-400" : isJanitor ? "text-zinc-400" : "text-brand-party"
-                                  )}>Horário:</span>
                                   <input 
                                     type="text"
-                                    placeholder="12:00"
-                                    value={start}
-                                    onChange={(e) => handleTimeUpdate(e.target.value, end)}
-                                    className="w-12 bg-transparent text-center font-bold text-white focus:outline-none placeholder-gray-600 text-xs"
+                                    placeholder={isSpecial ? "Ex: Réveillon Virada" : isCoord ? "Coordenação" : isOffice ? "Escritório" : isJanitor ? "Zeladoria" : "Nome da Festa"}
+                                    value={party.name}
+                                    onChange={(e) => handleUpdateParty(party.id, 'name', e.target.value)}
+                                    className={cn(
+                                      "w-full bg-brand-bg border border-brand-border rounded-lg px-2.5 py-1.5 text-xs text-white font-bold placeholder-gray-500 focus:outline-none",
+                                      isSpecial ? "focus:border-amber-400 text-amber-100" : isCoord ? "focus:border-cyan-400 text-cyan-100" : isOffice ? "focus:border-blue-400 text-blue-100" : isJanitor ? "focus:border-zinc-400 text-zinc-100" : "focus:border-brand-party text-white"
+                                    )}
                                   />
-                                  <span className="text-gray-400 font-bold text-[10px] select-none">h até</span>
-                                  <input 
-                                    type="text"
-                                    placeholder="17:00"
-                                    value={end}
-                                    onChange={(e) => handleTimeUpdate(start, e.target.value)}
-                                    className="w-12 bg-transparent text-center font-bold text-white focus:outline-none placeholder-gray-600 text-xs"
-                                  />
-                                  <span className="text-gray-400 font-bold text-[10px] select-none">h</span>
                                 </div>
 
-                                <button 
-                                  onClick={() => handleRemoveParty(party.id)}
-                                  className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
-                                  title="Excluir este evento"
-                                >
-                                  <Trash2 size={15} />
-                                </button>
+                                <div className="flex items-center justify-between sm:justify-start gap-1.5 flex-wrap">
+                                  <div className={cn(
+                                    "flex items-center gap-1 bg-brand-bg border border-brand-border rounded-lg px-2 py-1 text-xs text-white font-semibold",
+                                    isSpecial ? "focus-within:border-amber-400" : isCoord ? "focus-within:border-cyan-400" : isOffice ? "focus-within:border-blue-400" : isJanitor ? "focus-within:border-zinc-400" : "focus-within:border-brand-party"
+                                  )}>
+                                    <span className={cn(
+                                      "text-[10px] font-bold uppercase shrink-0 mr-0.5",
+                                      isSpecial ? "text-amber-300" : isCoord ? "text-cyan-300" : isOffice ? "text-blue-400" : isJanitor ? "text-zinc-400" : "text-brand-party"
+                                    )}>Horário:</span>
+                                    <input 
+                                      type="text"
+                                      placeholder="20:00"
+                                      value={start}
+                                      onChange={(e) => handleTimeUpdate(e.target.value, end)}
+                                      className="w-12 bg-transparent text-center font-bold text-white focus:outline-none placeholder-gray-600 text-xs"
+                                    />
+                                    <span className="text-gray-400 font-bold text-[10px] select-none">h até</span>
+                                    <input 
+                                      type="text"
+                                      placeholder="04:00"
+                                      value={end}
+                                      onChange={(e) => handleTimeUpdate(start, e.target.value)}
+                                      className="w-12 bg-transparent text-center font-bold text-white focus:outline-none placeholder-gray-600 text-xs"
+                                    />
+                                    <span className="text-gray-400 font-bold text-[10px] select-none">h</span>
+                                  </div>
+
+                                  {!isOffice && !isJanitor && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setExpandedPartyPayId(isPayConfigOpen ? null : party.id)}
+                                      className={cn(
+                                        "px-2 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 border transition-colors",
+                                        hasCustomSlotPay || isPayConfigOpen
+                                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                                          : "bg-brand-bg text-gray-300 border-brand-border hover:border-emerald-500/40 hover:text-emerald-300"
+                                      )}
+                                      title="Ajustar valor padrão e vencimento deste turno"
+                                    >
+                                      <DollarSign size={12} className="shrink-0" />
+                                      <span className="tabular-nums">{payBadgeLabel}</span>
+                                      {(party.customPaymentDueDate || isReveillonViradaWorkDay({ date: selectedDayStr, partyId: party.id, partyName: party.name })) && (
+                                        <span className="text-[9px] text-cyan-300 font-mono">
+                                          · {party.customPaymentDueDate
+                                            ? format(parseISO(`${party.customPaymentDueDate}T12:00:00`), 'dd/MM')
+                                            : format(addMonths(startOfMonth(parseISO(`${selectedDayStr}T12:00:00`)), 1), '15/MM')}
+                                        </span>
+                                      )}
+                                    </button>
+                                  )}
+
+                                  <button 
+                                    onClick={() => handleRemoveParty(party.id)}
+                                    className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
+                                    title="Excluir este evento/turno"
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </div>
                               </div>
+
+                              {/* Inline Pagamento Ajustável para este turno/evento */}
+                              {isPayConfigOpen && !isOffice && !isJanitor && (
+                                <div className="bg-brand-bg/75 border border-emerald-500/30 rounded-lg p-2.5 space-y-2 text-[11px]">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <span className="font-bold text-emerald-300 flex items-center gap-1">
+                                      <DollarSign size={13} />
+                                      Pagamento Padrão do Turno ({party.name})
+                                    </span>
+                                    {assignedInSlotCount > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleApplyPartyPayToAssigned(party)}
+                                        className="px-2 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-200 text-[10px] font-bold transition-colors"
+                                      >
+                                        Aplicar aos {assignedInSlotCount} já escalado(s)
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    <div>
+                                      <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1">Regra de Valor</label>
+                                      <select
+                                        value={payMode}
+                                        onChange={(e) => handleUpdatePartyFields(party.id, { customPayMode: e.target.value as SpecialPayMode })}
+                                        className="w-full bg-brand-card border border-brand-border rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-400"
+                                      >
+                                        <option value="default_party">Taxa Festa do nível</option>
+                                        <option value="default_daily">Diária CCSP do nível</option>
+                                        <option value="fixed">Valor Fixo Combinado (R$)</option>
+                                        <option value="bonus">Diária CCSP + Adicional (R$)</option>
+                                      </select>
+                                    </div>
+
+                                    {(payMode === 'fixed' || payMode === 'bonus') && (
+                                      <div>
+                                        <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1">
+                                          {payMode === 'fixed' ? 'Valor Fixo (R$)' : 'Adicional (R$)'}
+                                        </label>
+                                        <div className="relative">
+                                          <span className="absolute left-2 top-1 text-[11px] text-gray-400 font-bold">R$</span>
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            step="1"
+                                            value={party.customPayValue ?? ''}
+                                            onChange={(e) => handleUpdatePartyFields(party.id, { customPayValue: Math.max(0, Number(e.target.value) || 0) })}
+                                            placeholder="0"
+                                            className="w-full bg-brand-card border border-emerald-500/40 rounded py-1 pl-7 pr-2 text-xs font-bold text-emerald-300 focus:outline-none focus:border-emerald-400 tabular-nums"
+                                          />
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    <div>
+                                      <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1 flex items-center gap-1">
+                                        <Calendar size={10} className="text-cyan-400" />
+                                        Vencimento (Opcional)
+                                      </label>
+                                      <div className="flex items-center gap-1">
+                                        <input
+                                          type="date"
+                                          value={party.customPaymentDueDate || ''}
+                                          onChange={(e) => handleUpdatePartyFields(party.id, { customPaymentDueDate: e.target.value || undefined })}
+                                          className="w-full bg-brand-card border border-cyan-500/40 rounded px-2 py-1 text-xs font-mono text-cyan-200 focus:outline-none focus:border-cyan-400"
+                                        />
+                                          {party.customPaymentDueDate && (
+                                            <button
+                                              type="button"
+                                              onClick={() => handleUpdatePartyFields(party.id, { customPaymentDueDate: undefined })}
+                                              className="text-[10px] text-gray-400 hover:text-white px-1.5 py-1 rounded bg-slate-800"
+                                              title="Voltar para vencimento automático"
+                                            >
+                                              Auto
+                                            </button>
+                                          )}
+                                        </div>
+                                        {!party.customPaymentDueDate && isReveillonViradaWorkDay({ date: selectedDayStr, partyId: party.id, partyName: party.name }) && (
+                                          <span className="block text-[9px] text-cyan-300/80 mt-0.5 font-medium">
+                                            Padrão automático: {format(addMonths(startOfMonth(parseISO(`${selectedDayStr}T12:00:00`)), 1), '15/MM/yyyy')} (fechamento dez.)
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                             </div>
                           );
                         })}
@@ -1332,17 +1753,18 @@ export default function DayManagementModal({
                                   </button>
                                 )}
 
-                                {normalizedParties.map((party) => {
+                                {normalizedParties.map((party, pIdx) => {
                                   const isAssignedToThisParty = partyWorkDays.some(d => 
                                     (d.partyId === party.id || (!d.partyId && party.id === 'default_party') || d.partyName === party.name)
                                   );
-                                  const isCoord = (party.name || '').toLowerCase().includes('coordena');
-                                  const isOffice = (party.name || '').toLowerCase().includes('escritório') || (party.name || '').toLowerCase().includes('escritorio');
-                                  const isJanitor = (party.name || '').toLowerCase().includes('zelador');
+                                  const isCoord = isSlotCoord(party);
+                                  const isOffice = isSlotOffice(party);
+                                  const isJanitor = isSlotJanitor(party);
+                                  const isSpecial = isSlotSpecial(party);
 
                                   return (
                                     <button
-                                      key={party.id}
+                                      key={`${party.id || 'party'}_${pIdx}`}
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -1351,25 +1773,31 @@ export default function DayManagementModal({
                                       className={cn(
                                         "text-[9px] font-black px-2.5 py-1 rounded-lg transition-all uppercase tracking-wider flex items-center gap-1 max-w-[200px] truncate border",
                                         isAssignedToThisParty 
-                                          ? isOffice
-                                            ? "bg-blue-500 text-white font-bold border-blue-400 shadow-md ring-1 ring-blue-300"
-                                            : isJanitor
-                                              ? "bg-zinc-500 text-white font-bold border-zinc-400 shadow-md ring-1 ring-zinc-300"
-                                              : isCoord
-                                                ? "bg-cyan-500 text-slate-950 font-bold border-cyan-400 shadow-md ring-1 ring-cyan-300"
-                                                : "bg-brand-party text-white border-brand-party shadow-md ring-1 ring-brand-party" 
-                                          : isOffice
-                                            ? "bg-blue-950/40 border-blue-500/50 text-blue-300 hover:border-blue-400 hover:bg-blue-900/60"
-                                            : isJanitor
-                                              ? "bg-zinc-950/40 border-zinc-500/50 text-zinc-300 hover:border-zinc-400 hover:bg-zinc-900/60"
-                                              : isCoord
-                                                ? "bg-cyan-950/40 border-cyan-500/50 text-cyan-300 hover:border-cyan-400 hover:bg-cyan-900/60"
-                                                : "bg-brand-bg border-brand-border text-gray-400 hover:border-brand-party/50 hover:text-brand-party"
+                                          ? isSpecial
+                                            ? "bg-amber-400 text-slate-950 font-bold border-amber-300 shadow-md ring-1 ring-amber-300"
+                                            : isOffice
+                                              ? "bg-blue-500 text-white font-bold border-blue-400 shadow-md ring-1 ring-blue-300"
+                                              : isJanitor
+                                                ? "bg-zinc-500 text-white font-bold border-zinc-400 shadow-md ring-1 ring-zinc-300"
+                                                : isCoord
+                                                  ? "bg-cyan-500 text-slate-950 font-bold border-cyan-400 shadow-md ring-1 ring-cyan-300"
+                                                  : "bg-brand-party text-white border-brand-party shadow-md ring-1 ring-brand-party" 
+                                          : isSpecial
+                                            ? "bg-amber-950/40 border-amber-500/50 text-amber-300 hover:border-amber-400 hover:bg-amber-900/60"
+                                            : isOffice
+                                              ? "bg-blue-950/40 border-blue-500/50 text-blue-300 hover:border-blue-400 hover:bg-blue-900/60"
+                                              : isJanitor
+                                                ? "bg-zinc-950/40 border-zinc-500/50 text-zinc-300 hover:border-zinc-400 hover:bg-zinc-900/60"
+                                                : isCoord
+                                                  ? "bg-cyan-950/40 border-cyan-500/50 text-cyan-300 hover:border-cyan-400 hover:bg-cyan-900/60"
+                                                  : "bg-brand-bg border-brand-border text-gray-400 hover:border-brand-party/50 hover:text-brand-party"
                                       )}
                                       title={isAssignedToThisParty ? `Clique para remover de ${party.name}` : `Escalar para ${party.name}${party.time ? ` (${party.time})` : ''}`}
                                     >
                                       {isAssignedToThisParty ? (
                                         <Check size={11} strokeWidth={3} className="shrink-0" />
+                                      ) : isSpecial ? (
+                                        <Sparkles size={11} className="shrink-0 text-amber-300" />
                                       ) : isOffice ? (
                                         <Briefcase size={11} className="shrink-0 text-blue-300" />
                                       ) : isJanitor ? (
@@ -1398,11 +1826,11 @@ export default function DayManagementModal({
 
                               {/* Badges for active modes / extra hours per assignment */}
                               <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                                {dayWorkDays.map(wd => {
+                                {dayWorkDays.map((wd, wdIdx) => {
                                   const label = wd.type === 'common' ? 'CCSP' : (wd.partyName || 'Festa');
                                   const showName = dayWorkDays.length > 1;
                                   return (
-                                    <React.Fragment key={wd.id || `${wd.type}_${wd.partyId}`}>
+                                    <React.Fragment key={`${wd.id || `${wd.type}_${wd.partyId || wd.partyName || 'wd'}`}_${wdIdx}`}>
                                       {wd.isOvernight && (
                                         <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/40 shadow-sm">
                                           <Moon size={10} className="text-indigo-300" /> {showName ? `${label}: ` : ''}Pernoite ({wd.overnightHoursText || '22h às 08h'}) +{formatCurrency(wd.overnightPay || 0)}
@@ -1411,6 +1839,16 @@ export default function DayManagementModal({
                                       {wd.isReducedHours && (
                                         <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/40 shadow-sm">
                                           <Clock size={10} className="text-amber-300" /> {showName ? `${label}: ` : ''}Reduzido ({wd.customHoursText || 'Acordo'}): {formatCurrency(wd.customTotalPay || 0)}
+                                        </span>
+                                      )}
+                                      {wd.isCustomPay && !wd.isReducedHours && (
+                                        <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/40 shadow-sm tabular-nums">
+                                          <DollarSign size={10} className="text-emerald-300" /> {showName ? `${label}: ` : ''}Valor Combinado: {formatCurrency(wd.customTotalPay || 0)}
+                                        </span>
+                                      )}
+                                      {wd.customPaymentDueDate && (
+                                        <span className="inline-flex items-center gap-1 text-[9px] font-bold bg-cyan-500/15 text-cyan-300 px-2 py-0.5 rounded border border-cyan-500/30 tabular-nums">
+                                          <Calendar size={10} className="text-cyan-300" /> {showName ? `${label} · ` : ''}Venc. {format(parseISO(`${wd.customPaymentDueDate}T12:00:00`), 'dd/MM')}
                                         </span>
                                       )}
                                       {!!wd.extraHours && (
@@ -1453,11 +1891,13 @@ export default function DayManagementModal({
                                       ? "text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20"
                                       : dayWorkDays.some(d => d.isReducedHours)
                                         ? "text-amber-400 bg-amber-500/10 hover:bg-amber-500/20"
-                                        : "text-gray-500 hover:text-brand-primary hover:bg-brand-primary/10"
+                                        : dayWorkDays.some(d => d.isCustomPay || d.customPaymentDueDate)
+                                          ? "text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
+                                          : "text-gray-500 hover:text-brand-primary hover:bg-brand-primary/10"
                                 )}
-                                title={dayWorkDays.some(d => d.isOvernight) ? "Configurar Pernoite" : dayWorkDays.some(d => d.isReducedHours) ? "Configurar Horário Reduzido" : "Horas Extras e Configurações"}
+                                title={dayWorkDays.some(d => d.isOvernight) ? "Configurar Pernoite" : dayWorkDays.some(d => d.isReducedHours) ? "Configurar Horário Reduzido" : "Horas Extras, Valor e Vencimento"}
                               >
-                                {dayWorkDays.some(d => d.isOvernight) ? <Moon size={16} /> : <Clock size={16} />}
+                                {dayWorkDays.some(d => d.isOvernight) ? <Moon size={16} /> : dayWorkDays.some(d => d.isCustomPay) ? <DollarSign size={16} /> : <Clock size={16} />}
                               </button>
                             )}
                             <button 
@@ -1604,30 +2044,33 @@ export default function DayManagementModal({
 
                               {/* Party Buttons */}
                               {normalizedParties.length > 0 ? (
-                                normalizedParties.map(party => {
+                                normalizedParties.map((party, pIdx) => {
                                   const isChosen = hasSpecificPartyAvail(party.id);
-                                  const isCoord = (party.name || '').toLowerCase().includes('coordena');
-                                  const isOffice = (party.name || '').toLowerCase().includes('escritório') || (party.name || '').toLowerCase().includes('escritorio');
-                                  const isJanitor = (party.name || '').toLowerCase().includes('zelador');
+                                  const isCoord = isSlotCoord(party);
+                                  const isOffice = isSlotOffice(party);
+                                  const isJanitor = isSlotJanitor(party);
+                                  const isSpecial = isSlotSpecial(party);
 
                                   if (isChosen) {
                                     return (
                                       <button 
-                                        key={party.id}
+                                        key={`${party.id || 'party'}_${pIdx}`}
                                         onClick={() => handleAssignClick(emp, 'party', party)}
                                         className={cn(
-                                          "text-[10px] font-black px-2 py-1 rounded-lg transition-all flex items-center gap-1 uppercase max-w-[130px] truncate border shadow-xs active:scale-95",
-                                          isOffice
-                                            ? "bg-blue-500/20 hover:bg-blue-500 text-blue-300 hover:text-white border-blue-500/40"
-                                            : isJanitor
-                                              ? "bg-zinc-500/20 hover:bg-zinc-500 text-zinc-300 hover:text-white border-zinc-500/40"
-                                              : isCoord
-                                                ? "bg-cyan-500/20 hover:bg-cyan-500 text-cyan-300 hover:text-slate-950 border-cyan-500/40"
-                                                : "bg-brand-party/10 hover:bg-brand-party text-brand-party hover:text-white border-brand-party/30"
+                                          "text-[10px] font-black px-2 py-1 rounded-lg transition-all flex items-center gap-1 uppercase max-w-[140px] truncate border shadow-xs active:scale-95",
+                                          isSpecial
+                                            ? "bg-amber-500/20 hover:bg-amber-400 text-amber-200 hover:text-slate-950 border-amber-400/50"
+                                            : isOffice
+                                              ? "bg-blue-500/20 hover:bg-blue-500 text-blue-300 hover:text-white border-blue-500/40"
+                                              : isJanitor
+                                                ? "bg-zinc-500/20 hover:bg-zinc-500 text-zinc-300 hover:text-white border-zinc-500/40"
+                                                : isCoord
+                                                  ? "bg-cyan-500/20 hover:bg-cyan-500 text-cyan-300 hover:text-slate-950 border-cyan-500/40"
+                                                  : "bg-brand-party/10 hover:bg-brand-party text-brand-party hover:text-white border-brand-party/30"
                                         )}
                                         title={`Escalar para ${party.name} (Optado pelo recreador)`}
                                       >
-                                        {isOffice ? <Briefcase size={12} className="shrink-0" /> : isJanitor ? <Wrench size={12} className="shrink-0" /> : isCoord ? <ShieldCheck size={12} className="shrink-0" /> : <UserPlus size={12} className="shrink-0" />}
+                                        {isSpecial ? <Sparkles size={12} className="shrink-0" /> : isOffice ? <Briefcase size={12} className="shrink-0" /> : isJanitor ? <Wrench size={12} className="shrink-0" /> : isCoord ? <ShieldCheck size={12} className="shrink-0" /> : <UserPlus size={12} className="shrink-0" />}
                                         <span className="truncate">{party.name}</span>
                                       </button>
                                     );
@@ -1635,21 +2078,23 @@ export default function DayManagementModal({
 
                                   return (
                                     <button 
-                                      key={party.id}
+                                      key={`${party.id || 'party'}_${pIdx}`}
                                       onClick={() => handleAssignClick(emp, 'party', party)}
                                       className={cn(
-                                        "text-[10px] font-bold bg-slate-800/60 px-2 py-1 rounded-lg border border-dashed border-slate-600 transition-all flex items-center gap-1 uppercase max-w-[130px] truncate active:scale-95",
-                                        isOffice
-                                          ? "hover:bg-blue-500/15 text-slate-400 hover:text-blue-300 hover:border-blue-400/50"
-                                          : isJanitor
-                                            ? "hover:bg-zinc-500/15 text-slate-400 hover:text-zinc-300 hover:border-zinc-400/50"
-                                            : isCoord
-                                              ? "hover:bg-cyan-500/15 text-slate-400 hover:text-cyan-300 hover:border-cyan-400/50"
-                                              : "hover:bg-brand-party/15 text-slate-400 hover:text-brand-party hover:border-brand-party/40"
+                                        "text-[10px] font-bold bg-slate-800/60 px-2 py-1 rounded-lg border border-dashed border-slate-600 transition-all flex items-center gap-1 uppercase max-w-[140px] truncate active:scale-95",
+                                        isSpecial
+                                          ? "hover:bg-amber-500/15 text-slate-400 hover:text-amber-300 hover:border-amber-400/50"
+                                          : isOffice
+                                            ? "hover:bg-blue-500/15 text-slate-400 hover:text-blue-300 hover:border-blue-400/50"
+                                            : isJanitor
+                                              ? "hover:bg-zinc-500/15 text-slate-400 hover:text-zinc-300 hover:border-zinc-400/50"
+                                              : isCoord
+                                                ? "hover:bg-cyan-500/15 text-slate-400 hover:text-cyan-300 hover:border-cyan-400/50"
+                                                : "hover:bg-brand-party/15 text-slate-400 hover:text-brand-party hover:border-brand-party/40"
                                       )}
                                       title={`Escalar para ${party.name} (Escala manual pela gestão - não optado originalmente)`}
                                     >
-                                      {isOffice ? <Briefcase size={12} className="shrink-0 opacity-70" /> : isJanitor ? <Wrench size={12} className="shrink-0 opacity-70" /> : isCoord ? <ShieldCheck size={12} className="shrink-0 opacity-70" /> : <UserPlus size={12} className="shrink-0 opacity-70" />}
+                                      {isSpecial ? <Sparkles size={12} className="shrink-0 opacity-70" /> : isOffice ? <Briefcase size={12} className="shrink-0 opacity-70" /> : isJanitor ? <Wrench size={12} className="shrink-0 opacity-70" /> : isCoord ? <ShieldCheck size={12} className="shrink-0 opacity-70" /> : <UserPlus size={12} className="shrink-0 opacity-70" />}
                                       <span className="truncate">+ {party.name}</span>
                                     </button>
                                   );
@@ -1724,28 +2169,31 @@ export default function DayManagementModal({
                               </button>
                             )}
 
-                            {normalizedParties.map(party => {
-                              const isCoord = (party.name || '').toLowerCase().includes('coordena');
-                              const isOffice = (party.name || '').toLowerCase().includes('escritório') || (party.name || '').toLowerCase().includes('escritorio');
-                              const isJanitor = (party.name || '').toLowerCase().includes('zelador');
+                            {normalizedParties.map((party, pIdx) => {
+                              const isCoord = isSlotCoord(party);
+                              const isOffice = isSlotOffice(party);
+                              const isJanitor = isSlotJanitor(party);
+                              const isSpecial = isSlotSpecial(party);
                               
                               return (
                                 <button 
-                                  key={party.id}
+                                  key={`${party.id || 'party'}_${pIdx}`}
                                   onClick={() => handleAssignClick(emp, 'party', party)}
                                   className={cn(
-                                    "text-[10px] font-black bg-brand-bg border rounded-lg px-2 py-1 transition-all flex items-center gap-1 uppercase max-w-[130px] truncate",
-                                    isOffice
-                                      ? "border-blue-500/40 text-blue-300 hover:bg-blue-500/20 hover:border-blue-400 hover:text-blue-200"
-                                      : isJanitor
-                                        ? "border-zinc-500/40 text-zinc-300 hover:bg-zinc-500/20 hover:border-zinc-400 hover:text-zinc-200"
-                                        : isCoord
-                                          ? "border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-400 hover:text-cyan-200"
-                                          : "border-brand-border text-gray-400 hover:bg-brand-party/10 hover:border-brand-party hover:text-brand-party"
+                                    "text-[10px] font-black bg-brand-bg border rounded-lg px-2 py-1 transition-all flex items-center gap-1 uppercase max-w-[140px] truncate",
+                                    isSpecial
+                                      ? "border-amber-400/50 text-amber-300 hover:bg-amber-500/20 hover:border-amber-300 hover:text-amber-200"
+                                      : isOffice
+                                        ? "border-blue-500/40 text-blue-300 hover:bg-blue-500/20 hover:border-blue-400 hover:text-blue-200"
+                                        : isJanitor
+                                          ? "border-zinc-500/40 text-zinc-300 hover:bg-zinc-500/20 hover:border-zinc-400 hover:text-zinc-200"
+                                          : isCoord
+                                            ? "border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-400 hover:text-cyan-200"
+                                            : "border-brand-border text-gray-400 hover:bg-brand-party/10 hover:border-brand-party hover:text-brand-party"
                                   )}
                                   title={`Escalar para ${party.name}`}
                                 >
-                                  {isOffice ? <Briefcase size={12} className="shrink-0 text-blue-300" /> : isJanitor ? <Wrench size={12} className="shrink-0 text-zinc-300" /> : isCoord ? <ShieldCheck size={12} className="shrink-0 text-cyan-300" /> : <UserPlus size={12} />}
+                                  {isSpecial ? <Sparkles size={12} className="shrink-0 text-amber-300" /> : isOffice ? <Briefcase size={12} className="shrink-0 text-blue-300" /> : isJanitor ? <Wrench size={12} className="shrink-0 text-zinc-300" /> : isCoord ? <ShieldCheck size={12} className="shrink-0 text-cyan-300" /> : <UserPlus size={12} />}
                                   <span className="truncate">{party.name}</span>
                                 </button>
                               );

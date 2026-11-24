@@ -25,7 +25,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { Employee, WorkDay } from '../types';
-import { getPartyPaymentDueDate, computeCcspBatchStatus, formatCurrency } from '../lib/utils';
+import { getPartyPaymentDueDateForWorkDay, computeCcspBatchStatus, formatCurrency } from '../lib/utils';
 
 interface PaymentTimelineProps {
   employee: Employee;
@@ -111,8 +111,7 @@ export default function PaymentTimeline({ employee, currentDate = new Date() }: 
       const isManagement = employee.paymentGroup === 'management';
       const matchingPartyForPayment = partiesList.find(p => {
         try {
-          const partyDateObj = parseISO(p.date.includes('T') ? p.date : `${p.date}T12:00:00`);
-          const forecastPaymentDate = getPartyPaymentDueDate(partyDateObj, isManagement);
+          const forecastPaymentDate = getPartyPaymentDueDateForWorkDay(p, employee);
           return isSameDay(forecastPaymentDate, current);
         } catch {
           return false;
