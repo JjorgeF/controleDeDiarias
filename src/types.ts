@@ -139,6 +139,14 @@ export interface Employee {
   paymentGroup?: 'general' | 'management'; // 'general': Festas na 2ª e CCSP dia 15 | 'management': Festas e CCSP dia 15
   paidDates?: string[]; // Array of YYYY-MM-DD or milestone date strings marked as paid by admin
   ccspSettlements?: Record<string, CcspSettlementRecord>; // Keyed by dueDateStr e.g. "2026-11-15"
+  individualOpenings?: Record<string, IndividualMonthOpening>; // Keyed by 'YYYY-MM'
+}
+
+export interface IndividualMonthOpening {
+  openUntil: string; // Full ISO string with timezone (e.g. from Date.toISOString())
+  lockedKeys?: string[]; // Snapshot of employee's availabilities in that month before individual opening
+  openedAt?: string;
+  openedBy?: string;
 }
 
 export interface CcspSettlementRecord {
