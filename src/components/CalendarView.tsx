@@ -58,13 +58,14 @@ import {
   DollarSign
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Employee, WorkDay, DayType, CancellationLog, DayConfig, PartyConfig } from '../types';
+import { Employee, WorkDay, DayType, CancellationLog, DayConfig, PartyConfig, IndividualMonthOpening } from '../types';
 import { cn, formatCurrency, getWorkDayUniqueKey, isReveillonViradaWorkDay } from '../lib/utils';
 import DayManagementModal from './DayManagementModal';
 import DayWorkModeEditor from './DayWorkModeEditor';
 import ShiftSelector from './ShiftSelector';
 import { EmployeeMonthOverview } from './EmployeeMonthOverview';
 import { CalendarLegendModal } from './CalendarLegendModal';
+import IndividualOpeningModal from './IndividualOpeningModal';
 
 interface CalendarViewProps {
   employees: Employee[];
@@ -86,6 +87,8 @@ interface CalendarViewProps {
   sidebarTab?: 'availabilities' | 'cancellations';
   onSidebarTabChange?: React.Dispatch<React.SetStateAction<'availabilities' | 'cancellations'>>;
   onOpenRevertCancellation?: (employeeId?: string, date?: string) => void;
+  onGrantIndividualOpening?: (employeeIds: string[], monthKey: string, openUntilIso: string) => Promise<void>;
+  onRevokeIndividualOpening?: (employeeId: string, monthKey: string) => Promise<void>;
 }
 
 interface Particle {
@@ -297,6 +300,18 @@ export function isOptionExcludedByExtraordinaryScope(
   return false;
 }
 
+export function getActiveIndividualOpening(
+  employee: Employee | null | undefined,
+  monthKey: string,
+  now: Date = new Date()
+): IndividualMonthOpening | null {
+  const opening = employee?.individualOpenings?.[monthKey];
+  if (!opening || !opening.openUntil) return null;
+  const endDate = new Date(opening.openUntil);
+  if (isNaN(endDate.getTime()) || now > endDate) return null;
+  return opening;
+}
+
 export function isOptionLockedForEmployee(
   dayStr: string,
   optionKey: string,
@@ -306,9 +321,31 @@ export function isOptionLockedForEmployee(
 ): boolean {
   if (!isDeadlinePassed) return false;
   if (!employee || !dayConfig) return false;
-  
+
+  const monthKey = dayStr.slice(0, 7);
+  const indivOpening = getActiveIndividualOpening(employee, monthKey);
   const isExtra = isExtraordinaryActive(dayConfig);
-  if (!isExtra) return true; // Deadline passed and no active extra opening -> locked
+
+  if (!isExtra && !indivOpening) return true; // Deadline passed and no active opening -> locked
+
+  if (indivOpening) {
+    const indivLocked = indivOpening.lockedKeys || [];
+    const isLockedByIndiv = indivLocked.some(
+      k => k === optionKey || (optionKey === dayStr && k === `${dayStr}_common`) || (k === dayStr && optionKey === `${dayStr}_common`)
+    );
+    if (isLockedByIndiv) return true;
+    // Individual opening unlocks any non-locked option (CCSP and Parties) even outside extraordinary scope
+    if (!isExtra) return false;
+    // When both individual opening and extraordinary opening exist, respect pre-existing extraordinary locks too
+    const lockedMap = dayConfig.extraordinaryLockedAvailabilities;
+    if (lockedMap) {
+      const empLockedKeys = lockedMap[employee.id] || [];
+      return empLockedKeys.some(
+        k => k === optionKey || (optionKey === dayStr && k === `${dayStr}_common`) || (k === dayStr && optionKey === `${dayStr}_common`)
+      );
+    }
+    return false;
+  }
 
   // If this option is excluded by scope, it cannot be newly edited or added
   if (isOptionExcludedByExtraordinaryScope(dayStr, optionKey, dayConfig)) {
@@ -371,7 +408,9 @@ export default function CalendarView({
   onMarkCancellationRead,
   sidebarTab = 'availabilities',
   onSidebarTabChange,
-  onOpenRevertCancellation
+  onOpenRevertCancellation,
+  onGrantIndividualOpening,
+  onRevokeIndividualOpening
 }: CalendarViewProps) {
   const getDayConfig = (dateStr: string): DayConfig & { parties: PartyConfig[] } => {
     const config = dayConfigs?.[dateStr];
@@ -479,6 +518,17 @@ export default function CalendarView({
   const [deadlineInputDate, setDeadlineInputDate] = React.useState('');
   const [deadlineInputTime, setDeadlineInputTime] = React.useState('');
   const [showDeadlineAdminCard, setShowDeadlineAdminCard] = React.useState(false);
+
+  // Individual Opening Admin Modal & Live Clock State
+  const [isIndividualOpeningModalOpen, setIsIndividualOpeningModalOpen] = React.useState(false);
+  const [individualModalInitialIds, setIndividualModalInitialIds] = React.useState<string[]>([]);
+  const [individualModalInitialUntil, setIndividualModalInitialUntil] = React.useState<string | undefined>(undefined);
+  const [nowTick, setNowTick] = React.useState<number>(() => Date.now());
+
+  React.useEffect(() => {
+    const timer = setInterval(() => setNowTick(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Employee No Availability Modal State
   const [isNoAvailModalOpen, setIsNoAvailModalOpen] = React.useState(false);
@@ -1169,6 +1219,7 @@ export default function CalendarView({
       const isExpired = deadlineVal ? new Date() > new Date(deadlineVal) : false;
       const config = getDayConfig(dayStr);
       const isExtraordinary = isExtraordinaryActive(config);
+      const hasIndividualOpening = !!getActiveIndividualOpening(myEmployee, monthKey);
       
       let isPartyDeadlinePassed = false;
       if (config.partyDeadline) {
@@ -1181,10 +1232,10 @@ export default function CalendarView({
         isPartyDeadlinePassed = todayStart > eventStart;
       }
       
-      const isPartyOpen = config.isParty && !isPartyDeadlinePassed;
+      const isPartyOpen = config.isParty && (!isPartyDeadlinePassed || hasIndividualOpening);
       
-      // If global deadline is expired AND day is NOT extraordinarily open AND Party is NOT open, click disabled
-      if (isExpired && !isExtraordinary && !isPartyOpen) {
+      // If global deadline is expired AND day is NOT extraordinarily open AND Party is NOT open AND no individual opening, click disabled
+      if (isExpired && !isExtraordinary && !isPartyOpen && !hasIndividualOpening) {
         return;
       }
       
@@ -1195,7 +1246,7 @@ export default function CalendarView({
       
       const partyCount = config.parties?.length ?? (config.isParty ? 1 : 0);
       // Sempre abre o pop-up para dias com Festa (ou múltiplos eventos/CCSP+Festa), permitindo ao funcionário visualizar o nome completo da festa e o horário antes de escolher
-      const hasScopeRestriction = isExtraordinary && config.extraordinaryScope && config.extraordinaryScope !== 'all';
+      const hasScopeRestriction = !hasIndividualOpening && isExtraordinary && config.extraordinaryScope && config.extraordinaryScope !== 'all';
       const shouldOpenChoiceModal = config.isParty || (config.isCommon && config.isParty) || partyCount > 1 || hasScopeRestriction;
 
       if (shouldOpenChoiceModal) {
@@ -1210,12 +1261,16 @@ export default function CalendarView({
           const hasParty = currentAvailabilities.some(d => d.startsWith(`${dayStr}_party`));
           if (hasParty) {
             if (isOptionLockedForEmployee(dayStr, `${dayStr}_party`, myEmployee, config, isExpired)) {
-              alert("🔒 Sua disponibilidade para este evento já estava confirmada antes da Abertura Extra e não pode ser removida.");
+              alert(
+                hasIndividualOpening && !isExtraordinary
+                  ? "🔒 Sua disponibilidade para este evento já estava registrada antes da liberação individual e não pode ser removida (solicite cancelamento se necessário)."
+                  : "🔒 Sua disponibilidade para este evento já estava confirmada antes da Abertura Extra e não pode ser removida."
+              );
               return;
             }
             newAvailabilities = currentAvailabilities.filter(d => !d.startsWith(`${dayStr}_party`));
           } else {
-            if (isOptionExcludedByExtraordinaryScope(dayStr, `${dayStr}_party`, config)) {
+            if (!hasIndividualOpening && isOptionExcludedByExtraordinaryScope(dayStr, `${dayStr}_party`, config)) {
               alert("⚡ Esta Abertura Extra está restrita apenas para o CCSP (Sede). Não é possível cadastrar disponibilidade para eventos neste dia.");
               return;
             }
@@ -1228,12 +1283,16 @@ export default function CalendarView({
           const hasCommon = currentAvailabilities.includes(dayStr) || currentAvailabilities.includes(`${dayStr}_common`);
           if (hasCommon) {
             if (isOptionLockedForEmployee(dayStr, dayStr, myEmployee, config, isExpired)) {
-              alert("🔒 Sua disponibilidade para este dia já estava confirmada antes da Abertura Extra e não pode ser removida.");
+              alert(
+                hasIndividualOpening && !isExtraordinary
+                  ? "🔒 Sua disponibilidade para este dia já estava registrada antes da liberação individual e não pode ser removida (solicite cancelamento se necessário)."
+                  : "🔒 Sua disponibilidade para este dia já estava confirmada antes da Abertura Extra e não pode ser removida."
+              );
               return;
             }
             newAvailabilities = currentAvailabilities.filter(d => d !== dayStr && d !== `${dayStr}_common`);
           } else {
-            if (isOptionExcludedByExtraordinaryScope(dayStr, `${dayStr}_common`, config)) {
+            if (!hasIndividualOpening && isOptionExcludedByExtraordinaryScope(dayStr, `${dayStr}_common`, config)) {
               alert("⚡ Esta Abertura Extra está restrita apenas para Festas/Eventos. Não é possível cadastrar disponibilidade para o CCSP neste dia.");
               return;
             }
@@ -1348,9 +1407,35 @@ export default function CalendarView({
     }
   };
 
+  const nowDate = new Date(nowTick);
+  const currentMonthKeyNow = format(nowDate, 'yyyy-MM');
+  const todayStrNow = format(nowDate, 'yyyy-MM-dd');
+  const isPastMonth = currentMonthKey < currentMonthKeyNow;
+
   const currentDeadline = deadlines?.[currentMonthKey];
   const deadlineDate = currentDeadline ? new Date(currentDeadline) : null;
-  const isDeadlinePassed = deadlineDate ? new Date() > deadlineDate : false;
+  const isDeadlinePassed = deadlineDate ? nowDate > deadlineDate : false;
+
+  const myIndividualOpening = !isAdmin && !isPastMonth
+    ? getActiveIndividualOpening(myEmployee, currentMonthKey, nowDate)
+    : null;
+
+  const activeIndividualOpeningsThisMonth = React.useMemo(() => {
+    const now = new Date(nowTick);
+    return employees
+      .filter(emp => emp.status !== 'inactive')
+      .map(emp => {
+        const opening = getActiveIndividualOpening(emp, currentMonthKey, now);
+        if (!opening) return null;
+        return {
+          emp,
+          opening,
+          untilDate: new Date(opening.openUntil)
+        };
+      })
+      .filter((item): item is { emp: Employee; opening: IndividualMonthOpening; untilDate: Date } => item !== null)
+      .sort((a, b) => a.untilDate.getTime() - b.untilDate.getTime());
+  }, [employees, currentMonthKey, nowTick]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -1398,38 +1483,55 @@ export default function CalendarView({
       {/* Deadline & Extraordinary Open Notification Banners */}
       <div className="space-y-3">
         {!isAdmin && (
-          <div className={cn(
-            "border rounded-xl p-4 flex items-center justify-between shadow-md transition-all duration-200 animate-in fade-in slide-in-from-top-2",
-            isDeadlinePassed 
-              ? "bg-red-500/10 border-red-500/20 text-red-900 dark:text-red-200" 
-              : deadlineDate 
-                ? "bg-amber-500/10 border-amber-500/30 text-amber-950 dark:text-amber-200" 
-                : "bg-blue-500/10 border-blue-500/20 text-blue-900 dark:text-blue-200"
-          )}>
-            <div className="flex items-center gap-3">
-              {isDeadlinePassed ? (
-                <Lock className="text-red-600 dark:text-red-400 shrink-0 animate-bounce" size={20} />
-              ) : deadlineDate ? (
-                <Unlock className="text-amber-600 dark:text-yellow-400 shrink-0" size={20} />
-              ) : (
-                <Calendar className="text-blue-600 dark:text-blue-400 shrink-0" size={20} />
-              )}
-              <div>
-                <p className="text-xs md:text-sm font-black">
-                  {isDeadlinePassed ? (
-                    `Prazo Encerrado! O envio de disponibilidades para ${format(currentMonth, 'MMMM', { locale: ptBR })} expirou em ${format(deadlineDate!, "dd/MM/yyyy 'às' HH:mm")}.`
-                  ) : deadlineDate ? (
-                    `Prazo Limite (CCSP): Defina suas disponibilidades de ${format(currentMonth, 'MMMM', { locale: ptBR })} até ${format(deadlineDate, "dd/MM/yyyy 'às' HH:mm")}.`
-                  ) : (
-                    `Disponibilidades de ${format(currentMonth, 'MMMM', { locale: ptBR })}: Sem prazo limite definido.`
-                  )}
-                </p>
-                {!isDeadlinePassed && (
-                  <p className="text-[10px] text-amber-900 dark:text-yellow-400/80 mt-0.5 font-bold">Toque nos dias do calendário para marcar/desmarcar os dias em que você pode trabalhar.</p>
-                )}
+          myIndividualOpening ? (
+            <div className="border rounded-xl p-4 flex items-center justify-between gap-3 shadow-md transition-all duration-200 animate-in fade-in slide-in-from-top-2 bg-cyan-500/10 border-cyan-500/40 text-cyan-950 dark:text-cyan-100">
+              <div className="flex items-center gap-3">
+                <Unlock className="text-cyan-600 dark:text-cyan-400 shrink-0" size={20} />
+                <div>
+                  <p className="text-xs md:text-sm font-black">
+                    Liberação Individual Ativa ({format(currentMonth, 'MMMM', { locale: ptBR })}): envie suas disponibilidades até{' '}
+                    {format(new Date(myIndividualOpening.openUntil), "dd/MM/yyyy 'às' HH:mm")}.
+                  </p>
+                  <p className="text-[10px] md:text-[11px] text-cyan-900/80 dark:text-cyan-200/80 mt-0.5 font-bold">
+                    Você pode marcar dias futuros (CCSP e Festas). Disponibilidades já enviadas anteriormente permanecem travadas.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className={cn(
+              "border rounded-xl p-4 flex items-center justify-between shadow-md transition-all duration-200 animate-in fade-in slide-in-from-top-2",
+              isDeadlinePassed 
+                ? "bg-red-500/10 border-red-500/20 text-red-900 dark:text-red-200" 
+                : deadlineDate 
+                  ? "bg-amber-500/10 border-amber-500/30 text-amber-950 dark:text-amber-200" 
+                  : "bg-blue-500/10 border-blue-500/20 text-blue-900 dark:text-blue-200"
+            )}>
+              <div className="flex items-center gap-3">
+                {isDeadlinePassed ? (
+                  <Lock className="text-red-600 dark:text-red-400 shrink-0 animate-bounce" size={20} />
+                ) : deadlineDate ? (
+                  <Unlock className="text-amber-600 dark:text-yellow-400 shrink-0" size={20} />
+                ) : (
+                  <Calendar className="text-blue-600 dark:text-blue-400 shrink-0" size={20} />
+                )}
+                <div>
+                  <p className="text-xs md:text-sm font-black">
+                    {isDeadlinePassed ? (
+                      `Prazo Encerrado! O envio de disponibilidades para ${format(currentMonth, 'MMMM', { locale: ptBR })} expirou em ${format(deadlineDate!, "dd/MM/yyyy 'às' HH:mm")}.`
+                    ) : deadlineDate ? (
+                      `Prazo Limite (CCSP): Defina suas disponibilidades de ${format(currentMonth, 'MMMM', { locale: ptBR })} até ${format(deadlineDate, "dd/MM/yyyy 'às' HH:mm")}.`
+                    ) : (
+                      `Disponibilidades de ${format(currentMonth, 'MMMM', { locale: ptBR })}: Sem prazo limite definido.`
+                    )}
+                  </p>
+                  {!isDeadlinePassed && (
+                    <p className="text-[10px] text-amber-900 dark:text-yellow-400/80 mt-0.5 font-bold">Toque nos dias do calendário para marcar/desmarcar os dias em que você pode trabalhar.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
         )}
 
         {/* Extraordinary Open Alert Banner & Details Section for current month */}
@@ -1708,7 +1810,7 @@ export default function CalendarView({
                 </p>
               </div>
             </div>
-            {!isDeadlinePassed && (
+            {(!isDeadlinePassed || !!myIndividualOpening) && (
               <button
                 type="button"
                 onClick={handleClearNoAvailability}
@@ -1791,6 +1893,94 @@ export default function CalendarView({
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Admin Individual Opening Panel (visible above calendar ONLY on closed non-past months) */}
+      {isAdmin && isDeadlinePassed && !isPastMonth && onGrantIndividualOpening && (
+        <div className="border border-cyan-500/35 bg-cyan-500/[0.04] rounded-xl p-4 shadow-lg flex flex-col gap-3 animate-in fade-in duration-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 flex items-center justify-center shrink-0">
+                <Unlock size={18} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-sm font-black text-brand-text capitalize">
+                    Liberação Individual ({format(currentMonth, 'MMMM', { locale: ptBR })})
+                  </h3>
+                  {activeIndividualOpeningsThisMonth.length > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                      {activeIndividualOpeningsThisMonth.length} ativo{activeIndividualOpeningsThisMonth.length === 1 ? '' : 's'}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-brand-muted mt-0.5">
+                  Abra o envio de disponibilidades (CCSP e Festas) apenas para pessoas específicas sem reabrir a escala geral.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIndividualModalInitialIds([]);
+                setIndividualModalInitialUntil(undefined);
+                setIsIndividualOpeningModalOpen(true);
+              }}
+              className="px-3.5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 shrink-0"
+            >
+              <UserPlus size={14} />
+              <span>Liberar Funcionário(s)</span>
+            </button>
+          </div>
+
+          {activeIndividualOpeningsThisMonth.length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-2 border-t border-cyan-500/20">
+              {activeIndividualOpeningsThisMonth.map(({ emp, opening, untilDate }) => (
+                <div
+                  key={emp.id}
+                  className="inline-flex items-center gap-2 bg-brand-card border border-cyan-500/40 rounded-lg px-2.5 py-1.5 text-xs shadow-xs"
+                >
+                  <span className="font-bold text-brand-text">
+                    {emp.artisticName || emp.name}
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-cyan-300 bg-cyan-500/15 px-1.5 py-0.5 rounded">
+                    até {format(untilDate, "dd/MM 'às' HH:mm")}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIndividualModalInitialIds([emp.id]);
+                      setIndividualModalInitialUntil(opening.openUntil);
+                      setIsIndividualOpeningModalOpen(true);
+                    }}
+                    className="text-[10px] font-bold text-cyan-400 hover:text-cyan-200 underline"
+                    title="Alterar ou estender tempo limite"
+                  >
+                    Estender
+                  </button>
+                  {onRevokeIndividualOpening && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await onRevokeIndividualOpening(emp.id, currentMonthKey);
+                        showDeadlineToast(
+                          `Liberação encerrada`,
+                          `${emp.artisticName || emp.name} voltou para o bloqueio padrão do mês.`,
+                          'info'
+                        );
+                      }}
+                      className="text-red-400 hover:text-red-300 hover:bg-red-500/15 p-0.5 rounded transition-colors"
+                      title="Encerrar liberação individual agora"
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -2025,8 +2215,10 @@ export default function CalendarView({
                   const isPartyDeadlinePassed = config.partyDeadline 
                     ? (new Date() > new Date(config.partyDeadline)) 
                     : (new Date(new Date().setHours(0,0,0,0)) > new Date(new Date(day).setHours(0,0,0,0)));
-                  const isCcspOpen = config.isCommon && (!isDeadlinePassed || isExtraordinary);
-                  const isPartyOpen = config.isParty && (!isPartyDeadlinePassed || isExtraordinary);
+                  const dayMonthKey = dayStr.slice(0, 7);
+                  const hasIndividualOpeningForDay = !isAdmin && dayStr >= todayStrNow && dayMonthKey >= currentMonthKeyNow && !!getActiveIndividualOpening(myEmployee, dayMonthKey, nowDate);
+                  const isCcspOpen = config.isCommon && (!isDeadlinePassed || isExtraordinary || hasIndividualOpeningForDay);
+                  const isPartyOpen = config.isParty && (!isPartyDeadlinePassed || isExtraordinary || hasIndividualOpeningForDay);
                   
                   const isOpenForAvailability = isCurrentMonth && (isCcspOpen || isPartyOpen || isExtraordinary);
                   const showBeam = isCurrentMonth && !isMyScheduled && (isOpenForAvailability || (!isAdmin && isMyAvailable));
@@ -3100,6 +3292,29 @@ export default function CalendarView({
             </div>
 
             <div className="space-y-4">
+              {/* Individual Opening Notice Banner in Modal */}
+              {(() => {
+                const dateStr = format(employeeChoiceDate, 'yyyy-MM-dd');
+                const mKey = format(employeeChoiceDate, 'yyyy-MM');
+                const indiv = !isAdmin && dateStr >= todayStrNow && mKey >= currentMonthKeyNow
+                  ? getActiveIndividualOpening(myEmployee, mKey, nowDate)
+                  : null;
+                if (!indiv) return null;
+                return (
+                  <div className="flex items-center gap-2.5 bg-cyan-500/15 border border-cyan-500/40 rounded-xl p-3 text-xs text-cyan-200 animate-in fade-in">
+                    <Unlock size={18} className="text-cyan-400 shrink-0" />
+                    <div>
+                      <p className="font-bold text-cyan-300">
+                        Liberação Individual Ativa (até {format(new Date(indiv.openUntil), "dd/MM 'às' HH:mm")})
+                      </p>
+                      <p className="text-[11px] text-cyan-200/90 mt-0.5">
+                        Você pode marcar CCSP e Festas neste dia. Itens já enviados antes continuam travados.
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Extraordinary Open Notice Banner in Modal */}
               {(() => {
                 const dateStr = format(employeeChoiceDate, 'yyyy-MM-dd');
@@ -3164,7 +3379,8 @@ export default function CalendarView({
                 const currentAvailabilities = myEmployee.availabilities || [];
                 const isCommonChecked = currentAvailabilities.includes(dateStr) || currentAvailabilities.includes(`${dateStr}_common`);
                 const isLocked = isCommonChecked && isOptionLockedForEmployee(dateStr, dateStr, myEmployee, config, isDeadlinePassed);
-                const isExcludedByScope = isOptionExcludedByExtraordinaryScope(dateStr, `${dateStr}_common`, config);
+                const hasIndividualOpening = !isAdmin && dateStr >= todayStrNow && monthKey >= currentMonthKeyNow && !!getActiveIndividualOpening(myEmployee, monthKey, nowDate);
+                const isExcludedByScope = !hasIndividualOpening && isOptionExcludedByExtraordinaryScope(dateStr, `${dateStr}_common`, config);
                 const isExtraordinary = isExtraordinaryActive(config);
 
                 return (
@@ -3188,7 +3404,7 @@ export default function CalendarView({
                         {isLocked && (
                           <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
                             <Lock size={10} />
-                            <span>Confirmado (Trava pré-abertura)</span>
+                            <span>{hasIndividualOpening && !isExtraordinary ? 'Confirmado (Travado)' : 'Confirmado (Trava pré-abertura)'}</span>
                           </span>
                         )}
                         {isExcludedByScope && !isCommonChecked && (
@@ -3210,9 +3426,9 @@ export default function CalendarView({
                       <input 
                         type="checkbox"
                         checked={isCommonChecked}
-                        disabled={(isDeadlinePassed && !isExtraordinary) || (isExcludedByScope && !isCommonChecked)}
+                        disabled={(isDeadlinePassed && !isExtraordinary && !hasIndividualOpening) || (isExcludedByScope && !isCommonChecked)}
                         onChange={(e) => {
-                          if (e.target.checked && (isDeadlinePassed && !isExtraordinary)) {
+                          if (e.target.checked && (isDeadlinePassed && !isExtraordinary && !hasIndividualOpening)) {
                             alert("Prazo CCSP encerrado.");
                             return;
                           }
@@ -3221,16 +3437,21 @@ export default function CalendarView({
                             return;
                           }
                           if (!e.target.checked && isLocked) {
-                            alert("🔒 Sua disponibilidade para este dia já estava confirmada antes da Abertura Extra e não pode ser removida.");
+                            alert(
+                              hasIndividualOpening && !isExtraordinary
+                                ? "🔒 Sua disponibilidade para este dia já estava registrada antes da liberação individual e não pode ser removida (solicite cancelamento se necessário)."
+                                : "🔒 Sua disponibilidade para este dia já estava confirmada antes da Abertura Extra e não pode ser removida."
+                            );
                             return;
                           }
+                          const cleanNoAvail = currentAvailabilities.filter(d => d !== `no_avail_${monthKey}`);
                           let newAvail: string[];
                           if (e.target.checked) {
-                            const clean = currentAvailabilities.filter(d => d !== dateStr && d !== `${dateStr}_common`);
+                            const clean = cleanNoAvail.filter(d => d !== dateStr && d !== `${dateStr}_common`);
                             newAvail = Array.from(new Set([...clean, `${dateStr}_common`]));
                             triggerParticleBurst(dateStr);
                           } else {
-                            newAvail = currentAvailabilities.filter(d => d !== dateStr && d !== `${dateStr}_common`);
+                            newAvail = cleanNoAvail.filter(d => d !== dateStr && d !== `${dateStr}_common`);
                           }
                           if (onUpdateAvailabilities) {
                             onUpdateAvailabilities(myEmployee.id, newAvail);
@@ -3296,6 +3517,8 @@ export default function CalendarView({
                 const hasGeneralPartyKey = currentAvailabilities.includes(`${dateStr}_party`);
                 const hasAnySpecificPartyKeyForDate = parties.some(p => currentAvailabilities.includes(`${dateStr}_party_${p.id}`));
                 const isExtraordinary = isExtraordinaryActive(config);
+                const partyMonthKey = format(employeeChoiceDate, 'yyyy-MM');
+                const hasIndividualOpening = !isAdmin && dateStr >= todayStrNow && partyMonthKey >= currentMonthKeyNow && !!getActiveIndividualOpening(myEmployee, partyMonthKey, nowDate);
 
                 return (
                   <>
@@ -3305,7 +3528,7 @@ export default function CalendarView({
                       
                       const isPartyChecked = hasSpecificPartyKey || (hasGeneralPartyKey && (parties.length === 1 || !hasAnySpecificPartyKeyForDate));
                       const isLocked = isPartyChecked && isOptionLockedForEmployee(dateStr, partyKey, myEmployee, config, isPartyDeadlinePassed);
-                      const isExcludedByScope = isOptionExcludedByExtraordinaryScope(dateStr, partyKey, config);
+                      const isExcludedByScope = !hasIndividualOpening && isOptionExcludedByExtraordinaryScope(dateStr, partyKey, config);
 
                       const isCoord = (party.name || '').toLowerCase().includes('coordena');
                       const isOffice = (party.name || '').toLowerCase().includes('escritório') || (party.name || '').toLowerCase().includes('escritorio');
@@ -3357,7 +3580,7 @@ export default function CalendarView({
                               {isLocked && (
                                 <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
                                   <Lock size={10} />
-                                  <span>Confirmado (Trava pré-abertura)</span>
+                                  <span>{hasIndividualOpening && !isExtraordinary ? 'Confirmado (Travado)' : 'Confirmado (Trava pré-abertura)'}</span>
                                 </span>
                               )}
                               {isExcludedByScope && !isPartyChecked && (
@@ -3421,10 +3644,10 @@ export default function CalendarView({
                             <input 
                               type="checkbox"
                               checked={isPartyChecked}
-                              disabled={(isPartyDeadlinePassed && !isExtraordinary) || (isExcludedByScope && !isPartyChecked)}
+                              disabled={(isPartyDeadlinePassed && !isExtraordinary && !hasIndividualOpening) || (isExcludedByScope && !isPartyChecked)}
                               onChange={(e) => {
                                 const willBeChecked = e.target.checked;
-                                if (willBeChecked && (isPartyDeadlinePassed && !isExtraordinary)) {
+                                if (willBeChecked && (isPartyDeadlinePassed && !isExtraordinary && !hasIndividualOpening)) {
                                   alert("Prazo para esta festa encerrado.");
                                   return;
                                 }
@@ -3433,7 +3656,11 @@ export default function CalendarView({
                                   return;
                                 }
                                 if (!willBeChecked && isLocked) {
-                                  alert("🔒 Sua disponibilidade para este evento já estava confirmada antes da Abertura Extra e não pode ser removida.");
+                                  alert(
+                                    hasIndividualOpening && !isExtraordinary
+                                      ? "🔒 Sua disponibilidade para este evento já estava registrada antes da liberação individual e não pode ser removida (solicite cancelamento se necessário)."
+                                      : "🔒 Sua disponibilidade para este evento já estava confirmada antes da Abertura Extra e não pode ser removida."
+                                  );
                                   return;
                                 }
                                 const newSelectedPartyIds = parties
@@ -3444,7 +3671,7 @@ export default function CalendarView({
                                   })
                                   .map(p => p.id);
 
-                                const clean = currentAvailabilities.filter(d => d !== `${dateStr}_party` && !d.startsWith(`${dateStr}_party_`));
+                                const clean = currentAvailabilities.filter(d => d !== `no_avail_${partyMonthKey}` && d !== `${dateStr}_party` && !d.startsWith(`${dateStr}_party_`));
 
                                 let partyEntriesToAdd: string[] = [];
                                 if (newSelectedPartyIds.length > 0) {
@@ -3769,6 +3996,26 @@ export default function CalendarView({
             </div>
           </div>
         </div>
+      )}
+      {/* Individual Month Opening Modal (Admin) */}
+      {isAdmin && onGrantIndividualOpening && (
+        <IndividualOpeningModal
+          isOpen={isIndividualOpeningModalOpen}
+          onClose={() => setIsIndividualOpeningModalOpen(false)}
+          employees={employees}
+          currentMonth={currentMonth}
+          currentMonthKey={currentMonthKey}
+          initialSelectedEmployeeIds={individualModalInitialIds}
+          initialOpenUntilIso={individualModalInitialUntil}
+          onConfirm={async (ids, monthKey, openUntilIso) => {
+            await onGrantIndividualOpening(ids, monthKey, openUntilIso);
+            showDeadlineToast(
+              `Liberação individual salva!`,
+              `${ids.length} funcionário${ids.length === 1 ? '' : 's'} liberado${ids.length === 1 ? '' : 's'} até ${format(new Date(openUntilIso), "dd/MM 'às' HH:mm")}`,
+              'success'
+            );
+          }}
+        />
       )}
     </div>
   );
