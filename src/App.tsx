@@ -12,11 +12,12 @@ import {
   getDoc,
   getDocs,
   setDoc,
-  writeBatch
+  writeBatch,
+  deleteField
 } from 'firebase/firestore';
 import { onAuthStateChanged, User, signInWithPopup, signOut, getRedirectResult } from 'firebase/auth';
 import { auth, db, googleProvider, isFirebaseConfigured, handleFirestoreError, OperationType, removeUndefinedFields } from './lib/firebase';
-import { Employee, ViewMode, WorkDay, CancellationLog, Promotion, AppNotification, CustomNotificationDoc, DayConfig, PartyDetails } from './types';
+import { Employee, ViewMode, WorkDay, CancellationLog, Promotion, AppNotification, CustomNotificationDoc, DayConfig, PartyDetails, IndividualMonthOpening } from './types';
 import { recalculateEmployeeTimeline } from './utils/promotionUtils';
 import Header from './components/Header';
 import NavigationDock from './components/NavigationDock';
@@ -685,7 +686,27 @@ export default function App() {
     // 2. Deadline notifications
     const currentMonthKey = format(currentMonth, 'yyyy-MM');
     const currentDeadline = deadlines?.[currentMonthKey];
-    if (currentDeadline) {
+    const myIndividualOpening = !isViewingAsAdmin ? currentLoggedInEmployee?.individualOpenings?.[currentMonthKey] : undefined;
+    const isMyIndividualOpenNow = Boolean(
+      myIndividualOpening?.openUntil &&
+      !isNaN(new Date(myIndividualOpening.openUntil).getTime()) &&
+      new Date() <= new Date(myIndividualOpening.openUntil)
+    );
+
+    if (isMyIndividualOpenNow && myIndividualOpening) {
+      const indivEndDate = new Date(myIndividualOpening.openUntil);
+      const indivNotifId = `individual_opening_${currentLoggedInEmployee?.id}_${currentMonthKey}_${myIndividualOpening.openUntil}`;
+      if (!dismissedNotificationIds.includes(indivNotifId)) {
+        list.push({
+          id: indivNotifId,
+          type: 'deadline_warning',
+          title: `🔓 Liberação Individual Ativa (${format(currentMonth, 'MMMM', { locale: ptBR })})`,
+          message: `A coordenação liberou o envio de disponibilidades (CCSP e Festas) para você até ${format(indivEndDate, "dd/MM/yyyy 'às' HH:mm")}.`,
+          date: myIndividualOpening.openedAt || new Date().toISOString(),
+          isRead: readNotificationIds.includes(indivNotifId)
+        });
+      }
+    } else if (currentDeadline) {
       const deadlineDate = new Date(currentDeadline);
       const isExpired = new Date() > deadlineDate;
       const deadlineNotifId = `deadline_${currentMonthKey}_${isExpired ? 'expired' : 'active'}`;
@@ -1282,7 +1303,7 @@ export default function App() {
     try {
       let finalAvailabilities = availabilities;
 
-      if (!isAdmin) {
+      if (!isViewingAsAdmin) {
         const empRef = doc(db, 'employees', employeeId);
         const empSnap = await getDoc(empRef);
         if (empSnap.exists()) {
@@ -1299,18 +1320,97 @@ export default function App() {
             return dateStr < todayStr || monthKey < currentMonthKeyNow;
           });
 
-          finalAvailabilities = Array.from(new Set([...availabilities, ...protectedAvails]));
+          // Preserva disponibilidades que já existiam antes da liberação individual (regra de trava)
+          const indivLockedAvails: string[] = [];
+          if (empData.individualOpenings) {
+            Object.entries(empData.individualOpenings).forEach(([mKey, opening]) => {
+              const dlVal = deadlines?.[mKey];
+              const isGlobalExpired = dlVal ? new Date() > new Date(dlVal) : false;
+              const isOpeningValid = opening?.openUntil && new Date() <= new Date(opening.openUntil);
+              if ((isOpeningValid || isGlobalExpired) && Array.isArray(opening?.lockedKeys)) {
+                opening.lockedKeys.forEach(k => {
+                  if (k && !k.startsWith('login_') && !k.startsWith('no_avail_')) {
+                    indivLockedAvails.push(k);
+                  }
+                });
+              }
+            });
+          }
+
+          finalAvailabilities = Array.from(new Set([...availabilities, ...protectedAvails, ...indivLockedAvails]));
         }
       }
 
       const empRef = doc(db, 'employees', employeeId);
       await updateDoc(empRef, { availabilities: finalAvailabilities });
-      if (!isAdmin) {
+      if (!isViewingAsAdmin) {
         recordDailyAccessLog(user, false);
       }
     } catch (error: any) {
       console.error("Error updating availabilities:", error);
-      alert("Erro ao salvar suas disponibilidades: " + (error.message || "Verifique sua conexão e permissões do banco de dados."));
+      const isPermError = error?.code === 'permission-denied' || String(error?.message || '').toLowerCase().includes('permission');
+      alert(
+        isPermError
+          ? "Não foi possível salvar suas disponibilidades porque sua permissão ou prazo expirou. Recarregue a página e tente novamente."
+          : "Erro ao salvar suas disponibilidades: " + (error.message || "Verifique sua conexão e permissões do banco de dados.")
+      );
+      handleFirestoreError(error, OperationType.UPDATE, `employees/${employeeId}`);
+    }
+  };
+
+  const handleGrantIndividualOpening = async (employeeIds: string[], monthKey: string, openUntilIso: string) => {
+    if (!db || !isAdmin || employeeIds.length === 0) return;
+    try {
+      const now = new Date();
+      const nowIso = now.toISOString();
+      await Promise.all(
+        employeeIds.map(async (empId) => {
+          const empRef = doc(db, 'employees', empId);
+          const empSnap = await getDoc(empRef);
+          if (!empSnap.exists()) return;
+          const empData = empSnap.data() as Employee;
+          const existingOpening = empData.individualOpenings?.[monthKey];
+          const isAlreadyActive = Boolean(
+            existingOpening?.openUntil &&
+            !isNaN(new Date(existingOpening.openUntil).getTime()) &&
+            now <= new Date(existingOpening.openUntil)
+          );
+
+          // Se já havia uma liberação ativa sendo estendida, preserva o snapshot original de travamento;
+          // caso contrário, tira novo retrato das disponibilidades já existentes nesse mês.
+          const lockedKeys = isAlreadyActive && Array.isArray(existingOpening?.lockedKeys)
+            ? existingOpening.lockedKeys
+            : (empData.availabilities || []).filter(
+                av => av.startsWith(monthKey) && !av.startsWith('no_avail_') && !av.startsWith('login_')
+              );
+
+          const openingPayload: IndividualMonthOpening = {
+            openUntil: openUntilIso,
+            lockedKeys,
+            openedAt: nowIso,
+            openedBy: user?.email || 'Admin'
+          };
+
+          await updateDoc(empRef, {
+            [`individualOpenings.${monthKey}`]: openingPayload
+          });
+        })
+      );
+    } catch (error) {
+      console.error("Error granting individual opening:", error);
+      handleFirestoreError(error, OperationType.UPDATE, 'employees/individualOpenings');
+    }
+  };
+
+  const handleRevokeIndividualOpening = async (employeeId: string, monthKey: string) => {
+    if (!db || !isAdmin) return;
+    try {
+      const empRef = doc(db, 'employees', employeeId);
+      await updateDoc(empRef, {
+        [`individualOpenings.${monthKey}`]: deleteField()
+      });
+    } catch (error) {
+      console.error("Error revoking individual opening:", error);
       handleFirestoreError(error, OperationType.UPDATE, `employees/${employeeId}`);
     }
   };
@@ -2267,6 +2367,8 @@ export default function App() {
             sidebarTab={sidebarTab}
             onSidebarTabChange={setSidebarTab}
             onOpenRevertCancellation={handleOpenRevertCancellation}
+            onGrantIndividualOpening={handleGrantIndividualOpening}
+            onRevokeIndividualOpening={handleRevokeIndividualOpening}
           />
         )}
 
