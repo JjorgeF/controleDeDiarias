@@ -35,6 +35,9 @@
         },
         "ccspSettlements": {
           "type": "object"
+        },
+        "individualOpenings": {
+          "type": "object"
         }
       },
       "required": ["name", "email"]
